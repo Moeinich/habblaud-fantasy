@@ -3304,4 +3304,7 @@ export const ES: Readonly<Record<string, string>> = {
   "[remote] {0}: servidor central removido.": "[remote] {0}: servidor central eliminado.",
   "[remote] Erro: {0}": "[remote] Error: {0}",
   "[remote] Erro inesperado: {0}": "[remote] Error inesperado: {0}",
+  "Para mandar mensagens a esta máquina: instale o plugin habblaud-mensagens nela (npm run mod:install e npm run remote:install)": "Para enviar mensajes a esta máquina: instala en ella el plugin habblaud-mensagens (npm run mod:install y npm run remote:install)",
+  "Esta sessão roda em {0}: o terminal, assumir e encerrar só funcionam lá.": "Esta sesión corre en {0}: el terminal, tomar el control y terminar solo funcionan allí.",
+  "Roda em outra máquina: {0}": "Corre en otra máquina: {0}",
 };

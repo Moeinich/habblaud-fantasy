@@ -3,6 +3,7 @@ import type { UiComponent, UiContext } from './context';
 import { h, setHidden, setText, setVariant } from './dom';
 import { formatDuration } from './format';
 import { shellStage, shellWaitIn, statusLabel } from './model';
+import { createMachineTag, updateMachineTag } from './machine';
 import { providerOf } from './provider';
 import {
   createAccountChip,
@@ -24,6 +25,7 @@ export class HoverTip implements UiComponent {
   private name: HTMLElement;
   private chip: HTMLElement;
   private prov: HTMLElement;
+  private machine: HTMLElement;
   private dot: HTMLElement;
   private status: HTMLElement;
   private activity: HTMLElement;
@@ -35,6 +37,7 @@ export class HoverTip implements UiComponent {
     this.name = h('strong', { class: 'ui-tip__name' });
     this.chip = createAccountChip('sm');
     this.prov = createProviderTag('ui-prov--xs');
+    this.machine = createMachineTag('ui-prov--xs');
     this.dot = createStatusDot();
     this.status = h('span', { class: 'ui-tip__status' });
     this.activity = createActivityLine();
@@ -44,7 +47,7 @@ export class HoverTip implements UiComponent {
     this.el = h(
       'div',
       { class: 'ui-tip', attrs: { 'aria-hidden': 'true' } },
-      h('div', { class: 'ui-tip__top' }, this.name, this.chip, this.prov),
+      h('div', { class: 'ui-tip__top' }, this.name, this.chip, this.prov, this.machine),
       this.task,
       h('div', { class: 'ui-tip__line' }, this.dot, this.status, this.since),
       this.activity,
@@ -92,6 +95,7 @@ export class HoverTip implements UiComponent {
     setText(this.name, a.name);
     updateAccountChip(this.chip, this.ctx.account(a.account), a.account, a.provider);
     updateProviderTag(this.prov, providerOf(a));
+    updateMachineTag(this.machine, a);
     // Esperando um shell: o que ele espera (com o tempo correndo) e o que anda fazendo enquanto isso.
     const now = this.ctx.now();
     const wait = shellWaitIn(a, this.ctx.store.snapshot?.agents ?? [], now);

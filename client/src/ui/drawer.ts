@@ -45,6 +45,7 @@ import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel,
 import { ptyControllable } from './ptyapi';
 import { createAgentRow, updateAgentRow } from './rows';
 import { SocialSection } from './social';
+import { createMachineTag, isRemote, remoteTerminalHint, updateMachineTag } from './machine';
 import { TERMINAL_UNAVAILABLE_HINT, type TerminalControl } from './terminal';
 import { Movable } from './movable';
 import type { PtyControl } from './pty';
@@ -204,6 +205,8 @@ class AgentView {
   private accChip: HTMLElement;
   private accName: HTMLElement;
   private accProv: HTMLElement;
+  /** Machine of an agent that runs elsewhere (ui/machine.ts). */
+  private accMachine: HTMLElement;
   private accEmail: HTMLElement;
   /** Dica dos hooks do Codex (ao vivo e aprovar pelo escritório), na gaveta de um agente do Codex. */
   private codexHint: HTMLElement;
@@ -277,6 +280,7 @@ class AgentView {
     this.accChip = createAccountChip('md');
     this.accName = h('span', { class: 'ui-hero__acc-name' });
     this.accProv = createProviderTag('ui-prov--xs');
+    this.accMachine = createMachineTag('ui-prov--xs');
     this.accEmail = h('span', { class: 'ui-hero__acc-email' });
     this.roomName = h('span');
     this.roomBtn = h('button', { class: 'ui-room-link', type: 'button', on: { click: () => this.last && ctx.select({ type: 'room', id: this.last.roomId }, { focus: true }) } }, this.roomName);
@@ -285,7 +289,7 @@ class AgentView {
       'div',
       { class: 'ui-hero__text' },
       h('div', { class: 'ui-hero__line' }, this.name, this.character.button, this.role),
-      h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accProv, this.accEmail),
+      h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accProv, this.accMachine, this.accEmail),
       h('div', { class: 'ui-hero__where' }, h('span', { class: 'ui-muted', text: tr('Sala') }), this.roomBtn),
     );
     this.gone = h('p', { class: 'ui-gone', text: tr('Este agente já saiu do escritório.'), hidden: true });
@@ -544,6 +548,7 @@ class AgentView {
     updateAccountChip(this.accChip, account, a.account, a.provider);
     setText(this.accName, account?.name ?? a.account);
     updateProviderTag(this.accProv, provider, account?.name ?? '');
+    updateMachineTag(this.accMachine, a);
     // E-mail (Claude Code) ou, no Codex (sem e-mail), o plano.
     const accSub = account?.email ?? (codex && account?.plan ? tr('plano {0}', [account.plan]) : '');
     setText(this.accEmail, accSub);
@@ -692,7 +697,8 @@ class AgentView {
 
   private renderTerminalButton(live: boolean, provider = providerOf(this.last)): void {
     const router = this.ctx.terminals;
-    const available = (router ? router.available : !!this.ctx.store.snapshot?.meta.terminal) && access().terminal;
+    const remote = isRemote(this.last);
+    const available = (router ? router.available : !!this.ctx.store.snapshot?.meta.terminal) && access().terminal && !remote;
     const open = (router ? router.openAgentId : this.terminal.agentId) === this.id;
     // Interativo: o Claude Code roda aqui (pty) ou roda noutro terminal e dá para assumir pela janela.
     const readOnly = !!this.ctx.store.snapshot?.meta.terminal;
@@ -711,7 +717,9 @@ class AgentView {
       open
         ? tr('Fechar o terminal (T)')
         : !available
-          ? this.ctx.store.replaying
+          ? remote && this.last
+            ? remoteTerminalHint(this.last)
+            : this.ctx.store.replaying
             ? tr('Sem terminal no timelapse: a conversa é a de agora, não a do momento reproduzido.')
             : this.ctx.store.snapshot?.meta.terminal && access().remote
               ? tr('O terminal não está liberado no acesso remoto (HABBLAUD_REMOTE_ALLOW).')
@@ -733,8 +741,9 @@ class AgentView {
     const s = a.stats;
     const st = this.stats;
     st.set('tools', formatInt(s.toolCalls));
-    st.set('tokensIn', formatTokens(s.tokensIn));
-    st.set('tokensOut', formatTokens(s.tokensOut));
+    // Agents of other machines: the hooks carry no token counts (a 0 would be wrong, so nothing is shown).
+    st.set('tokensIn', a.machine ? null : formatTokens(s.tokensIn));
+    st.set('tokensOut', a.machine ? null : formatTokens(s.tokensOut));
     st.set('cost', s.costUSD !== undefined ? formatUSD(s.costUSD) : null);
     const codex = providerOf(a) === 'codex';
     const hasLines = s.linesAdded !== undefined || s.linesRemoved !== undefined;

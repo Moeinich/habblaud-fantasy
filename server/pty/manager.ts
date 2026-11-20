@@ -50,6 +50,8 @@ export interface PtyAgentRef {
   account: string;
   sessionId: string;
   cwd?: string;
+  /** Name of the machine the agent runs on, when it is another one (AgentInfo.machine): no stop or take over. */
+  machine?: string;
 }
 
 /**
@@ -439,6 +441,7 @@ export class PtyManager {
     const agent = this.opts.agent(agentId);
     if (!agent) throw new PtyError(404, tr('agente não encontrado'));
     if (agent.kind !== 'main') throw new PtyError(400, tr('só dá para encerrar ou assumir o agente principal de uma sessão'));
+    if (agent.machine) throw new PtyError(409, tr('Esta sessão roda em {0}: o terminal, assumir e encerrar só funcionam lá.', [agent.machine]));
     return agent;
   }
 

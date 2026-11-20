@@ -364,3 +364,14 @@ describe('carregar o node-pty e achar o claude', () => {
     }),
   );
 });
+
+describe('PtyManager: agents of other machines', () => {
+  it('never stops or takes over a session that runs on another machine', async () => {
+    const s = setup({ agent: { machine: 'mac-anna' } });
+    const err = await rejects(s.manager.stop(`acc:${PID}`), 409);
+    expect(err.message).toContain('mac-anna');
+    await rejects(s.manager.takeover(`acc:${PID}`), 409);
+    expect(s.killPid).not.toHaveBeenCalled();
+    expect(s.spawned).toEqual([]);
+  });
+});

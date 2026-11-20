@@ -478,6 +478,17 @@
   font-size: 8.5px;
 }
 
+/* Machine of an agent that runs elsewhere (ui/machine.ts): same shape as the provider tag, quieter. */
+.ui-machine {
+  max-width: 11em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ui-text-dim, inherit);
+}
+
 .ui-status-dot {
   --st: var(--st-idle);
   display: inline-block;

@@ -11,6 +11,7 @@ import {
   isSettled,
   messageText,
   PLUGIN_HINT,
+  REMOTE_PLUGIN_HINT,
   pollDelay,
   sendStatusText,
   timeoutError,
@@ -127,5 +128,12 @@ describe('caixa de mensagem (peças puras)', () => {
     expect(pollDelay(0)).toBeLessThan(1_000);
     expect(pollDelay(20_000)).toBeGreaterThan(pollDelay(0));
     expect(pollDelay(60_000)).toBeGreaterThanOrEqual(pollDelay(20_000));
+  });
+});
+
+describe('agents of other machines', () => {
+  it('without the plugin connected, the hint says to set it up on that machine', () => {
+    expect(composerMode(agent({ canMessage: undefined, machine: { id: 'mac-anna', name: 'mac-anna' } }), ON)).toEqual({ kind: 'hint', text: REMOTE_PLUGIN_HINT });
+    expect(composerMode(agent({ machine: { id: 'mac-anna', name: 'mac-anna' } }), ON)).toEqual({ kind: 'ready' });
   });
 });

@@ -160,7 +160,8 @@ export class MessageComposer {
       this.ctx.invalidate();
     });
     // Transcrevendo: o botão fica até o texto chegar (ele vai para o rascunho de quem ditou).
-    setHidden(this.dictate.el, !this.canDictate || (!ready && !this.dictate.busy));
+    // Dictation runs on this server's computer: off for agents of another machine (out of scope there).
+    setHidden(this.dictate.el, !this.canDictate || !!agent?.machine || (!ready && !this.dictate.busy));
     // Na gaveta, a dica do plugin entra no lugar da caixa; no terminal ela já está no lugar do texto.
     setHidden(this.row, !term && !ready);
     if (this.tip) {

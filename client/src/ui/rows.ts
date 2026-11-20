@@ -3,6 +3,7 @@ import type { AccountInfo, AgentInfo } from '../../../shared/types';
 import { createAvatar, updateAvatar, type AvatarSize } from './avatar';
 import { h, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
 import { formatDuration } from './format';
+import { createMachineTag, updateMachineTag } from './machine';
 import { activityFallback, shellLine, shellWaitIn, statusLabel } from './model';
 import {
   createAccountChip,
@@ -21,6 +22,7 @@ interface RowRefs {
   avatar: HTMLElement;
   name: HTMLElement;
   chip: HTMLElement;
+  machine: HTMLElement;
   role: HTMLElement;
   dot: HTMLElement;
   activity: HTMLElement;
@@ -37,6 +39,7 @@ export function createAgentRow(agent: AgentInfo, onPick: (id: string) => void, s
   const avatar = createAvatar(agent, size);
   const name = h('span', { class: 'ui-agent__name' });
   const chip = createAccountChip('sm');
+  const machine = createMachineTag('ui-prov--xs');
   const role = createRoleBadge();
   const dot = createStatusDot();
   const activity = createActivityLine();
@@ -46,12 +49,12 @@ export function createAgentRow(agent: AgentInfo, onPick: (id: string) => void, s
     'button',
     { class: 'ui-agent', type: 'button' },
     avatar,
-    h('span', { class: 'ui-agent__main' }, h('span', { class: 'ui-agent__top' }, name, chip, since, role), task, activity),
+    h('span', { class: 'ui-agent__main' }, h('span', { class: 'ui-agent__top' }, name, chip, machine, since, role), task, activity),
     dot,
   );
   row.dataset.id = agent.id;
   row.addEventListener('click', () => onPick(row.dataset.id!));
-  refs.set(row, { avatar, name, chip, role, dot, activity, task, since, size });
+  refs.set(row, { avatar, name, chip, machine, role, dot, activity, task, since, size });
   return row;
 }
 
@@ -74,6 +77,7 @@ export function updateAgentRow(
   setStyleVar(row, '--acc', account?.color ?? '#8b98b3');
   setText(r.name, agent.name);
   updateAccountChip(r.chip, account, agent.account, agent.provider);
+  updateMachineTag(r.machine, agent);
   updateRoleBadge(r.role, agent);
   const title = agent.title?.trim() ?? '';
   setText(r.task, title);
@@ -100,6 +104,6 @@ export function updateAgentRow(
   setAttr(
     row,
     'aria-label',
-    `${agent.name}, ${agent.kind === 'main' ? tr('agente principal') : tr('subagente {0}', [agent.role])}, ${account?.name ?? agent.account}${agent.provider === 'codex' ? ' (Codex)' : ''}, ${statusLabel(status)}${doing ? `: ${doing}` : ''}`,
+    `${agent.name}, ${agent.kind === 'main' ? tr('agente principal') : tr('subagente {0}', [agent.role])}, ${account?.name ?? agent.account}${agent.provider === 'codex' ? ' (Codex)' : ''}${agent.machine ? `, ${agent.machine.name}` : ''}, ${statusLabel(status)}${doing ? `: ${doing}` : ''}`,
   );
 }
