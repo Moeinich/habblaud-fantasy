@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +18,7 @@ import {
   loadSecret,
   LoginThrottle,
   parseAllow,
+  parseKioskTokenHash,
   parseRemoteConfig,
   readCookie,
   RemoteSessions,
@@ -625,5 +627,60 @@ describe('cookie Secure e download da CA', () => {
     expect(ca.status).toBe(200);
     expect(ca.headers['content-type']).toBe('application/x-x509-ca-cert');
     expect((await request(base, '/login')).body).toContain('/remote/ca.crt');
+  });
+});
+
+describe('GET /login/kiosk (link de login sem senha)', () => {
+  const TOKEN = 'tv-token-0123456789abcdef';
+  const hash = createHash('sha256').update(TOKEN).digest();
+
+  async function kioskServer(kioskTokenHash?: Buffer) {
+    const cfg = { ...CFG, kioskTokenHash };
+    const gate = createRemoteGate({ config: cfg, sessions: new RemoteSessions(SECRET, cfg), secure: false });
+    const srv = http.createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://x');
+      if (gate(req, res, url)) return;
+      res.writeHead(200);
+      res.end('office');
+    });
+    await new Promise<void>((ok) => srv.listen(0, '127.0.0.1', ok));
+    closers.push(() => new Promise<void>((ok) => srv.close(() => ok())));
+    return `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+  }
+
+  it('token certo: abre a sessão e volta para /', async () => {
+    const base = await kioskServer(hash);
+    const r = await request(base, `/login/kiosk?token=${TOKEN}`);
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/');
+    expect(r.headers['referrer-policy']).toBe('no-referrer');
+    const cookie = (r.headers['set-cookie']?.[0] ?? '').split(';')[0];
+    expect(cookie.startsWith(`${COOKIE}=`)).toBe(true);
+    const page = await request(base, '/', { headers: { Cookie: cookie } });
+    expect(page.status).toBe(200);
+  });
+
+  it('token errado ou ausente: sem cookie, de volta ao login', async () => {
+    const base = await kioskServer(hash);
+    for (const path of ['/login/kiosk?token=nope', '/login/kiosk']) {
+      const r = await request(base, path);
+      expect(r.status).toBe(302);
+      expect(r.headers.location).toBe('/login');
+      expect(r.headers['set-cookie']).toBeUndefined();
+    }
+  });
+
+  it('sem HABBLAUD_REMOTE_KIOSK_TOKEN_HASH a rota não existe', async () => {
+    const base = await kioskServer(undefined);
+    const r = await request(base, `/login/kiosk?token=${TOKEN}`);
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/login');
+    expect(r.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('parseKioskTokenHash só aceita 64 hex', () => {
+    expect(parseKioskTokenHash('a'.repeat(64))?.length).toBe(32);
+    expect(parseKioskTokenHash('xyz')).toBeUndefined();
+    expect(parseKioskTokenHash(undefined)).toBeUndefined();
   });
 });

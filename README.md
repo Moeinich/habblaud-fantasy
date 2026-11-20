@@ -288,6 +288,10 @@ Install a certificate › CA certificate), checking the fingerprint the setup sh
   https+insecure://127.0.0.1:443` publishes the remote port (with login) only to your devices, with a valid
   certificate at `https://<computador>.<tailnet>.ts.net`; add that name to `HABBLAUD_ALLOWED_HOSTS`. Always point it at
   the remote port, never at 4747 (which has no login).
+- **Screens without a keyboard (e.g. a TV):** put `HABBLAUD_REMOTE_KIOSK_TOKEN_HASH=<sha256 hex of a random token>` in
+  `.env` and open `https://<address>/login/kiosk?token=<token>`: it signs in without typing the user and password. Create
+  one with `node -e "const t=require('crypto').randomBytes(32).toString('base64url');console.log(t, require('crypto').createHash('sha256').update(t).digest('hex'))"`
+  (the token goes in the link, the hash in `.env`). Removing or changing the hash disables the link.
 - **Session:** 30 days; changing the password (running the setup again) ends all of them, and **Settings › Phone
   access › Sign out** ends the one on that device. After 5 wrong passwords in a row, each new attempt waits from 1 s up to 5 min.
 - **IP changed?** `docker:up` re-issues the server certificate when the new IP is missing or when it's 30 days from

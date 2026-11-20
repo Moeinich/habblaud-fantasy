@@ -13,6 +13,10 @@
 //   HABBLAUD_REMOTE_TLS_DIR pasta com server.key, server.crt (e ca.crt, servido em /remote/ca.crt). Padrão:
 //                           /remote-tls no Docker, ~/.habblaud/remote-tls/server no Node. Sem certificado a porta não
 //                           sobe, a menos que HABBLAUD_REMOTE_INSECURE_HTTP=1 (HTTP puro: senha e cookie à vista na rede).
+//   HABBLAUD_REMOTE_KIOSK_TOKEN_HASH  opcional: SHA-256 (hex) de um token aleatório; GET /login/kiosk?token=<token>
+//                           abre a sessão sem digitar usuário e senha (telas sem teclado, ex.: uma TV). Ausente = rota
+//                           desligada. Trocar o hash (ou apagar) invalida o link; as sessões já abertas seguem as regras
+//                           de sempre (Ajustes › Sair).
 //   HABBLAUD_REMOTE_PORT / HABBLAUD_REMOTE_HOST  só no Node (padrão 0.0.0.0:4748); no Docker o container escuta sempre
 //                           em 0.0.0.0:4748 e quem decide a exposição é a porta publicada (HABBLAUD_REMOTE_BIND).
 //
@@ -48,6 +52,8 @@ export interface RemoteConfig {
   /** Texto do hash como veio do ambiente (entra na chave das sessões). */
   passwordHashText: string;
   allow: ReadonlySet<RemoteFeature>;
+  /** SHA-256 do token do link de login sem senha (/login/kiosk); ausente = rota desligada. */
+  kioskTokenHash?: Buffer;
   /** Ausente = HTTP puro (só com HABBLAUD_REMOTE_INSECURE_HTTP=1). */
   tls?: RemoteTls;
 }
@@ -90,8 +96,23 @@ export function parseRemoteConfig(
   const port = inDocker ? DEFAULT_REMOTE_PORT : Number.isInteger(rawPort) && rawPort > 0 && rawPort < 65536 ? rawPort : DEFAULT_REMOTE_PORT;
   const host = inDocker ? '0.0.0.0' : env.HABBLAUD_REMOTE_HOST?.trim() || '0.0.0.0';
   return {
-    config: { port, host, user, passwordHash, passwordHashText: hashText, allow: parseAllow(env.HABBLAUD_REMOTE_ALLOW), tls: hasTls ? tls : undefined },
+    config: {
+      port,
+      host,
+      user,
+      passwordHash,
+      passwordHashText: hashText,
+      allow: parseAllow(env.HABBLAUD_REMOTE_ALLOW),
+      kioskTokenHash: parseKioskTokenHash(env.HABBLAUD_REMOTE_KIOSK_TOKEN_HASH),
+      tls: hasTls ? tls : undefined,
+    },
   };
+}
+
+/** HABBLAUD_REMOTE_KIOSK_TOKEN_HASH: 64 caracteres hex (SHA-256). Qualquer outra coisa deixa a rota desligada. */
+export function parseKioskTokenHash(raw: string | undefined): Buffer | undefined {
+  const hex = raw?.trim().toLowerCase() ?? '';
+  return /^[0-9a-f]{64}$/.test(hex) ? Buffer.from(hex, 'hex') : undefined;
 }
 
 export function parseAllow(raw: string | undefined): Set<RemoteFeature> {
@@ -257,6 +278,9 @@ export class LoginThrottle {
   }
 }
 
+/** Link de login sem senha (HABBLAUD_REMOTE_KIOSK_TOKEN_HASH). */
+export const KIOSK_PATH = '/login/kiosk';
+
 /** Requisições que chegaram pela porta remota e passaram pelo login. */
 const remoteRequests = new WeakSet<IncomingMessage>();
 /** Arquivos que a porta remota serve sem login: manifesto e ícones (o celular os busca antes do login, sem o
@@ -387,7 +411,7 @@ function cookieHeader(value: string, maxAgeS: number, secure: boolean): string {
 }
 
 export interface RemoteGateDeps {
-  config: Pick<RemoteConfig, 'user' | 'passwordHash'>;
+  config: Pick<RemoteConfig, 'user' | 'passwordHash' | 'kioskTokenHash'>;
   sessions: RemoteSessions;
   /** Cookie com Secure (a porta fala HTTPS). */
   secure: boolean;
@@ -483,6 +507,32 @@ export function createRemoteGate(deps: RemoteGateDeps): (req: IncomingMessage, r
         });
         res.end(pem);
       }
+      return true;
+    }
+
+    if (path === KIOSK_PATH && deps.config.kioskTokenHash) {
+      req.resume();
+      if (method !== 'GET') {
+        sendJson(res, 405, { error: tr('método não permitido') }, { Allow: 'GET' });
+        return true;
+      }
+      const wait = throttle.retryAfter();
+      if (wait > 0) {
+        sendJson(res, 429, { error: tr('Muitas tentativas. Tente de novo em {0} s.', [wait]) }, { 'Retry-After': String(wait) });
+        return true;
+      }
+      const given = createHash('sha256').update(url.searchParams.get('token') ?? '', 'utf8').digest();
+      const headers = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' };
+      if (!timingSafeEqual(given, deps.config.kioskTokenHash)) {
+        throttle.fail();
+        res.writeHead(302, { ...headers, Location: '/login' });
+        res.end();
+        return true;
+      }
+      throttle.succeed();
+      const { token, maxAgeS } = deps.sessions.issue();
+      res.writeHead(302, { ...headers, Location: '/', 'Set-Cookie': cookieHeader(token, maxAgeS, deps.secure) });
+      res.end();
       return true;
     }
 
