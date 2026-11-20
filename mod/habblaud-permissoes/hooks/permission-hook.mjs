@@ -27,6 +27,10 @@
 //
 // Regras: Node puro (22+), sem dependências; nunca trava nem quebra a sessão (todo erro = sair sem
 // decidir). Só fala com 127.0.0.1. HABBLAUD_HOOK_DEBUG=1 escreve o que acontece no stderr.
+//
+// Central server (another machine): with HABBLAUD_SERVER_URL and HABBLAUD_SERVER_TOKEN set (the habblaud-remote
+// setup, see README "Multiple machines"), the same requests go to <url>/api/ingest/permissions[/:id/wait] with the
+// machine token instead of 127.0.0.1.
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -48,6 +52,30 @@ const MAX_BODY = 200_000;
 const ASK_TOOL = 'AskUserQuestion';
 
 const debug = process.env.HABBLAUD_HOOK_DEBUG === '1' ? (msg) => process.stderr.write(`[habblaud-hook] ${msg}\n`) : () => {};
+
+const SERVER_TOKEN = /^hbl1\.[a-z0-9-]{1,32}\.[A-Za-z0-9_-]{43}$/;
+/** Registering with a central server on another machine: network and TLS take longer than the local loopback. */
+const SERVER_REGISTER_TIMEOUT_MS = 5_000;
+
+/**
+ * Central Habblaud on another machine (HABBLAUD_SERVER_URL + HABBLAUD_SERVER_TOKEN, the habblaud-remote setup):
+ * `{base, token}`, or undefined (the local Habblaud, as always). Only https://, or http:// to this computer (tests).
+ */
+export function serverOf(env = process.env) {
+  const url = (env.HABBLAUD_SERVER_URL ?? '').trim().replace(/\/+$/, '');
+  const token = (env.HABBLAUD_SERVER_TOKEN ?? '').trim();
+  if (!url || !SERVER_TOKEN.test(token)) return undefined;
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) return undefined;
+  if (u.username || u.password || u.search || u.hash || (u.pathname !== '/' && u.pathname !== '')) return undefined;
+  return { base: `${u.protocol}//${u.host}`, token };
+}
 
 /** Porta e tempo limite: argumentos (--port, --timeout) ou ambiente (HABBLAUD_PORT, HABBLAUD_PERMISSION_TIMEOUT). */
 export function parseOptions(argv, env = process.env) {
@@ -174,11 +202,13 @@ function readStdin() {
 }
 
 /** Requisição ao Habblaud local; null = fora do ar, tempo esgotado ou resposta ilegível. */
-async function call(base, method, path, body, timeoutMs) {
+async function call(base, method, path, body, timeoutMs, token) {
   try {
+    const headers = body === undefined ? {} : { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(`${base}${path}`, {
       method,
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -211,9 +241,13 @@ export async function run(argv = process.argv.slice(2), env = process.env, stdin
     if (!input || typeof input !== 'object' || typeof input.session_id !== 'string' || typeof input.tool_name !== 'string') return undefined;
     if (input.hook_event_name !== undefined && input.hook_event_name !== 'PermissionRequest') return undefined;
 
-    const base = `http://127.0.0.1:${opts.port}`;
+    // With a central server (another machine), the same requests go to /api/ingest/permissions with the machine token.
+    const server = serverOf(env);
+    const base = server ? server.base : `http://127.0.0.1:${opts.port}`;
+    const prefix = server ? '/api/ingest/permissions' : '/api/permissions';
+    const token = server?.token;
     const deadline = Date.now() + opts.timeoutMs;
-    const reg = await call(base, 'POST', '/api/permissions', requestBody(input, opts.timeoutMs), REGISTER_TIMEOUT_MS);
+    const reg = await call(base, 'POST', prefix, requestBody(input, opts.timeoutMs), server ? SERVER_REGISTER_TIMEOUT_MS : REGISTER_TIMEOUT_MS, token);
     if (!reg || reg.status !== 201 || typeof reg.json?.id !== 'string') {
       debug(`sem desvio (${reg ? `${reg.status} ${JSON.stringify(reg.json ?? null)}` : 'Habblaud fora do ar'})`);
       return undefined;
@@ -226,7 +260,7 @@ export async function run(argv = process.argv.slice(2), env = process.env, stdin
         return undefined;
       }
       const waitS = Math.max(0.05, Math.min(WAIT_S, left / 1_000));
-      const r = await call(base, 'GET', `/api/permissions/${id}/wait?timeout=${waitS}`, undefined, waitS * 1_000 + 5_000);
+      const r = await call(base, 'GET', `${prefix}/${id}/wait?timeout=${waitS}`, undefined, waitS * 1_000 + 5_000, token);
       if (!r || r.status !== 200) return undefined;
       const status = r.json?.status;
       if (status === 'pending') continue;

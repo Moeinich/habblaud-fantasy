@@ -1,6 +1,9 @@
 {
   "name": "habblaud",
-  "owner": { "name": "Márcio Junior", "url": "https://github.com/marmottajr" },
+  "owner": {
+    "name": "Márcio Junior",
+    "url": "https://github.com/marmottajr"
+  },
   "description": "Plugins do Habblaud, o escritório virtual em pixel art das suas sessões do Claude Code.",
   "version": "1.0.3",
   "plugins": [
@@ -20,6 +23,12 @@
       "name": "habblaud-mensagens",
       "source": "./mod/habblaud-mensagens",
       "description": "Mandar mensagens pelo Habblaud: o que você digita no escritório entra na sessão como se você tivesse digitado no terminal.",
+      "category": "productivity"
+    },
+    {
+      "name": "habblaud-remote",
+      "source": "./mod/habblaud-remote",
+      "description": "Send this machine's Claude Code sessions to a central Habblaud on another machine (asynchronous hooks; needs HABBLAUD_SERVER_URL and HABBLAUD_SERVER_TOKEN).",
       "category": "productivity"
     }
   ]

@@ -41,6 +41,8 @@ export const POLL_MS = 2_000
 export const OFFLINE_POLL_MS = 30_000
 /** Quanto esperar o Habblaud local responder (`$.http.fetch` não aceita AbortSignal: a corrida é com um timer). */
 export const FETCH_TIMEOUT_MS = 2_000
+/** The same deadline to a central server on another machine (network, TLS). */
+export const SERVER_FETCH_TIMEOUT_MS = 5_000
 /** Quanto esperar `$.prompt.submit` voltar antes de dar a mensagem como na fila da sessão. */
 export const SUBMIT_WAIT_MS = 2_000
 /** Tamanho máximo do motivo de uma falha (vem de um hook ou de uma exceção; o texto da mensagem nunca é cortado). */
@@ -67,6 +69,8 @@ interface ModEnv {
   /** Id da conta (o nome da pasta, como o servidor chama); ausente sem HOME (ou USERPROFILE) nem CLAUDE_CONFIG_DIR. */
   accountId?: string
   port: number
+  /** Central server on another machine (serverOf); absent = the local Habblaud. */
+  server?: { base: string; token: string }
   /** Sessão do app desktop do Claude (CLAUDE_CODE_ENTRYPOINT=claude-desktop): roda como SDK e só tem superfície
    *  enquanto está na tela do app, mas é interativa e recebe prompts mesmo assim. */
   desktop: boolean
@@ -122,6 +126,22 @@ export function accountIdOf(configDir: string): string | undefined {
 export function portOf(raw: string | undefined): number {
   const n = Number.parseInt(raw ?? '', 10)
   return Number.isInteger(n) && n > 0 && n < 65_536 ? n : DEFAULT_PORT
+}
+
+/**
+ * Central Habblaud server (another machine, HABBLAUD_SERVER_URL + HABBLAUD_SERVER_TOKEN): its base URL and the machine
+ * token, or undefined (talk to the local Habblaud as always). Only https://, or http:// to this computer itself (tests).
+ * Same function in mod/habblaud and mod/habblaud-mensagens.
+ */
+export function serverOf(url: string | undefined, token: string | undefined): { base: string; token: string } | undefined {
+  const u = (url ?? '').trim().replace(/\/+$/, '')
+  const t = (token ?? '').trim()
+  if (!u || !/^hbl1\.[a-z0-9-]{1,32}\.[A-Za-z0-9_-]{43}$/.test(t)) return undefined
+  const m = /^(https?):\/\/([^/?#@\s]+)$/.exec(u)
+  if (!m) return undefined
+  const host = m[2].replace(/:\d+$/, '')
+  if (m[1] === 'http' && host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') return undefined
+  return { base: u, token: t }
 }
 
 /** Corpo de POST /api/mod/inbox: a conta só quando se sabe qual é. */
@@ -187,6 +207,8 @@ async function readEnv($: EngineInterface): Promise<ModEnv> {
     port: portOf(await $.env.get('HABBLAUD_PORT')),
     desktop: (await $.env.get('CLAUDE_CODE_ENTRYPOINT'))?.trim() === 'claude-desktop',
   }
+  const server = serverOf(await $.env.get('HABBLAUD_SERVER_URL'), await $.env.get('HABBLAUD_SERVER_TOKEN'))
+  if (server) next.server = server
   const accountId = configDir ? accountIdOf(configDir) : undefined
   if (accountId) next.accountId = accountId
   env = next
@@ -206,16 +228,21 @@ async function waitAtMost<T>($: EngineInterface, promise: Promise<T>, ms: number
   }
 }
 
-/** POST de um JSON ao Habblaud local com prazo de 2 s: a resposta, ou undefined (fora do ar, travado). Nunca lança. */
-async function postJson($: EngineInterface, port: number, path: string, body: string): Promise<HttpResponse | undefined> {
+/**
+ * POST of a JSON to Habblaud with a 2 s deadline (5 s to a central server): the response, or undefined (down, stuck).
+ * Never throws. With a central server, `/api/mod/inbox…` becomes `/api/ingest/inbox…` with the machine token.
+ */
+async function postJson($: EngineInterface, e: ModEnv, path: string, body: string): Promise<HttpResponse | undefined> {
   try {
-    const request = $.http.fetch(`http://127.0.0.1:${port}${path}`, {
-      method: 'POST',
-      // Sem o Content-Type, o guarda do servidor recusa o POST (415).
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body,
-    })
-    return await waitAtMost($, request, FETCH_TIMEOUT_MS)
+    // Sem o Content-Type, o guarda do servidor recusa o POST (415).
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' }
+    let url = `http://127.0.0.1:${e.port}${path}`
+    if (e.server) {
+      url = `${e.server.base}${path.replace('/api/mod/', '/api/ingest/')}`
+      headers.authorization = `Bearer ${e.server.token}`
+    }
+    const request = $.http.fetch(url, { method: 'POST', headers, body })
+    return await waitAtMost($, request, e.server ? SERVER_FETCH_TIMEOUT_MS : FETCH_TIMEOUT_MS)
   } catch {
     return undefined
   }
@@ -276,7 +303,7 @@ async function round($: EngineInterface): Promise<void> {
     const surfaces = await $.session.surfaces()
     if (!surfaces.length && !e.desktop) return
     const session = await $.session.id()
-    const res = await postJson($, e.port, '/api/mod/inbox', inboxBody(session, e.accountId))
+    const res = await postJson($, e, '/api/mod/inbox', inboxBody(session, e.accountId))
     const messages = res?.ok ? parseInbox(res.text) : undefined
     if (!messages) {
       schedule($, OFFLINE_POLL_MS)
@@ -286,7 +313,7 @@ async function round($: EngineInterface): Promise<void> {
     if (!messages.length) return
     const results = await deliver($, messages)
     // Falhou a confirmação: o servidor dá as mensagens como falhas em 30 s ("a sessão não confirmou a entrega").
-    await postJson($, e.port, '/api/mod/inbox/ack', ackBody(session, results))
+    await postJson($, e, '/api/mod/inbox/ack', ackBody(session, results))
   } catch {
     // silêncio: a próxima rodada tenta de novo
   } finally {

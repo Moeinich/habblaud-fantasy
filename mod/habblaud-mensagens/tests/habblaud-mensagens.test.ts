@@ -4,7 +4,7 @@
 // servidor) e o prompt.submit de baixo (a sessão: aceita, um hook recusa, a chamada lança ou fica presa).
 import type { HttpResponse, On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
-import { accountIdOf, ackBody, configDirOf, inboxBody, MAX_REASON, normalizePath, parseInbox, portOf, reasonText, type InboxMessage } from '../hooks/register'
+import { accountIdOf, ackBody, configDirOf, inboxBody, MAX_REASON, normalizePath, parseInbox, portOf, reasonText, serverOf, type InboxMessage } from '../hooks/register'
 
 const NOW = Date.parse('2026-10-09T12:00:00Z')
 const PORT = '4850'
@@ -308,5 +308,37 @@ describe('funções puras', () => {
     expect(portOf('0')).toBe(4747)
     expect(portOf('abc')).toBe(4747)
     expect(portOf(undefined)).toBe(4747)
+  })
+})
+
+describe('central server (another machine)', () => {
+  const TOKEN = `hbl1.mac-anna.${'a'.repeat(43)}`
+  const SERVER = 'https://pi.tail.ts.net'
+
+  test('with HABBLAUD_SERVER_URL and the token, the rounds go to /api/ingest/inbox with the machine token', async ($, on) => {
+    const w = world(on, {
+      env: { HOME: '/home/fulano', HABBLAUD_SERVER_URL: `${SERVER}/`, HABBLAUD_SERVER_TOKEN: TOKEN },
+      inbox: batches([{ id: 'm1', text: 'run the linter' }]),
+    })
+    await $.session.start(START)
+    await w.clock.advance(2_000)
+    const auth = { ...JSON_HEADERS, authorization: `Bearer ${TOKEN}` }
+    expect(w.sent).toEqual([
+      { url: `${SERVER}/api/ingest/inbox`, method: 'POST', headers: auth, body: { session: 'sess-1', account: '.claude' } },
+      { url: `${SERVER}/api/ingest/inbox/ack`, method: 'POST', headers: auth, body: { session: 'sess-1', results: [{ id: 'm1', ok: true }] } },
+    ])
+    expect(w.texts()).toEqual(['run the linter'])
+  })
+})
+
+describe('serverOf', () => {
+  test('https only (or this computer), no path, and a well-formed token', () => {
+    const token = `hbl1.mac.${'b'.repeat(43)}`
+    expect(serverOf(undefined, token)).toBeUndefined()
+    expect(serverOf('https://pi.tail.ts.net', 'nope')).toBeUndefined()
+    expect(serverOf('http://pi.tail.ts.net', token)).toBeUndefined()
+    expect(serverOf('https://pi.tail.ts.net/x', token)).toBeUndefined()
+    expect(serverOf('https://pi.tail.ts.net:4748/', token)).toEqual({ base: 'https://pi.tail.ts.net:4748', token })
+    expect(serverOf('http://127.0.0.1:4850', token)).toEqual({ base: 'http://127.0.0.1:4850', token })
   })
 })

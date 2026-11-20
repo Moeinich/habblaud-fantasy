@@ -42,6 +42,7 @@ function world(on: On, w: World = {}) {
   mock.env(on, w.env ?? { HOME: '/home/fulano', CLAUDE_CONFIG_DIR: '~/.claude-conta2,/outra/pasta', HABBLAUD_PORT: PORT })
   const writes: Array<{ path: string; text: string }> = []
   const fetches: string[] = []
+  const calls: Array<{ url: string; method?: string; headers?: Record<string, string>; body?: unknown }> = []
   const statuses: Array<string | undefined> = []
   const commands: string[] = []
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -64,6 +65,7 @@ function world(on: On, w: World = {}) {
   })
   on('http.fetch', async ($, e) => {
     fetches.push(e.url)
+    calls.push({ url: e.url, method: e.init?.method, headers: e.init?.headers, body: e.init?.body === undefined ? undefined : JSON.parse(e.init.body) })
     const a = w.answer ? w.answer() : summary([])
     if (a === 'offline') return { deny: 'connect ECONNREFUSED 127.0.0.1:4850' }
     if (a === 'hang') {
@@ -72,7 +74,7 @@ function world(on: On, w: World = {}) {
     }
     return { value: 'status' in a ? response(a.status, a.text) : response(200, JSON.stringify(a)) }
   })
-  return { clock, writes, fetches, statuses, commands }
+  return { clock, writes, fetches, calls, statuses, commands }
 }
 
 const START = { cwd: '/work', surface: 'terminal', isInteractive: true } as const
@@ -291,5 +293,31 @@ describe('funções puras', () => {
     const s = parseSummary(JSON.stringify({ version: '0.3.0', agents: 2, working: 1, waiting: [{ name: 'Ana\nB', room: 'r', answerable: 'sim' }, { room: 'sem nome' }] }))
     expect(s?.waiting).toEqual([{ id: 'Ana B', name: 'Ana B', room: 'r', account: '', waitingFor: 'responder no terminal', answerable: false }])
     expect(statusText([])).toBeUndefined()
+  })
+})
+
+describe('central server (another machine)', () => {
+  const TOKEN = `hbl1.mac-anna.${'a'.repeat(43)}`
+  const SERVER = 'https://pi.tail.ts.net'
+  const ENV = { HOME: '/home/fulano', HABBLAUD_SERVER_URL: SERVER, HABBLAUD_SERVER_TOKEN: TOKEN }
+
+  test('usage is posted to /api/ingest/usage with the machine token (no local file)', async ($, on) => {
+    const w = world(on, { env: ENV })
+    await $.session.start(START)
+    expect(w.writes).toEqual([])
+    const usage = w.calls.find((c) => c.url === `${SERVER}/api/ingest/usage`)
+    expect(usage?.method).toBe('POST')
+    expect(usage?.headers?.authorization).toBe(`Bearer ${TOKEN}`)
+    expect(usage?.body).toMatchObject({ account: '.claude', accountId: '.claude', fetchedAt: NOW, five_hour: { utilization: 42 } })
+  })
+
+  test('the status line asks the server (/api/ingest/summary) with the machine token', async ($, on) => {
+    const w = world(on, { env: ENV, answer: () => summary([waiting('Bia', 'loja')]) })
+    await $.session.start(START)
+    await w.clock.advance(5_000)
+    const ask = w.calls.find((c) => c.url.startsWith(`${SERVER}/api/ingest/summary`))
+    expect(ask?.url).toBe(`${SERVER}/api/ingest/summary?account=.claude&session=sess-1`)
+    expect(ask?.headers?.authorization).toBe(`Bearer ${TOKEN}`)
+    expect(w.fetches.some((u) => u.startsWith('http://127.0.0.1'))).toBe(false)
   })
 })

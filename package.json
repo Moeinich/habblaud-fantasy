@@ -44,6 +44,10 @@
     "codex:bridge": "tsx scripts/codex-bridge.ts",
     "remote:setup": "tsx scripts/remote-setup.ts",
     "remote:mdns": "tsx scripts/remote-mdns.ts",
+    "remote:install": "tsx scripts/remote-install.ts install",
+    "remote:uninstall": "tsx scripts/remote-install.ts uninstall",
+    "remote:status": "tsx scripts/remote-install.ts status",
+    "ingest:token": "tsx scripts/ingest-token.ts",
     "release": "tsx scripts/release.ts"
   },
   "devDependencies": {

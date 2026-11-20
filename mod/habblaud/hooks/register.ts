@@ -30,6 +30,8 @@ export const POLL_MS = 5_000
 export const OFFLINE_POLL_MS = 30_000
 /** Quanto esperar o Habblaud local responder (`$.http.fetch` não aceita AbortSignal: a corrida é com um timer). */
 export const FETCH_TIMEOUT_MS = 2_000
+/** The same deadline to a central server on another machine (network, TLS). */
+export const SERVER_FETCH_TIMEOUT_MS = 5_000
 /** Valores idênticos gravados há menos que isto não são regravados (a mesma regra do tap). */
 export const MIN_REWRITE_MS = 10_000
 /** Nomes na linha embaixo do prompt antes do "e mais N". */
@@ -80,6 +82,8 @@ interface ModEnv {
   /** Pasta do uso; ausente sem HOME (ou USERPROFILE) nem HABBLAUD_USAGE_DIR. */
   usageDir?: string
   port: number
+  /** Central server on another machine (serverOf); absent = the local Habblaud. */
+  server?: { base: string; token: string }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -140,6 +144,22 @@ export function usageDirOf(habblaudUsageDir: string | undefined, home: string | 
 export function portOf(raw: string | undefined): number {
   const n = Number.parseInt(raw ?? '', 10)
   return Number.isInteger(n) && n > 0 && n < 65_536 ? n : DEFAULT_PORT
+}
+
+/**
+ * Central Habblaud server (another machine, HABBLAUD_SERVER_URL + HABBLAUD_SERVER_TOKEN): its base URL and the machine
+ * token, or undefined (talk to the local Habblaud as always). Only https://, or http:// to this computer itself (tests).
+ * Same function in mod/habblaud and mod/habblaud-mensagens.
+ */
+export function serverOf(url: string | undefined, token: string | undefined): { base: string; token: string } | undefined {
+  const u = (url ?? '').trim().replace(/\/+$/, '')
+  const t = (token ?? '').trim()
+  if (!u || !/^hbl1\.[a-z0-9-]{1,32}\.[A-Za-z0-9_-]{43}$/.test(t)) return undefined
+  const m = /^(https?):\/\/([^/?#@\s]+)$/.exec(u)
+  if (!m) return undefined
+  const host = m[2].replace(/:\d+$/, '')
+  if (m[1] === 'http' && host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') return undefined
+  return { base: u, token: t }
 }
 
 /**
@@ -266,6 +286,8 @@ async function readEnv($: EngineInterface): Promise<ModEnv> {
     port: portOf(await $.env.get('HABBLAUD_PORT')),
     usageDir: usageDirOf(await $.env.get('HABBLAUD_USAGE_DIR'), home),
   }
+  const server = serverOf(await $.env.get('HABBLAUD_SERVER_URL'), await $.env.get('HABBLAUD_SERVER_TOKEN'))
+  if (server) next.server = server
   if (configDir) {
     next.configDir = configDir
     const accountId = accountIdOf(configDir)
@@ -279,27 +301,40 @@ async function readEnv($: EngineInterface): Promise<ModEnv> {
 async function writeUsage($: EngineInterface, rateLimits: readonly SessionRateLimit[]): Promise<void> {
   if (!rateLimits.length) return
   const e = await readEnv($)
-  if (!e.configDir || !e.usageDir) return
+  if (!e.configDir || (!e.usageDir && !e.server)) return
   const now = await $.clock.now()
   const rec = usageRecord(rateLimits, e.configDir, now)
   if (!rec) return
-  const file = `${e.usageDir}/${rec.accountId}.json`
+  const file = e.server ? `${e.server.base}/api/ingest/usage#${rec.accountId}` : `${e.usageDir}/${rec.accountId}.json`
   const key = JSON.stringify([file, rec.configDir, rec.five_hour, rec.seven_day])
   if (lastWrite && lastWrite.key === key && now - lastWrite.at >= 0 && now - lastWrite.at < MIN_REWRITE_MS) return
-  // $.fs.write cria a pasta se faltar e NÃO é atômico: o leitor do servidor ignora uma leitura pela
-  // metade e fica com o último registro bom (server/accounts/statusline.ts).
-  await $.fs.write(file, `${JSON.stringify(rec)}\n`)
+  if (e.server) {
+    // Central server: the same record, posted (POST /api/ingest/usage), with the account id the server prefixes.
+    const res = await $.http.fetch(`${e.server.base}/api/ingest/usage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${e.server.token}` },
+      body: JSON.stringify({ ...rec, account: rec.accountId }),
+    })
+    if (!res.ok) return
+  } else {
+    // $.fs.write cria a pasta se faltar e NÃO é atômico: o leitor do servidor ignora uma leitura pela
+    // metade e fica com o último registro bom (server/accounts/statusline.ts).
+    await $.fs.write(file, `${JSON.stringify(rec)}\n`)
+  }
   lastWrite = { key, at: now }
 }
 
 /** GET /api/mod/summary com prazo de 2 s; nunca lança. */
-async function askHabblaud($: EngineInterface, port: number, query: string): Promise<Asked> {
+async function askHabblaud($: EngineInterface, e: ModEnv, query: string): Promise<Asked> {
   let wait: { cancel: () => void } | undefined
   const timeout = new Promise<undefined>((resolve) => {
-    wait = $.clock.after(FETCH_TIMEOUT_MS, () => resolve(undefined))
+    wait = $.clock.after(e.server ? SERVER_FETCH_TIMEOUT_MS : FETCH_TIMEOUT_MS, () => resolve(undefined))
   })
   try {
-    const res = await Promise.race([$.http.fetch(`http://127.0.0.1:${port}/api/mod/summary${query}`, { headers: { accept: 'application/json' } }), timeout])
+    const request = e.server
+      ? $.http.fetch(`${e.server.base}/api/ingest/summary${query}`, { headers: { accept: 'application/json', authorization: `Bearer ${e.server.token}` } })
+      : $.http.fetch(`http://127.0.0.1:${e.port}/api/mod/summary${query}`, { headers: { accept: 'application/json' } })
+    const res = await Promise.race([request, timeout])
     if (!res) return { kind: 'offline' }
     // 404 JSON = um Habblaud de antes do mod (rota desconhecida); outro 404 qualquer = não é o Habblaud.
     if (res.status === 404 && res.text.includes('rota desconhecida')) return { kind: 'outdated' }
@@ -343,7 +378,7 @@ async function poll($: EngineInterface): Promise<void> {
     const params = new URLSearchParams()
     if (e.accountId) params.set('account', e.accountId)
     params.set('session', await $.session.id())
-    const asked = await askHabblaud($, e.port, `?${params.toString()}`)
+    const asked = await askHabblaud($, e, `?${params.toString()}`)
     if (asked.kind !== 'ok') {
       setStatus($, undefined)
       schedule($, OFFLINE_POLL_MS)
@@ -361,8 +396,8 @@ async function poll($: EngineInterface): Promise<void> {
 /** O texto do /habblaud: o escritório inteiro (sem filtrar esta sessão, para os números baterem com a tela). */
 async function habblaudText($: EngineInterface): Promise<string> {
   const e = await readEnv($)
-  const url = `http://localhost:${e.port}`
-  const asked = await askHabblaud($, e.port, '')
+  const url = e.server ? e.server.base : `http://localhost:${e.port}`
+  const asked = await askHabblaud($, e, '')
   if (asked.kind === 'outdated') return outdatedText(url)
   if (asked.kind === 'offline') return offlineText(url)
   return summaryText(asked.summary, url)
