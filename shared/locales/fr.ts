@@ -3290,4 +3290,9 @@ export const FR: Readonly<Record<string, string>> = {
   "Carimbo deixado na portaria: {0}": "Tampon laissé à l'accueil : {0}",
   "Entre no prédio ou chegue mais perto da porta para carimbar.": "Entrez dans l'immeuble ou approchez-vous de la porte pour tamponner.",
   "O carimbo não foi deixado. Tente de novo.": "Le tampon n'a pas été laissé. Réessayez.",
+  "HABBLAUD_INGEST=1 precisa do acesso remoto ligado (npm run remote:setup): os tokens só entram pela porta remota": "HABBLAUD_INGEST=1 nécessite l'accès à distance activé (npm run remote:setup) : les jetons n'entrent que par le port distant",
+  "HABBLAUD_INGEST=1 precisa da porta remota com HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP não serve)": "HABBLAUD_INGEST=1 nécessite le port distant en HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP ne suffit pas)",
+  "   Outras máquinas: ligado (HABBLAUD_INGEST) na porta remota; tokens em {0}.": "   Autres machines : activé (HABBLAUD_INGEST) sur le port distant ; jetons dans {0}.",
+  "token de máquina inválido: crie um com npm run ingest:token -- add <nome> no servidor": "jeton de machine invalide : créez-en un avec npm run ingest:token -- add <nom> sur le serveur",
+  "requisições demais desta máquina": "trop de requêtes de cette machine",
 };

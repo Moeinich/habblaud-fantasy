@@ -9,6 +9,7 @@ import type {
   AgentStats,
   AgentStatus,
   FeedItem,
+  MachineRef,
   Notice,
   NoticeLevel,
   OfficeSnapshot,
@@ -107,6 +108,8 @@ export interface MainInput {
   startedAt: number;
   status: AgentStatus;
   waitingFor?: string;
+  /** Agent of another machine (ingest): tagged in AgentInfo.machine and RoomInfo.machine; its subagents inherit it. */
+  machine?: MachineRef;
 }
 
 export interface SubInput {
@@ -196,7 +199,7 @@ const byStart = (a: ShellJob, b: ShellJob) => a.startedAt - b.startedAt || a.id.
 
 export class Office {
   private agents = new Map<string, AgentRecord>();
-  private rooms = new Map<string, { path: string; createdAt: number }>();
+  private rooms = new Map<string, { path: string; createdAt: number; machine?: MachineRef }>();
   private slots = new SlotAllocator(SLOT_COOLDOWN_MS);
   private roomNames = new Map<string, string>();
   private feed: FeedItem[] = [];
@@ -323,7 +326,7 @@ export class Office {
       return;
     }
     const roomId = normalizeCwd(p.cwd);
-    this.ensureRoom(roomId, now);
+    this.ensureRoom(roomId, now, p.machine);
     const chosen = this.roomCharacter(roomId, p.id, p.sessionId);
     // A mesma sessão retomada noutro processo (ex.: "Assumir aqui") mantém o nome, mesmo com o processo antigo
     // ainda saindo do escritório.
@@ -347,6 +350,7 @@ export class Office {
       seed: chosen?.seed ?? hash32(p.id),
     };
     if (p.provider && p.provider !== 'claude') info.provider = p.provider;
+    if (p.machine) info.machine = { ...p.machine };
     if (chosen) {
       info.custom = true;
       if (chosen.parts) info.parts = { ...chosen.parts };
@@ -610,6 +614,7 @@ export class Office {
       seed: hash32(p.id),
     };
     if (parent.info.provider) info.provider = parent.info.provider;
+    if (parent.info.machine) info.machine = { ...parent.info.machine };
     if (p.title) info.title = p.title;
     if (p.background) info.background = true;
     this.agents.set(p.id, { info, history: [], turnStart: now });
@@ -957,14 +962,19 @@ export class Office {
     for (const r of this.demoSnap?.rooms ?? []) entries.set(r.id, { path: r.path, createdAt: r.createdAt });
     this.slots.sync(entries.keys(), now);
     const rooms: RoomInfo[] = [...entries]
-      .map(([id, r]) => ({
-        id,
-        name: this.roomName(id),
-        path: r.path,
-        slot: this.slots.slotOf(id) ?? 0,
-        seed: hash32(id),
-        createdAt: r.createdAt,
-      }))
+      .map(([id, r]) => {
+        const room: RoomInfo = {
+          id,
+          name: this.roomName(id),
+          path: r.path,
+          slot: this.slots.slotOf(id) ?? 0,
+          seed: hash32(id),
+          createdAt: r.createdAt,
+        };
+        const machine = r.machine;
+        if (machine) room.machine = { ...machine };
+        return room;
+      })
       .sort((a, b) => a.slot - b.slot);
     // festa/alarme (eventos do GitHub): das salas reais ou do demo
     for (const room of rooms) {
@@ -1038,9 +1048,9 @@ export class Office {
     return out;
   }
 
-  private ensureRoom(roomId: string, now: number): void {
+  private ensureRoom(roomId: string, now: number, machine?: MachineRef): void {
     if (this.rooms.has(roomId)) return;
-    this.rooms.set(roomId, { path: roomId, createdAt: now });
+    this.rooms.set(roomId, machine ? { path: roomId, createdAt: now, machine: { ...machine } } : { path: roomId, createdAt: now });
     this.recomputeRoomNames();
     this.notice('room', roomId, 'info', tr('🏗️ Nova sala: {0}', [this.roomName(roomId)]), roomId);
   }

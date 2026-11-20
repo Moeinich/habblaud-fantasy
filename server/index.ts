@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { codexDirsRefused, isDefaultDir } from './accounts/detect';
 import { AccountsService } from './accounts/service';
 import { isTruthy, loadConfig, messagesOffReason, terminalOffReason, worldSocketUrl } from './config';
-import { createApiHandler, sendJson } from './http/app';
+import { createApiHandler, modSummary, sendJson } from './http/app';
 import { createRequestGuard, isLoopbackHost } from './http/guard';
 import { createRemoteGate, isRemoteRequest, loadSecret, RemoteSessions, startRemoteListener, type RemoteListener } from './http/remote';
 import { Hub } from './http/sse';
@@ -56,6 +56,11 @@ import { WorldService } from './world/service';
 import { WorldSettingsStore } from './world/settings';
 import { OwnerSocial } from './world/social';
 import { BuildingTokens } from './world/tokens';
+import { IngestAccounts } from './ingest/accounts';
+import { createIngestHandler } from './ingest/http';
+import { localAgents, localSnapshot } from './ingest/isolation';
+import { MACHINES_FILE, MachineStore } from './ingest/machines';
+import { IngestSource } from './ingest/source';
 import { BuildingUplink } from './world/uplink';
 import { WorldViewer } from './world/viewer';
 
@@ -113,6 +118,11 @@ const accounts = new AccountsService({
   usageDir: config.usageDir,
   onChange: () => late.office?.markDirty(),
 });
+// Sessions of other machines (HABBLAUD_INGEST=1, server/ingest/): their accounts go next to the local ones.
+const ingestAccounts = config.ingest ? new IngestAccounts() : undefined;
+const late2: { ingest?: IngestSource } = {};
+const remoteAccounts = (): ReturnType<IngestAccounts['list']> =>
+  ingestAccounts && late2.ingest ? ingestAccounts.list(late2.ingest.openAccounts()) : [];
 const office = new Office({
   names,
   roomAlias: (path) => roomAliases.get(path),
@@ -120,9 +130,9 @@ const office = new Office({
   // No modo dev o Vite serve o cliente direto do código-fonte: não há build para comparar.
   build: config.dev ? undefined : createBuildReader(config.rootDir),
   startedAt,
-  accounts: (sessions) => accounts.list(sessions),
+  accounts: (sessions) => [...accounts.list(sessions), ...remoteAccounts()],
   sources: () => late.agents?.sources() ?? [],
-  accountName: (id) => accounts.find(id)?.detected.name,
+  accountName: (id) => accounts.find(id)?.detected.name ?? (ingestAccounts ? remoteAccounts().find((a) => a.id === id)?.name : undefined),
   terminal: config.terminal,
   permissions: () => late.permissions?.snapshot() ?? new Map(),
   messages: config.messages ? () => late.messages?.reachable() ?? new Set() : undefined,
@@ -138,6 +148,11 @@ const agents = new SourceSet([claude]);
 const codexDirs = config.codex ? discoverCodexDirs(process.env, config.home) : [];
 const codex = codexDirs.length ? new CodexSource({ accounts, office, dirs: codexDirs, env: process.env, home: config.home }) : undefined;
 if (codex) agents.add(codex);
+const ingest = config.ingest
+  ? new IngestSource({ office, onAnsweredElsewhere: (agentId, tool) => late.permissions?.answeredElsewhere(agentId, tool) })
+  : undefined;
+late2.ingest = ingest;
+if (ingest) agents.add(ingest);
 // Eventos dos hooks do Codex (POST /api/codex/events, mod/habblaud-codex/hook.mjs): vão para a fonte do Codex ao vivo
 // (CodexLive); sem ela (nenhuma pasta do Codex ou HABBLAUD_CODEX=0) a rota responde {ok: false}.
 const codexLive: CodexLive | undefined = codex;
@@ -152,7 +167,11 @@ const stats = new DayStatsService({ dir: join(config.dataDir, 'stats'), snapshot
 stats.load();
 // O prédio no Habblaud World (world/uplink.ts): só com o servidor do mundo aceito. Conecta sozinho com a conta aprovada, o
 // personagem criado, a trava do terminal e sem pausa; o pacote sai só da projeção (shared/world/projection.ts).
-const worldTokens = new BuildingTokens({ stats });
+// World never sees other machines (ingest/isolation.ts): with ingest on, its tokens come from a "My day" tracker that
+// only samples this machine's agents (kept apart, in <dataDir>/stats-local).
+const localStats = config.ingest && world ? new DayStatsService({ dir: join(config.dataDir, 'stats-local'), snapshot: () => localSnapshot(hub.current()) }) : undefined;
+localStats?.load();
+const worldTokens = new BuildingTokens({ stats: localStats ?? stats });
 const worldUplink =
   world && config.world.url
     ? new BuildingUplink({
@@ -165,7 +184,8 @@ const worldUplink =
         locale: () => getLocale() as WorldLocale,
         store: worldStore,
         canAct: () => config.terminal,
-        agents: () => office.list(),
+        // Only this machine's agents: the building never includes sessions of other machines (ingest/isolation.ts).
+        agents: () => localAgents(office.list()),
         subscribe: (cb) => office.onChange(cb),
         booting: () => office.isBooting(),
         tokens: () => worldTokens.read(),
@@ -328,11 +348,13 @@ if (timeline) {
 permissions?.start();
 messages?.start();
 stats.start();
+localStats?.start();
 updates.start();
 worldUplink?.start();
 const ticker = setInterval(() => {
   try {
     office.tick();
+    ingest?.tick();
   } catch (err) {
     log.warnOnce(`tick:${errMsg(err)}`, tr('Falha no relógio do escritório: {0}', [errMsg(err)]));
   }
@@ -434,6 +456,19 @@ server.on('error', (err: NodeJS.ErrnoException) => {
 let remoteListener: RemoteListener | undefined;
 if (config.remote) {
   const remote = config.remote;
+  // Other machines (HABBLAUD_INGEST=1): /api/ingest/* with the machine's token, before the cookie login.
+  const ingestRoutes =
+    ingest && ingestAccounts
+      ? createIngestHandler({
+          machines: new MachineStore(join(config.dataDir, MACHINES_FILE)),
+          source: ingest,
+          accounts: ingestAccounts,
+          permissions,
+          messages,
+          summary: (own) => modSummary(hub.current(), (id) => office.has(id), config.version, own),
+          version: config.version,
+        })
+      : undefined;
   const gate = createRemoteGate({
     config: remote,
     sessions: new RemoteSessions(loadSecret(join(config.dataDir, 'remote-secret')), remote, Date.now, join(config.dataDir, 'remote-revoked.json')),
@@ -446,6 +481,7 @@ if (config.remote) {
       const url = parseUrl(req);
       try {
         if (guard(req, res)) return;
+        if (ingestRoutes?.(req, res, url)) return;
         if (gate(req, res, url)) return;
         if (!api(req, res, url)) fallback(req, res, url);
       } catch (err) {
@@ -467,6 +503,8 @@ if (config.remote) {
 } else if (config.remoteWarning) {
   log.warn(`   ${config.remoteWarning}.`);
 }
+if (config.ingest) log.info(tr('   Outras máquinas: ligado (HABBLAUD_INGEST) na porta remota; tokens em {0}.', [join(config.dataDir, MACHINES_FILE)]));
+else if (config.ingestWarning) log.warn(`   ${config.ingestWarning}.`);
 
 server.listen(config.port, config.host, () => {
   const host = config.host === '0.0.0.0' || config.host === '::' ? 'localhost' : config.host;
@@ -546,6 +584,7 @@ function shutdown(signal: string): void {
   log.info(tr('Encerrando ({0})…', [signal]));
   clearInterval(ticker);
   stats.stop();
+  localStats?.stop();
   agents.stop();
   accounts.stop();
   hub.stop();

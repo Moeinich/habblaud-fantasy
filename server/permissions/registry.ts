@@ -93,6 +93,9 @@ export interface RegistryOptions {
 
 export type SkipReason = 'no-viewers' | 'unknown-session' | 'unsupported-tool' | 'too-many';
 export type RegisterResult = { id: string; expiresAt: number } | { skip: SkipReason };
+/** answeredElsewhere: minimum age of a request before an event of another machine may release it. */
+export const ANSWERED_ELSEWHERE_MIN_MS = 1_500;
+
 export type ReleaseReason = 'terminal' | 'answered' | 'expired' | 'orphan' | 'gone' | 'unwatched' | 'shutdown';
 
 /**
@@ -448,6 +451,29 @@ export class PermissionRegistry {
   }
 
   /** Detalhe completo de um pedido em aberto (com os argumentos), ou undefined. */
+  /** The agent a request belongs to (ingest checks that a machine only waits on its own requests). */
+  agentOf(id: string): string | undefined {
+    return this.pending.get(id)?.agentId;
+  }
+
+  /**
+   * The request was answered somewhere the registry cannot read (the terminal of another machine): its tool ran
+   * (`tool` given) or the agent's turn ended (no `tool`). Releases the matching open requests of that agent as
+   * `answered`, so the hook stops waiting. Used for agents of other machines (server/ingest/source.ts), which have no
+   * transcript here.
+   */
+  answeredElsewhere(agentId: string, tool?: string): void {
+    for (const p of [...this.pending.values()]) {
+      if (p.outcome || p.agentId !== agentId) continue;
+      if (tool !== undefined && p.info.tool !== tool) continue;
+      // A late event of an earlier call (async hooks) must not release a request that just arrived: nobody answers a
+      // dialog in the terminal that fast.
+      if (this.now() - p.info.createdAt < ANSWERED_ELSEWHERE_MIN_MS) continue;
+      this.release(p, 'answered');
+      if (tool !== undefined) break;
+    }
+  }
+
   detail(id: string): PermissionRequestInfo | undefined {
     const p = this.pending.get(id);
     if (p && !p.outcome) return { ...p.info, ...this.queueOf(p) };

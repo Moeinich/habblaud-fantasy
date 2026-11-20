@@ -3274,4 +3274,9 @@ export const ES: Readonly<Record<string, string>> = {
   "Carimbo deixado na portaria: {0}": "Sello dejado en la recepción: {0}",
   "Entre no prédio ou chegue mais perto da porta para carimbar.": "Entra al edificio o acércate más a la puerta para sellar.",
   "O carimbo não foi deixado. Tente de novo.": "El sello no se dejó. Inténtalo de nuevo.",
+  "HABBLAUD_INGEST=1 precisa do acesso remoto ligado (npm run remote:setup): os tokens só entram pela porta remota": "HABBLAUD_INGEST=1 necesita el acceso remoto activado (npm run remote:setup): los tokens solo entran por el puerto remoto",
+  "HABBLAUD_INGEST=1 precisa da porta remota com HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP não serve)": "HABBLAUD_INGEST=1 necesita el puerto remoto con HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP no sirve)",
+  "   Outras máquinas: ligado (HABBLAUD_INGEST) na porta remota; tokens em {0}.": "   Otras máquinas: activado (HABBLAUD_INGEST) en el puerto remoto; tokens en {0}.",
+  "token de máquina inválido: crie um com npm run ingest:token -- add <nome> no servidor": "token de máquina no válido: crea uno con npm run ingest:token -- add <nombre> en el servidor",
+  "requisições demais desta máquina": "demasiadas solicitudes de esta máquina",
 };

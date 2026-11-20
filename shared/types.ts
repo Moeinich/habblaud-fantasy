@@ -186,6 +186,20 @@ export interface AgentInfo {
    * e perguntou pela caixa de entrada há pouco. Ver POST /api/messages.
    */
   canMessage?: boolean;
+  /**
+   * The agent runs on another machine and reached this server through the ingest endpoint (server/ingest/, the
+   * habblaud-remote plugin). Absent = an agent of this machine. Remote agents have no transcript here: the terminal,
+   * history, deliveries, the interactive terminal, New agent and dictation do not apply to them.
+   */
+  machine?: MachineRef;
+}
+
+/** A machine that sends its sessions to this server (HABBLAUD_INGEST). */
+export interface MachineRef {
+  /** Stable slug chosen when the token was created (`npm run ingest:token -- add <name>`). */
+  id: string;
+  /** Display name (the same as the id unless a label was given). */
+  name: string;
 }
 
 export interface RoomInfo {
@@ -207,6 +221,8 @@ export interface RoomInfo {
   createdAt: number;
   /** Efeito visual temporário na sala (eventos do GitHub detectados nos transcripts; ver shared/github.ts). */
   effect?: RoomEffect;
+  /** The room belongs to another machine (see AgentInfo.machine). */
+  machine?: MachineRef;
 }
 
 /**
@@ -326,6 +342,8 @@ export interface AccountInfo {
    * - disabled: sem números (tap de statusline não instalado e nenhum cache do /usage).
    */
   usageStatus: 'ok' | 'stale' | 'disabled';
+  /** The account lives on another machine (see AgentInfo.machine). */
+  machine?: MachineRef;
 }
 
 export interface OfficeSnapshot {

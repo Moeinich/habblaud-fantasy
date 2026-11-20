@@ -58,6 +58,12 @@ export interface ServerConfig {
   remoteWarning?: string;
   /** Habblaud World (server/world/): conta, personagem e, nas próximas fases, o prédio no mundo. */
   world: WorldConfig;
+  /**
+   * HABBLAUD_INGEST=1: other machines send their sessions to /api/ingest/* (server/ingest/), only on the remote port
+   * with HTTPS. False when off or when the remote port is missing or without TLS (`ingestWarning` says why).
+   */
+  ingest: boolean;
+  ingestWarning?: string;
 }
 
 export interface WorldConfig {
@@ -222,6 +228,17 @@ export function worldSocketUrl(base: string): string {
   return `${base.replace(/^http/, 'ws').replace(/\/+$/, '')}/v1/socket`;
 }
 
+/**
+ * Whether the ingest endpoint is on (undefined = on). It needs HABBLAUD_INGEST=1 AND the remote port with HTTPS: the
+ * machine tokens never travel in the clear and the local port (no login) never takes them.
+ */
+export function ingestOffReason(env: NodeJS.ProcessEnv, remote: RemoteConfig | undefined): string | undefined {
+  if (!isTruthy(env.HABBLAUD_INGEST)) return 'off';
+  if (!remote) return tr('HABBLAUD_INGEST=1 precisa do acesso remoto ligado (npm run remote:setup): os tokens só entram pela porta remota');
+  if (!remote.tls) return tr('HABBLAUD_INGEST=1 precisa da porta remota com HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP não serve)');
+  return undefined;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): ServerConfig {
   const home = env.HOME || homedir();
   const inDocker = detectDocker(env);
@@ -230,6 +247,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   const host = env.HABBLAUD_HOST?.trim() || '127.0.0.1';
   const pkg = readPackage(rootDir);
   const remote = parseRemoteConfig(env, inDocker);
+  const ingestOff = ingestOffReason(env, remote.config);
   return {
     port: Number.isFinite(port) && port > 0 && port < 65536 ? port : 4747,
     host,
@@ -252,5 +270,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     remote: remote.config,
     remoteWarning: remote.warning,
     world: parseWorldConfig(env, argv),
+    ingest: !ingestOff,
+    ingestWarning: ingestOff && ingestOff !== 'off' ? ingestOff : undefined,
   };
 }
