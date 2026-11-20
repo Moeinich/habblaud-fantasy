@@ -70,6 +70,45 @@ describe('remote:install', () => {
     }
   });
 
+  it('Codex: installs the hooks and writes the central server (600) in codex-hook.json; uninstall removes it', async () => {
+    const tmp = tempDir();
+    try {
+      const codexHome = join(tmp.dir, '.codex');
+      mkdirSync(codexHome, { recursive: true });
+      mkdirSync(join(tmp.dir, '.habblaud'), { recursive: true });
+      writeFileSync(join(tmp.dir, '.habblaud', 'codex-hook.json'), JSON.stringify({ port: 4800, permissionTimeoutS: 30 }));
+      const claude = fakeClaude();
+      const codexCalls: unknown[] = [];
+      const out: string[] = [];
+      const ctx = {
+        env: { HOME: tmp.dir, HABBLAUD_CODEX_DIRS: codexHome },
+        home: tmp.dir,
+        claude: claude.runner,
+        out: (l: string) => out.push(l),
+        codex: async (o: unknown) => (codexCalls.push(o), 0),
+      };
+      const opts = parseArgs(['install', '--server', 'https://pi.tail.ts.net', '--token', TOKEN], {});
+      if (opts === 'help') throw new Error('help');
+      expect(await run(opts, ctx, okFetch)).toBe(0);
+      expect(codexCalls).toEqual([{ command: 'install', dryRun: false, port: 4800, waitS: 30 }]);
+      const file = join(tmp.dir, '.habblaud', 'codex-hook.json');
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ port: 4800, permissionTimeoutS: 30, server: 'https://pi.tail.ts.net', token: TOKEN });
+      if (HAS_POSIX_MODES) expect(statSync(file).mode & 0o777).toBe(0o600);
+
+      const un = parseArgs(['uninstall'], {});
+      if (un === 'help') throw new Error('help');
+      expect(await run(un, ctx, okFetch)).toBe(0);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ port: 4800, permissionTimeoutS: 30 });
+
+      const skip = parseArgs(['install', '--server', 'https://pi.tail.ts.net', '--token', TOKEN, '--no-codex'], {});
+      if (skip === 'help') throw new Error('help');
+      expect(await run(skip, ctx, okFetch)).toBe(1); // no Claude Code account and Codex left out: nothing to do
+      expect(codexCalls).toHaveLength(1);
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
   it('a refused token stops before writing anything', async () => {
     const tmp = tempDir();
     try {

@@ -153,6 +153,8 @@ describe('ingest: events', () => {
     expect(ev).not.toHaveProperty('evil');
     expect(ev.cwd).toBe('ab');
     expect(ev.prompt).toHaveLength(4_000);
+    expect(parseIngestEvent(t.event({ provider: 'codex' }), Date.now()).provider).toBe('codex');
+    expect(parseIngestEvent(t.event({ provider: 'other' }), Date.now())).not.toHaveProperty('provider');
   });
 
   it('tool values are rebuilt with limits (no prototype keys, bounded depth and size)', () => {

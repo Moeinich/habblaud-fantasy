@@ -98,6 +98,7 @@ export function parseIngestEvent(raw: unknown, now: number): IngestEvent {
   const set = <K extends keyof IngestEvent>(k: K, v: IngestEvent[K] | undefined) => {
     if (v !== undefined) out[k] = v;
   };
+  if (r.provider === 'codex') out.provider = 'codex';
   set('cwd', text(r.cwd, 1024));
   set('agent_id', token(r.agent_id));
   set('agent_type', text(r.agent_type, 80));

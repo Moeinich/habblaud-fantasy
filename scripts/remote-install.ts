@@ -1,4 +1,4 @@
-// Sends this machine's Claude Code sessions to a central Habblaud on another machine (the "Multiple machines" setup).
+// Sends this machine's Claude Code and Codex sessions to a central Habblaud on another machine (the "Multiple machines" setup).
 // Runs on the machine where the sessions run (a Mac), with tsx:
 //
 //   npm run remote:install -- --server https://pi.<tailnet>.ts.net --token hbl1.<machine>.<secret>
@@ -12,6 +12,10 @@
 //    mode 600): the habblaud-remote hooks, the permission hook, the messages plugin and the habblaud mod read them;
 // 2. adds this folder as the "habblaud" plugin marketplace (if missing) and installs the habblaud-remote plugin
 //    through the Claude Code CLI. The other Habblaud plugins come from `npm run mod:install`.
+// For Codex (unless --no-codex, and only when a Codex folder exists: CODEX_HOME, ~/.codex*, HABBLAUD_CODEX_DIRS) it:
+// 3. installs the Habblaud hooks in <CODEX_HOME>/hooks.json of each folder (as npm run codex:install);
+// 4. writes `server` and `token` in ~/.habblaud/codex-hook.json (mode 600): the hook then posts every event to the
+//    central server. Codex runs a new or changed hook only after you approve it in /hooks.
 // Before that it checks the server and the token (GET /api/ingest/hello), unless --skip-check.
 //
 // Note: variables in the settings `env` reach every process Claude Code starts (tools included). The token only lets
@@ -25,6 +29,18 @@ import { discoverClaudeDirs, expandHome } from '../server/accounts/detect';
 import { accountEnv, makeClaudeRunner, parseMarketplaceList, parsePluginList, sameDir, type ClaudeRunner } from './mod-install';
 import { readSettings, tildify, writeSettings, type Settings } from './statusline-install';
 import { tr } from '../shared/i18n';
+import {
+  DEFAULT_PORT as CODEX_DEFAULT_PORT,
+  DEFAULT_WAIT_S as CODEX_DEFAULT_WAIT_S,
+  HOOK_SCRIPT as CODEX_HOOK_SCRIPT,
+  configPath as codexConfigPath,
+  discoverCodexHomes,
+  probeNode,
+  readHookConfig,
+  run as codexRun,
+  setHookRemote,
+  type RunOptions as CodexRunOptions,
+} from './codex-install';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const MARKETPLACE = 'habblaud';
@@ -34,7 +50,7 @@ export const TOKEN_VAR = 'HABBLAUD_SERVER_TOKEN';
 const TOKEN = /^hbl1\.([a-z0-9-]{1,32})\.[A-Za-z0-9_-]{43}$/;
 
 const USAGE = tr(
-  'Uso: npm run remote:<install|uninstall|status> [-- opções]\n\n  install     manda as sessões desta máquina para um Habblaud central (--server e --token)\n  uninstall   tira o endereço e o token de cada conta e o plugin habblaud-remote\n  status      mostra, por conta, o servidor configurado e o plugin\n\nOpções:\n  --server <url>     endereço HTTPS do Habblaud central (ex.: https://pi.<tailnet>.ts.net)\n  --token <token>    token desta máquina (npm run ingest:token -- add <nome> no servidor); ou HABBLAUD_SERVER_TOKEN\n  --account <pasta>  só esta conta (ex.: --account ~/.claude-conta2); pode repetir\n  --skip-check       não confere o servidor e o token antes de gravar\n  --dry-run          mostra o que faria, sem gravar nada\n  --claude <cmd>     comando do Claude Code (padrão: claude, do PATH)\n  -h, --help         mostra esta ajuda',
+  'Uso: npm run remote:<install|uninstall|status> [-- opções]\n\n  install     manda as sessões desta máquina para um Habblaud central (--server e --token)\n  uninstall   tira o endereço e o token de cada conta e o plugin habblaud-remote\n  status      mostra, por conta, o servidor configurado e o plugin\n\nOpções:\n  --server <url>     endereço HTTPS do Habblaud central (ex.: https://pi.<tailnet>.ts.net)\n  --token <token>    token desta máquina (npm run ingest:token -- add <nome> no servidor); ou HABBLAUD_SERVER_TOKEN\n  --account <pasta>  só esta conta (ex.: --account ~/.claude-conta2); pode repetir\n  --skip-check       não confere o servidor e o token antes de gravar\n  --no-codex         não mexe no Codex (só no Claude Code)\n  --dry-run          mostra o que faria, sem gravar nada\n  --claude <cmd>     comando do Claude Code (padrão: claude, do PATH)\n  -h, --help         mostra esta ajuda',
 );
 
 export class FatalError extends Error {}
@@ -47,13 +63,15 @@ export interface RemoteOptions {
   skipCheck: boolean;
   dryRun: boolean;
   claudeCmd?: string;
+  /** Also set up Codex (default: yes, when a Codex folder exists). */
+  codex: boolean;
 }
 
 export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): RemoteOptions | 'help' {
   const [command, ...rest] = argv;
   if (!command || command === '-h' || command === '--help' || rest.includes('-h') || rest.includes('--help')) return 'help';
   if (command !== 'install' && command !== 'uninstall' && command !== 'status') throw new FatalError(tr('comando desconhecido: {0}', [command]));
-  const o: RemoteOptions = { command, accounts: [], skipCheck: false, dryRun: false };
+  const o: RemoteOptions = { command, accounts: [], skipCheck: false, dryRun: false, codex: true };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     const value = () => {
@@ -66,6 +84,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     else if (a === '--account') o.accounts.push(value());
     else if (a === '--skip-check') o.skipCheck = true;
     else if (a === '--dry-run') o.dryRun = true;
+    else if (a === '--no-codex') o.codex = false;
     else if (a === '--claude') o.claudeCmd = value();
     else throw new FatalError(tr('opção desconhecida: {0}', [a]));
   }
@@ -136,6 +155,57 @@ interface Ctx {
   home: string;
   claude: ClaudeRunner;
   out: (line: string) => void;
+  /** npm run codex:install|status (tests inject a fake). */
+  codex?: (opts: CodexRunOptions) => Promise<number>;
+}
+
+/** The Codex part: hooks in each Codex folder and the central server in ~/.habblaud/codex-hook.json. */
+async function runCodex(o: RemoteOptions, ctx: Ctx): Promise<number> {
+  const found = discoverCodexHomes(ctx.env, ctx.home);
+  const cfgFile = tildify(codexConfigPath(ctx.home), ctx.home);
+  if (o.command === 'status') {
+    if (!found.dirs.length) return 0;
+    const cfg = readHookConfig(ctx.home);
+    const machine = cfg?.token ? TOKEN.exec(cfg.token)?.[1] : undefined;
+    ctx.out(cfg?.server ? tr('[remote] Codex: {0} como "{1}" ({2})', [cfg.server, machine ?? '?', cfgFile]) : tr('[remote] Codex: sem servidor central'));
+    return 0;
+  }
+  if (o.command === 'uninstall') {
+    if (o.dryRun) ctx.out(tr('[remote] Codex: tiraria o servidor central de {0}', [cfgFile]));
+    else if (setHookRemote(ctx.home, undefined)) ctx.out(tr('[remote] Codex: servidor central removido de {0} (os hooks ficam e voltam a falar com o Habblaud local; npm run codex:uninstall os tira).', [cfgFile]));
+    return 0;
+  }
+  if (!found.dirs.length) return 0;
+  const cfg = readHookConfig(ctx.home);
+  const runner =
+    ctx.codex ??
+    ((opts: CodexRunOptions) =>
+      codexRun(opts, {
+        env: ctx.env,
+        home: ctx.home,
+        now: new Date(),
+        hookPath: CODEX_HOOK_SCRIPT,
+        out: (l) => ctx.out(`   ${l}`),
+        nodeProbe: probeNode,
+        nodeCandidates: ['/opt/homebrew/bin/node', '/usr/local/bin/node', process.execPath],
+      }));
+  ctx.out(tr('[remote] Codex: instalando os hooks do Habblaud…'));
+  const code = await runner({
+    command: 'install',
+    dryRun: o.dryRun,
+    port: typeof cfg?.port === 'number' ? cfg.port : CODEX_DEFAULT_PORT,
+    waitS: typeof cfg?.permissionTimeoutS === 'number' ? cfg.permissionTimeoutS : CODEX_DEFAULT_WAIT_S,
+  });
+  if (code !== 0) {
+    ctx.out(tr('[remote] Codex: os hooks não foram instalados em todas as pastas.'));
+    return 1;
+  }
+  if (o.dryRun) ctx.out(tr('[remote] Codex: gravaria o servidor central em {0}', [cfgFile]));
+  else {
+    setHookRemote(ctx.home, { server: o.server!, token: o.token! });
+    ctx.out(tr('[remote] Codex: pronto. Os eventos vão para {0} (aprove os hooks do Habblaud em /hooks no Codex, se ele pedir).', [o.server!]));
+  }
+  return 0;
 }
 
 function accountDirs(o: RemoteOptions, env: NodeJS.ProcessEnv, home: string): string[] {
@@ -163,7 +233,9 @@ function installPlugin(dir: string, ctx: Ctx, dryRun: boolean): string | undefin
 
 export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): Promise<number> {
   const dirs = accountDirs(o, ctx.env, ctx.home);
-  if (!dirs.length) {
+  const withCodex = o.codex && !o.accounts.length;
+  const codexDirs = withCodex ? discoverCodexHomes(ctx.env, ctx.home).dirs : [];
+  if (!dirs.length && !codexDirs.length) {
     ctx.out(tr('Nenhuma conta do Claude Code encontrada (~/.claude* com projects/ ou sessions/). Use --account <pasta> ou HABBLAUD_CLAUDE_DIRS.'));
     return 1;
   }
@@ -223,6 +295,7 @@ export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): 
       ctx.out(tr('[remote] {0}: servidor central removido.', [label]));
     }
   }
+  if (withCodex) failures += await runCodex(o, ctx);
   return failures ? 1 : 0;
 }
 

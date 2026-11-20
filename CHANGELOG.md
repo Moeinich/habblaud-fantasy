@@ -22,6 +22,9 @@ one (0.**3**.0).
   or deny their permissions, answer their questions, send them messages, and their merged PRs and red CI throw the
   same party and alarm. The terminal, taking over, New agent and dictation stay off for them. Habblaud World never
   receives agents of other machines. See "Multiple machines" in the README.
+- **Codex sessions of other machines too.** `npm run remote:install` now also sets up Codex on the Mac: it installs
+  the Habblaud Codex hooks and points them at the central server, so Codex agents of that machine show up in the
+  server's office with their activities, subagents and waiting approvals (`--no-codex` leaves Codex alone).
 
 ### Changed
 

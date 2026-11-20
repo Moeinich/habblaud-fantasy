@@ -1,7 +1,8 @@
 // Ingest protocol: other machines send their Claude Code sessions to this server (HABBLAUD_INGEST=1).
 //
 // The habblaud-remote plugin (mod/habblaud-remote) runs one asynchronous hook per Claude Code event and posts it,
-// fire-and-forget, to POST /api/ingest/events on the remote port (HTTPS, `Authorization: Bearer <machine token>`).
+// fire-and-forget, to POST /api/ingest/events. The Codex hook (mod/habblaud-codex/hook.mjs) does the same for Codex
+// sessions when ~/.habblaud/codex-hook.json names a central server, with `provider: 'codex'` on the remote port (HTTPS, `Authorization: Bearer <machine token>`).
 // The server rebuilds the agents from those events (server/ingest/source.ts). The permission hook, the messages plugin
 // and the habblaud mod reach the same server through /api/ingest/* when HABBLAUD_SERVER_URL is set.
 //
@@ -23,6 +24,8 @@ export const INGEST_EVENTS = [
   'Stop',
   'SubagentStart',
   'SubagentStop',
+  /** Codex only: an approval request (the session waits for an answer in its terminal). */
+  'PermissionRequest',
 ] as const;
 
 export type IngestEventName = (typeof INGEST_EVENTS)[number];
@@ -35,7 +38,9 @@ export interface IngestEvent {
   /** When the hook ran, epoch ms on the sending machine (ordering of events of one session). */
   at: number;
   event: IngestEventName;
-  /** Basename of the Claude Code config dir (CLAUDE_CONFIG_DIR, or `.claude`). */
+  /** The tool that runs the session; absent = Claude Code. */
+  provider?: 'codex';
+  /** Basename of the config dir (CLAUDE_CONFIG_DIR or `.claude`; for Codex, CODEX_HOME or `.codex`). */
   account: string;
   session_id: string;
   cwd?: string;

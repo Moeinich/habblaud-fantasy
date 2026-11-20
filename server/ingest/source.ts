@@ -11,12 +11,15 @@
 // - Activities from the tool calls (describeTool, the same texts as the local agents), the prompt and the task list
 //   (TodoWrite); GitHub events (PR opened or merged, CI, release, push) from PostToolUse, with the same detection as
 //   the transcripts (sources/github.ts), so the room throws the same party.
+// - Codex sessions (`provider: 'codex'`, from mod/habblaud-codex/hook.mjs) take the same path: their agents carry
+//   the Codex provider, tool calls are described as the local Codex source does, and PermissionRequest = waiting.
 // - Not available (no transcript): token counts, the session title (the first prompt stands in), background shells.
 import type { Activity, AgentStatus, MachineRef, SourceInfo, TaskItem } from '../../shared/types';
 import { describePrompt, describeTool, describeWaitingFor, truncate } from '../../shared/activity';
 import { remoteId, type IngestEvent } from '../../shared/ingest';
 import { tr } from '../../shared/i18n';
 import type { Office } from '../model/office';
+import { describeCodexPrompt, describeCodexTool } from '../sources/codex/rollout';
 import { detectGitHubResult, githubCallOf, type GitHubCall } from '../sources/github';
 import type { AgentSource } from '../sources/source';
 
@@ -37,6 +40,7 @@ interface SubState {
 interface Session {
   key: string;
   machine: MachineRef;
+  provider?: 'codex';
   localSessionId: string;
   /** sessionId in the office (`r:<machine>:<sessionId>`). */
   sessionId: string;
@@ -172,18 +176,24 @@ export class IngestSource implements AgentSource {
         this.decide(s, s.agentId, 'working', ev.at);
         if (ev.prompt) {
           s.title ??= truncate(ev.prompt.replace(/\s+/g, ' '), 80);
-          office.addActivity(s.agentId, { id: `${s.agentId}#p:${ev.id}`, at: now, ...describePrompt(ev.prompt) }, true);
+          const desc = s.provider === 'codex' ? describeCodexPrompt(ev.prompt) : describePrompt(ev.prompt);
+          office.addActivity(s.agentId, { id: `${s.agentId}#p:${ev.id}`, at: now, ...desc }, true);
         }
         break;
       }
       case 'PreToolUse': {
         if (!target) break;
         this.decide(s, target, 'working', ev.at);
-        const name = ev.tool_name ?? 'tool';
         const sub = s.subs.get(target);
         if (sub) sub.toolCalls++;
         else s.toolCalls++;
-        const act: Activity = { id: `${target}#${ev.tool_use_id ?? ev.id}`, at: now, ...describeTool(name, ev.tool_input ?? {}), tool: name };
+        let name = ev.tool_name ?? 'tool';
+        let act: Activity;
+        if (s.provider === 'codex') {
+          const d = describeCodexTool(name, rec(ev.tool_input) ?? {});
+          name = d.tool;
+          act = { id: `${target}#${ev.tool_use_id ?? ev.id}`, at: now, ...d.desc, tool: name };
+        } else act = { id: `${target}#${ev.tool_use_id ?? ev.id}`, at: now, ...describeTool(name, ev.tool_input ?? {}), tool: name };
         office.addActivity(target, act, true);
         if ((name === 'Agent' || name === 'Task') && target === s.agentId) {
           const d = rec(ev.tool_input)?.description;
@@ -214,6 +224,9 @@ export class IngestSource implements AgentSource {
         }
         break;
       }
+      case 'PermissionRequest':
+        this.decide(s, target ?? s.agentId, 'waiting', ev.at, tr('aprovar um comando'));
+        break;
       case 'Stop':
         this.decide(s, s.agentId, 'idle', ev.at);
         this.opts.onAnsweredElsewhere?.(s.agentId);
@@ -295,6 +308,7 @@ export class IngestSource implements AgentSource {
     const s: Session = {
       key: `${machine.id}\0${ev.session_id}`,
       machine,
+      ...(ev.provider ? { provider: ev.provider } : {}),
       localSessionId: ev.session_id,
       sessionId,
       agentId: sessionId,
@@ -319,6 +333,7 @@ export class IngestSource implements AgentSource {
       startedAt: now,
       status: ev.event === 'SessionStart' || ev.event === 'Stop' ? 'idle' : 'working',
       machine,
+      ...(ev.provider ? { provider: ev.provider } : {}),
     });
     this.sessions.set(s.key, s);
     return s;
