@@ -66,7 +66,12 @@ export interface IngestSourceOptions {
   now?: () => number;
   /** A request of this agent was answered on its own machine (its tool ran, or the turn ended). */
   onAnsweredElsewhere?: (agentId: string, tool?: string) => void;
+  /** The machines that still have a token (MachineStore): the agents of a revoked machine leave at the next check. */
+  knownMachines?: () => ReadonlySet<string>;
 }
+
+/** How often tick() checks for revoked machines. */
+const REVOKED_CHECK_MS = 5_000;
 
 function rec(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
@@ -94,6 +99,7 @@ export class IngestSource implements AgentSource {
   private readonly sessions = new Map<string, Session>();
   private readonly seen = new Map<string, Map<string, number>>();
   private readonly now: () => number;
+  private revokedCheckAt = 0;
 
   constructor(private readonly opts: IngestSourceOptions) {
     this.now = opts.now ?? Date.now;
@@ -229,6 +235,11 @@ export class IngestSource implements AgentSource {
   /** Closes what ended or went quiet. Called by the server's ticker. */
   tick(): void {
     const now = this.now();
+    if (this.opts.knownMachines && this.sessions.size && now - this.revokedCheckAt >= REVOKED_CHECK_MS) {
+      this.revokedCheckAt = now;
+      const known = this.opts.knownMachines();
+      for (const id of new Set([...this.sessions.values()].map((s) => s.machine.id))) if (!known.has(id)) this.dropMachine(id);
+    }
     for (const s of [...this.sessions.values()]) {
       if (s.endingAt !== undefined && now >= s.endingAt) this.close(s);
       else if (now - s.lastSeen >= IDLE_CLOSE_MS) this.close(s);

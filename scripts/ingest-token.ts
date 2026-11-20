@@ -1,13 +1,12 @@
 // Machine tokens for HABBLAUD_INGEST (other machines sending their sessions to this server). Runs on the SERVER:
 //
 //   npm run ingest:token -- add <name> [--label "Anna's Mac"]   creates (or replaces) the token and prints it ONCE
-//   npm run ingest:token -- remove <name>                       revokes it (its agents leave within 12 h at most)
+//   npm run ingest:token -- remove <name>                       revokes it (its agents leave the office within seconds)
 //   npm run ingest:token -- list                                the machines (never the tokens)
 //
 // Only the SHA-256 of each token is stored, in <HABBLAUD_DATA_DIR or ~/.habblaud>/ingest-machines.json (mode 600).
 // The running server picks up changes by itself. In Docker, run it inside the container:
-// `docker compose exec habblaud node --import tsx scripts/ingest-token.ts add <name>` (or with HABBLAUD_DATA_DIR
-// pointing at the data volume).
+// `docker compose exec habblaud node dist/server/ingest-token.js add <name>` (the image only has dist/).
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';

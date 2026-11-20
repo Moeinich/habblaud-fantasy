@@ -148,8 +148,13 @@ const agents = new SourceSet([claude]);
 const codexDirs = config.codex ? discoverCodexDirs(process.env, config.home) : [];
 const codex = codexDirs.length ? new CodexSource({ accounts, office, dirs: codexDirs, env: process.env, home: config.home }) : undefined;
 if (codex) agents.add(codex);
-const ingest = config.ingest
-  ? new IngestSource({ office, onAnsweredElsewhere: (agentId, tool) => late.permissions?.answeredElsewhere(agentId, tool) })
+const machineStore = config.ingest ? new MachineStore(join(config.dataDir, MACHINES_FILE)) : undefined;
+const ingest = machineStore
+  ? new IngestSource({
+      office,
+      onAnsweredElsewhere: (agentId, tool) => late.permissions?.answeredElsewhere(agentId, tool),
+      knownMachines: () => new Set(machineStore.machines().map((m) => m.id)),
+    })
   : undefined;
 late2.ingest = ingest;
 if (ingest) agents.add(ingest);
@@ -458,9 +463,9 @@ if (config.remote) {
   const remote = config.remote;
   // Other machines (HABBLAUD_INGEST=1): /api/ingest/* with the machine's token, before the cookie login.
   const ingestRoutes =
-    ingest && ingestAccounts
+    ingest && ingestAccounts && machineStore
       ? createIngestHandler({
-          machines: new MachineStore(join(config.dataDir, MACHINES_FILE)),
+          machines: machineStore,
           source: ingest,
           accounts: ingestAccounts,
           permissions,

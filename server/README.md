@@ -91,6 +91,7 @@ party) or 10 min. A push only shows a notice. The same CI seen again within 2 mi
 | `GET /api/messages/:id` | (page) message status (`OutboxMessage`: `queued` \| `sent` \| `delivered` \| `failed`) |
 | `POST /api/mod/inbox` | (plugin `habblaud-mensagens`) `{session, account?}`: marks the session's presence and delivers `{messages: InboxMessage[]}` |
 | `POST /api/mod/inbox/ack` | (plugin) `{session, results: [{id, ok, error?}]}`: acknowledges each delivered message (or the failure) |
+| `/api/ingest/*` | other machines (`HABBLAUD_INGEST=1`): only on the remote port, with a machine token; see [Other machines](#other-machines-ingest) |
 
 The snapshot (SSE and `GET /api/snapshot`) carries only the last 8 activities of each agent in `recent`; the history
 of up to 200 (including the beginning of long transcripts, read in the background) comes from `GET /api/agents/:id`.
@@ -284,6 +285,46 @@ snapshot and in `messages` in `/api/health`.
 
 Any local process can call these routes (like the permission ones): turning messages on means accepting that a
 program on the machine itself can type into the sessions that have the plugin.
+
+## Other machines (ingest)
+
+`HABBLAUD_INGEST=1` lets other computers send their Claude Code sessions to this server (setup: "Multiple machines" in
+the main README). It only turns on with the remote port over HTTPS (`ingestOffReason` in `config.ts`; otherwise a
+warning at startup and nothing changes). The routes (`ingest/http.ts`) are answered on the remote port **before** its
+cookie login, with `Authorization: Bearer <machine token>`; on port 4747 they do not exist (404).
+
+- **Tokens** (`ingest/machines.ts`): `hbl1.<machineId>.<43 base64url chars>` (32 random bytes). `npm run
+  ingest:token -- add|remove|list` (`scripts/ingest-token.ts`; in Docker `node dist/server/ingest-token.js`) keeps only
+  the SHA-256 in `<dataDir>/ingest-machines.json` (mode 600), re-read when it changes. SHA-256 instead of scrypt: the
+  token has 256 bits of entropy and is checked on every hook event. The agents of a removed machine leave within 5 s.
+- **Limits:** 256 KB per body; a token bucket of 60 requests refilled at 30/s per machine (429 + `Retry-After: 1`);
+  wrong tokens slow down the next wrong ones (`LoginThrottle`), never a valid one.
+- **Validation** (`ingest/protocol.ts`): every field by type and shape, ids as tokens (`[A-Za-z0-9_.:@-]`), texts
+  without control characters and cut; `tool_input`/`tool_response` rebuilt (plain JSON only, depth 6, 60 keys, 100
+  items, 8,000 characters per text, 48 KB in all; prototype keys dropped). Unknown fields are dropped.
+- **Ids:** everything a machine sends is prefixed with `r:<machineId>:` (sessions, agents, accounts; subagents
+  `r:<m>:<session>:<agentId>`), so the same `sessionId` on two machines never collides and a machine only reaches its
+  own sessions. Agents, rooms and accounts carry `machine: {id, name}`; the room is `<machineId>:<cwd>`.
+- **Agents** (`ingest/source.ts`, `IngestSource`): from the hook events of the `habblaud-remote` plugin
+  (`shared/ingest.ts`). SessionStart/any event of an unknown session = arrives; SessionEnd = leaves (with reason
+  `clear`, the next SessionStart `clear` in the same folder within 10 s continues the same character); no event for
+  12 h = leaves. Prompt/tool events = working, `Notification` (permission or question) = waiting, Stop = idle;
+  subagents from SubagentStart/SubagentStop (title from the `Agent` call). The hooks run asynchronously, so a status only
+  changes with an event at least as new (the sender's `at`) as the one that set it; event ids are deduplicated.
+  Activities from `describeTool`, tasks from `TodoWrite`, the first prompt as the title. GitHub events from
+  PostToolUse/PostToolUseFailure with the transcript detection (`sources/github.ts`), live: the same party and alarm.
+  No token counts, background shells or transcript (terminal, history and deliveries do not apply).
+- **Permissions, messages, usage, mod summary:** `/api/ingest/permissions` (+ `/:id/wait`, only for the machine's own
+  requests), `/api/ingest/inbox` (+ `/ack`), `/api/ingest/usage` (the statusline-tap JSON with `account`) and
+  `/api/ingest/summary` reuse the same registries as the local routes, with the ids prefixed. The registry cannot read
+  a remote transcript, so `PermissionRegistry.answeredElsewhere` releases a request as `answered` when that agent's
+  tool ran (PostToolUse) or its turn ended (Stop), and only after 1.5 s (a late event of an earlier call must not
+  release a fresh request). Codex requests from other machines are skipped (`unsupported-tool`).
+- **Off for remote agents:** the terminal, take over and end (`PtyManager` answers 409), New agent and dictation.
+- **Habblaud World never sees other machines** (`ingest/isolation.ts`): `index.ts` hands the uplink
+  `localAgents(office.list())` and, with ingest on, a separate "My day" tracker over `localSnapshot(...)` in
+  `<dataDir>/stats-local` for the building's tokens. Nothing in `world/` changes; `ingest/isolation.test.ts` runs the
+  real uplink against the fake world server with remote agents in the office.
 
 ## Project character
 
@@ -498,6 +539,12 @@ in `shared/world/city.ts` (source of truth; the world server keeps the exact cop
 | `HABBLAUD_WORLD_URL` | `https://server.habblaud.com` | Habblaud World server: only `https://` or `wss://`, with no path; `http://127.0.0.1:*` only in dev mode (refused, World stays off). The building goes up over the WebSocket on the same origin (`/v1/socket`) |
 | `HABBLAUD_WORLD` | on | `0` (`false`, `off`, `no`) turns off Habblaud World: routes 404, nothing in the interface and nothing leaves |
 | `HABBLAUD_WORLD_DEV` | off (`--dev` turns it on) | `1` accepts the world server at `http://127.0.0.1` or `ws://127.0.0.1` |
+| `HABBLAUD_INGEST` | off | `1` turns on `/api/ingest/*` for other machines, only with the remote port over HTTPS (see [Other machines](#other-machines-ingest)) |
+
+On a machine that sends its sessions to another Habblaud (Claude Code environment, the settings `env` written by
+`npm run remote:install`): `HABBLAUD_SERVER_URL` (`https://…`, no path) and `HABBLAUD_SERVER_TOKEN` (`hbl1.…`). The
+`habblaud-remote` hooks, the permission hook, `habblaud-mensagens` and the `habblaud` mod then use `/api/ingest/*` on
+that server instead of `127.0.0.1`.
 
 In the permission hook (Claude Code environment; the `--port`/`--timeout` arguments stored by the installer take
 precedence): `HABBLAUD_PORT` (Habblaud's port, default `4747`), `HABBLAUD_PERMISSION_TIMEOUT` (seconds to wait
@@ -547,6 +594,7 @@ The repository is also a Claude Code plugin marketplace (`.claude-plugin/marketp
 - `history/` — the timelapse timeline recorder (`timeline.ts`) and the My day statistics: sampling, persistence and retention (`daystats.ts`; the pure accumulator lives in `shared/daystats.ts`).
 - `permissions/` — answering through the office (permissions and questions): request registry (`registry.ts`), routes (`http.ts`) and the transcript call lookup (`transcript.ts`).
 - `messages/` — messages through the office: queue, session presence and deadlines (`registry.ts`) and routes (`http.ts`).
+- `ingest/` — other machines (`HABBLAUD_INGEST`): machine tokens (`machines.ts`), validation (`protocol.ts`), the agents rebuilt from hook events (`source.ts`), their accounts and usage (`accounts.ts`), the routes (`http.ts`) and the World isolation (`isolation.ts`).
 - `updates/` — new-version check against GitHub releases (`checker.ts`).
 - `world/` — Habblaud World: session in `world.json` (`settings.ts`), world server client (`client.ts`), ALTCHA (`altcha.ts`), the account (`service.ts`), the `/api/world/*` routes (`http.ts`) and the building in the world (`uplink.ts`, with `ids.ts`, `tokens.ts`, `theme.ts` and `signals.ts`).
 

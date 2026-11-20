@@ -10,6 +10,19 @@ one (0.**3**.0).
 
 ## [Unreleased]
 
+### Added
+
+- **Multiple machines in one office.** A Habblaud server (for example a Raspberry Pi that is always on) can now show
+  the Claude Code sessions of other computers. On each Mac, the new `habblaud-remote` plugin sends every session event
+  in the background (it never slows the session down), and the permission, messages and usage plugins talk to the
+  server instead of the Mac itself. Turn it on with `HABBLAUD_INGEST=1` on the server, create a token per machine with
+  `npm run ingest:token -- add <name>` and run `npm run remote:install -- --server https://…` on the Mac. It only works
+  over the remote port with HTTPS, and only the token's hash is stored. Agents of other machines show the machine's
+  name on their card and get their own rooms; you can follow their status, activities, subagents and usage, approve
+  or deny their permissions, answer their questions, send them messages, and their merged PRs and red CI throw the
+  same party and alarm. The terminal, taking over, New agent and dictation stay off for them. Habblaud World never
+  receives agents of other machines. See "Multiple machines" in the README.
+
 ### Changed
 
 - **The office is now a fantasy camp.** The whole look was redrawn in an original fantasy-RTS style. Desks are

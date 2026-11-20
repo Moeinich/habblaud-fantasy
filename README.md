@@ -298,6 +298,57 @@ Without HTTPS the remote port doesn't start; `HABBLAUD_REMOTE_INSECURE_HTTP=1` f
 in the clear on the network). In Node mode: `HABBLAUD_REMOTE_PORT` and `HABBLAUD_REMOTE_HOST` (default
 `0.0.0.0:4748`) and `HABBLAUD_REMOTE_TLS_DIR` (default `~/.habblaud/remote-tls/server`).
 
+### Multiple machines (optional)
+
+One Habblaud can show the Claude Code sessions of **several computers** in the same office: for example a Raspberry
+Pi that is always on runs the server, and each Mac sends its own sessions to it. Nothing of this exists until you turn
+it on, and a Habblaud without it behaves exactly as before.
+
+**How it works.** On each Mac, the `habblaud-remote` plugin runs one asynchronous hook per Claude Code event and posts
+it, fire-and-forget, to the server (it never blocks the session; a lost event is fixed by the next one). The
+permission hook, the messages plugin and the Habblaud mod talk to the same server instead of `127.0.0.1`. Each machine
+has its own token; the server keeps only its hash. Everything goes over the server's
+[remote port with login and HTTPS](#phone-with-login-and-https-approving-requests), never over port 4747.
+
+**On the server (the Pi):**
+
+```bash
+npm run remote:setup          # user, password and HTTPS for the remote port
+# in .env (Docker) or the environment (Node): HABBLAUD_INGEST=1, and HABBLAUD_REMOTE_ALLOW=permissions,messages
+# to answer and write from the browser; HABBLAUD_WORLD=0 if you don't use Habblaud World
+npm run docker:up             # or: HABBLAUD_INGEST=1 npm start
+tailscale serve --bg --https=443 https+insecure://127.0.0.1:4748   # the remote port, only to your tailnet
+# add pi.<tailnet>.ts.net to HABBLAUD_ALLOWED_HOSTS
+npm run ingest:token -- add mac-anna   # one token per machine, shown once
+```
+
+In Docker, create the token inside the container:
+`docker compose exec habblaud node dist/server/ingest-token.js add mac-anna`.
+`npm run ingest:token -- list` shows the machines and `remove <name>` revokes one.
+
+**On each Mac (where the sessions run):**
+
+```bash
+npm run mod:install           # permission, messages and usage plugins (once)
+HABBLAUD_SERVER_TOKEN=hbl1.mac-anna.… npm run remote:install -- --server https://pi.<tailnet>.ts.net
+```
+
+`remote:install` checks the server and the token, writes `HABBLAUD_SERVER_URL` and `HABBLAUD_SERVER_TOKEN` in the
+`env` of each account's `settings.json` (mode 600) and installs the `habblaud-remote` plugin. New sessions (or
+`/reload-plugins`) show up in the server's office, in a room per machine and folder, with the machine's name on the
+agent's card. `npm run remote:status` shows the setup and `npm run remote:uninstall` removes it. The Mac does not need
+to run a Habblaud server of its own.
+
+**What works for agents of other machines:** status, activities, tasks, subagents, plan usage (5h and weekly), GitHub
+effects (party for an opened or merged PR and a release, alarm for red CI), approving or denying permissions and
+answering questions, and sending messages. **What doesn't** (shown as off in the interface): the terminal (the
+transcripts stay on the Mac), taking over and ending, New agent and dictation for that machine, token counts, the
+conversation history and deliveries. CI watched with a command in the background (`run_in_background`) gives no
+effect, and a session killed without exiting leaves the office after 12 h without events.
+
+**Habblaud World** only ever sees the server's own machine: agents of other machines never go into what is sent to
+the world (`server/ingest/isolation.ts`).
+
 ### Updating
 
 The version in use shows up in the top bar, next to "Connected", and in **Settings › About**. Every 6 hours
@@ -724,6 +775,8 @@ Everything works without configuring anything. If you need to adjust something, 
 | `HABBLAUD_PTY` | off | `1` turns on the interactive terminal (open, take over and end Claude Code sessions from the office; local access only and outside Docker) and **New agent** (also in Docker, through `npm run codex:bridge`). Read the warning in [Privacy and security](#privacy-and-security). |
 | `HABBLAUD_CLAUDE_BIN` | `claude` from PATH | The Claude Code executable that the interactive terminal and New agent run. |
 | `HABBLAUD_REMOTE_ALLOW` | `permissions` | What the [phone with login](#phone-with-login-and-https-approving-requests) can do: `permissions`, `messages`, `terminal`, `spawn` (comma-separated) or `none`. The other `HABBLAUD_REMOTE_*` are written by `npm run remote:setup`. |
+| `HABBLAUD_INGEST` | off | `1` lets other machines send their sessions to this Habblaud ([Multiple machines](#multiple-machines-optional)); only on the remote port with HTTPS. Tokens: `npm run ingest:token`. |
+| `HABBLAUD_SERVER_URL`, `HABBLAUD_SERVER_TOKEN` | — | On a machine that sends its sessions to another Habblaud: the server's address and this machine's token, in the Claude Code settings `env` (written by `npm run remote:install`). |
 | `HABBLAUD_MENSAGENS` | on (with the terminal) | `0` turns off only messages from the office (the box in the terminal and in the agent's details). |
 | `HABBLAUD_CODEX` | on | `0` turns off Codex in the office. |
 | `HABBLAUD_CODEX_DIRS` | automatic detection | Codex folders, comma-separated (instead of `~/.codex*` and `CODEX_HOME`). |
@@ -733,7 +786,7 @@ Everything works without configuring anything. If you need to adjust something, 
 | `HABBLAUD_ACCOUNTS` | — | JSON to customize name, letter or color, matched by the account folder name. E.g. `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
 
 **In Docker**, `HABBLAUD_PORT`, `HABBLAUD_BIND`, `HABBLAUD_ALLOWED_HOSTS`, `HABBLAUD_DEMO`, `HABBLAUD_TERMINAL`,
-`HABBLAUD_MENSAGENS`, `HABBLAUD_CODEX`, `HABBLAUD_UPDATE_CHECK`, `HABBLAUD_LANG`, `HABBLAUD_PTY`, the `HABBLAUD_WORLD*` and the
+`HABBLAUD_MENSAGENS`, `HABBLAUD_CODEX`, `HABBLAUD_UPDATE_CHECK`, `HABBLAUD_LANG`, `HABBLAUD_PTY`, `HABBLAUD_INGEST`, the `HABBLAUD_WORLD*` and the
 `HABBLAUD_REMOTE_*` apply (in `.env` or in the environment), as do `HABBLAUD_CLAUDE_DIRS`, `HABBLAUD_CODEX_DIRS`, `HABBLAUD_USAGE_DIR` and
 `HABBLAUD_ACCOUNTS` (read by `docker:up` on the host); the rest are fixed inside the container. Options: `npm run docker:up -- --no-build` (starts without rebuilding),
 `npm run docker:down` (stops) and `npm run docker:logs` (follows the logs).

@@ -163,4 +163,19 @@ describe('IngestSource', () => {
     expect(source.apply(MAC_A, ev('PreToolUse', { cwd: undefined }))).toBe(false);
     expect(office.list()).toHaveLength(0);
   });
+
+  it('the agents of a revoked machine leave at the next check', () => {
+    let now = 1_700_000_000_000;
+    const office = new Office({ names: new NameStore(null), version: 't', startedAt: 0, accounts: () => [], sources: () => [], accountName: () => undefined, now: () => now });
+    let known = new Set(['mac-a', 'mac-b']);
+    const source = new IngestSource({ office, now: () => now, knownMachines: () => known });
+    const ev = (id: string): IngestEvent => ({ v: 1, id, at: now, event: 'SessionStart', account: '.claude', session_id: SID, cwd: '/p' });
+    source.apply(MAC_A, ev('evt-00000001'));
+    source.apply(MAC_B, ev('evt-00000002'));
+    known = new Set(['mac-b']);
+    now += 6_000;
+    source.tick();
+    expect(office.get(`r:mac-a:${SID}`)!.status).toBe('offline');
+    expect(office.get(`r:mac-b:${SID}`)!.status).not.toBe('offline');
+  });
 });
