@@ -185,10 +185,13 @@ export function mouse(b: PixelBuf, x: number, y: number, tone: DeskItemTone = 'l
   b.set(x, y, '#7fe0a0');
 }
 
-// ------------------------------------------------------------------ facções (Horda / Aliança)
+// ------------------------------------------------------------------ factions (Horde / Alliance / Elf)
 
-/** Facção de um móvel: Horda (madeira escura, couro, ferro, osso) ou Aliança (carvalho, azul, ouro, pedra). */
-export type Faction = 'horde' | 'alliance';
+/**
+ * Faction of a piece of furniture, one per race: Horde (dark timber, hide, iron, bone), Alliance (oak, blue, gold,
+ * stone) or Elf (living moonwood, silver filigree, violet cloth, teal leaves and moonlight).
+ */
+export type Faction = 'horde' | 'alliance' | 'elf';
 
 /** Paletas das facções (rampas prontas para os móveis). */
 export const FACTION = {
@@ -207,6 +210,18 @@ export const FACTION = {
     stone: ramp('#9c968a', 0.06),
     plaster: ramp('#e6dcc4', 0.05),
     oak: ramp('#8a6239', 0.07),
+  },
+  elf: {
+    /** Living moonwood: dark violet-brown bark. */
+    bark: ramp('#5a4058', 0.07),
+    /** Polished heartwood (tabletops, panels). */
+    heart: ramp('#86687e', 0.06),
+    violet: ramp('#6a3f8a', 0.08),
+    teal: ramp('#2f8a86', 0.08),
+    leaf: ramp('#4f9a78', 0.08),
+    silver: ramp('#c4ccd8', 0.06),
+    /** Moonlight glow. */
+    moon: '#9ff0e6',
   },
 } as const;
 
@@ -331,6 +346,7 @@ export function monitorFront(
 ): { x: number; y: number; w: number; h: number } {
   if (style === 'horde') return hordeTablet(b, x, y, w, h);
   if (style === 'alliance') return allianceMirror(b, x, y, w, h);
+  if (style === 'elf') return elfMoonpane(b, x, y, w, h);
   const body = '#6a645a';
   b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
   b.rect(x, y, w, h, body);
@@ -445,6 +461,129 @@ function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number)
   return { x: sx, y: sy, w: sw, h: sh };
 }
 
+/** Silver crescent moon (5x5, tilted, horns pointing up-right). (x, y) = top-left. */
+export function crescent(b: PixelBuf, x: number, y: number, c: string = FACTION.elf.silver.lt, dark: string = FACTION.elf.silver.dk): void {
+  b.hline(x + 1, x + 2, y, c);
+  b.hline(x, x + 1, y + 1, c);
+  b.set(x, y + 2, c);
+  b.hline(x, x + 1, y + 3, dark);
+  b.set(x + 4, y + 3, dark);
+  b.hline(x + 1, x + 3, y + 4, dark);
+}
+
+/** Small two-leaf sprig (teal-green) growing from (x, y) upwards; `dir` = side the top leaf leans to. */
+export function leafSprig(b: PixelBuf, x: number, y: number, dir: -1 | 1 = 1): void {
+  const l = FACTION.elf.leaf;
+  b.vline(x, y - 2, y, FACTION.elf.bark.lt);
+  b.set(x - dir, y - 1, l.base);
+  b.set(x - dir * 2, y - 2, l.lt);
+  b.set(x + dir, y - 3, l.lt);
+  b.set(x + dir * 2, y - 3, l.hi);
+  b.set(x + dir, y - 2, l.dk);
+}
+
+/** Moon lantern (Elf, replaces candles): silver hook, violet-capped glass orb with a teal moonlight core. (x, y) = top-left, 4x6. */
+export function moonLantern(b: PixelBuf, x: number, y: number): void {
+  const e = FACTION.elf;
+  b.set(x + 1, y, e.silver.lt);
+  b.set(x + 2, y, e.silver.dk);
+  b.hline(x, x + 3, y + 1, e.violet.base);
+  b.set(x, y + 1, e.violet.lt);
+  b.rect(x, y + 2, 4, 3, '#4fc8c0');
+  b.set(x + 1, y + 2, e.moon);
+  b.set(x + 1, y + 3, '#ffffff');
+  b.set(x + 2, y + 3, e.moon);
+  b.set(x + 3, y + 4, '#2f8a86');
+  b.hline(x, x + 3, y + 5, e.silver.dk);
+  b.set(x, y + 5, e.silver.base);
+}
+
+/**
+ * Elf: moonwell scrying pane in an arched frame of living moonwood. The arch grows two leafy shoots at the top
+ * corners and carries a silver crescent at the crown; the stand is a pair of roots splaying on the desk.
+ */
+function elfMoonpane(b: PixelBuf, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
+  const e = FACTION.elf;
+  const t = e.bark;
+  b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
+  // Roots: a short trunk under the pane splitting into two roots.
+  const cx = x + Math.floor(w / 2) - 1;
+  b.rect(cx, y + h, 2, 2, t.base);
+  b.set(cx, y + h, t.lt);
+  b.line(cx - 1, y + h + 1, cx - 4, y + h + 2, t.base);
+  b.line(cx + 2, y + h + 1, cx + 5, y + h + 2, t.dk);
+  b.set(cx - 4, y + h + 2, t.lt);
+  // Frame of bark (rectangle) plus a 2-row arch on top.
+  b.rect(x, y, w, h, t.base);
+  b.hline(x + 1, x + w - 2, y - 1, t.lt);
+  b.hline(x + 3, x + w - 4, y - 2, t.base);
+  b.set(x + 2, y - 2, t.lt);
+  b.set(x + w - 3, y - 2, t.dk);
+  b.hline(x, x + w - 1, y, t.lt);
+  b.vline(x, y, y + h - 1, t.lt);
+  b.hline(x, x + w - 1, y + h - 1, t.dd);
+  b.vline(x + w - 1, y, y + h - 1, t.dk);
+  // Bark grooves on the side posts.
+  b.set(x, y + 3, t.base);
+  b.set(x + w - 1, y + 5, t.dd);
+  const sx = x + 1;
+  const sy = y + 1;
+  const sw = w - 2;
+  const sh = h - 2;
+  screenBg(b, sx, sy, sw, sh);
+  // Faint moonwater sheen on the top row of the pane.
+  b.hline(sx, sx + sw - 1, sy, '#2e4a4c');
+  // Silver crescent at the crown of the arch.
+  const mx = x + Math.floor(w / 2);
+  b.hline(mx - 2, mx, y - 3, e.silver.lt);
+  b.set(mx - 3, y - 2, e.silver.base);
+  b.set(mx + 1, y - 3, e.silver.dk);
+  b.set(mx - 1, y - 2, e.moon);
+  // Leafy shoots curling out of the top corners.
+  b.set(x - 1, y - 1, e.leaf.base);
+  b.set(x - 1, y - 2, e.leaf.lt);
+  b.set(x, y - 2, e.leaf.hi);
+  b.set(x + w, y - 1, e.leaf.dk);
+  b.set(x + w, y - 2, e.leaf.base);
+  b.set(x + w - 1, y - 2, e.leaf.lt);
+  // Vine wrapping the left post.
+  b.set(x, y + 2, e.leaf.base);
+  b.set(x, y + h - 3, e.leaf.dk);
+  // Moon gem (status light) in the bottom rail.
+  b.set(mx, y + h - 1, e.moon);
+  b.set(mx - 1, y + h - 1, '#4fc8c0');
+  return { x: sx, y: sy, w: sw, h: sh };
+}
+
+/** Back of the elf pane: pale heartwood panel in a bark frame, silver crescent emblem and a carved leaf vine. */
+function elfMoonpaneBack(b: PixelBuf, x: number, y: number, w: number, h: number): void {
+  const e = FACTION.elf;
+  const t = e.bark;
+  const panel = e.heart;
+  const cx = x + Math.floor(w / 2);
+  b.hline(x + 2, x + w - 1, y + h + 3, SURFACE_SHADOW_LIGHT);
+  b.rect(cx - 1, y + h, 2, 2, t.base);
+  b.line(cx - 2, y + h + 1, cx - 4, y + h + 2, t.base);
+  b.line(cx + 1, y + h + 1, cx + 3, y + h + 2, t.dk);
+  b.rect(x, y, w, h, t.base);
+  b.hline(x, x + w - 1, y, t.lt);
+  b.hline(x, x + w - 1, y + h - 1, t.dd);
+  b.vline(x + w - 1, y, y + h - 1, t.dk);
+  // Pale heartwood (the back must read as a back: never dark like the face).
+  b.rect(x + 1, y + 1, w - 2, h - 2, panel.lt);
+  b.hline(x + 1, x + w - 2, y + 1, panel.hi);
+  b.vline(x + w - 2, y + 1, y + h - 2, panel.base);
+  b.hline(x + 1, x + w - 2, y + h - 2, panel.base);
+  // Carved vine along the bottom with leaves.
+  for (let xx = x + 2; xx < x + w - 2; xx++) b.set(xx, y + h - 3 - ((xx >> 1) & 1), (xx & 3) === 0 ? e.leaf.base : panel.dk);
+  // Silver crescent emblem in the middle.
+  crescent(b, cx - 2, y + 1, e.silver.hi, e.silver.dk);
+  b.set(cx + 1, y + 3, e.moon);
+  // Leaf tips at the corners, flush with the frame (nothing above it: it must not cover the lap of whoever sits behind).
+  b.set(x, y, e.leaf.lt);
+  b.set(x + w - 1, y, e.leaf.dk);
+}
+
 /** Conteúdo estático de uma tela secundária (2º monitor / notebook). */
 export type StaticScreen = 'sheet' | 'ide' | 'chart';
 
@@ -513,6 +652,7 @@ export function monitorBack(
 ): void {
   if (style === 'horde') return hordeTabletBack(b, x, y, w, h);
   if (style === 'alliance') return allianceMirrorBack(b, x, y, w, h);
+  if (style === 'elf') return elfMoonpaneBack(b, x, y, w, h);
   const p =
     tone === 'mid'
       ? { hi: '#a8a296', lt: '#958f84', base: '#827c71', dk: '#6a645a', line: '#3f3a33' }

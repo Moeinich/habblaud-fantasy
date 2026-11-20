@@ -1,6 +1,8 @@
 // Rugs (pure). Three looks, picked from the shape and the colour the layout asks for:
 // - long thin strips (corridor runners) become a cobbled dirt path with ragged edges;
 // - cool colours (blue/teal, Alliance rooms) become a woven heraldic runner: blue field, gold border, lozenges;
+// - violet/plum colours (elf rooms) become a leaf-woven moon runner: violet field, silver border wound with a
+//   teal leaf vine, crescent sigils and leaf tips scalloping the edge;
 // - warm colours (Horde rooms, tavern) become a stretched hide rug with painted tribal stripes and lacing.
 import { mix, parseColor, ramp, rgbToHsl, shade } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
@@ -19,6 +21,7 @@ export function renderRug(w: number, h: number, color: string, seed: number): Pi
   const [r, g, bl] = parseColor(color);
   const [hue, sat] = rgbToHsl(r, g, bl);
   if (hue >= 165 && hue <= 280 && sat > 0.12) return heraldicRunner(w, h, color, seed);
+  if (hue > 280 && hue <= 340 && sat > 0.12) return moonRunner(w, h, color, seed);
   return hideRug(w, h, color, seed);
 }
 
@@ -77,6 +80,98 @@ function heraldicRunner(w: number, h: number, color: string, seed: number): Pixe
     }
   }
   for (const [cx, cy] of [[x0, 0], [x1, 0], [x0, h - 1], [x1, h - 1]] as const) b.clear(cx, cy);
+  return b;
+}
+
+/** Elf: woven violet runner, silver border wound with a teal leaf vine, crescent sigils and scalloped leaf edges. */
+function moonRunner(w: number, h: number, color: string, seed: number): PixelBuf {
+  const b = new PixelBuf(w, h);
+  const field = ramp(mix(color, '#5a3a78', 0.35), 0.07);
+  const silver = { hi: '#eef2f8', lt: '#c4ccd8', dk: '#8a92a4' };
+  const leaf = ramp('#4f9a78', 0.08);
+  const glow = '#9ff0e6';
+  // Leaf tips along the long edges (outside the border) and the field inside.
+  const x0 = 1;
+  const y0 = 1;
+  const x1 = w - 2;
+  const y1 = h - 2;
+  for (let x = x0 + 2; x < x1 - 1; x += 4) {
+    const o = (hp(x, 0, seed) & 1) as 0 | 1;
+    b.set(x + o, 0, leaf.lt);
+    b.set(x + o + 1, 0, leaf.base);
+    b.set(x + o, h - 1, leaf.base);
+    b.set(x + o + 1, h - 1, leaf.dk);
+  }
+  for (let y = y0 + 2; y < y1 - 1; y += 4) {
+    b.set(0, y, leaf.lt);
+    b.set(0, y + 1, leaf.base);
+    b.set(w - 1, y, leaf.base);
+    b.set(w - 1, y + 1, leaf.dk);
+  }
+  b.rect(x0, y0, x1 - x0 + 1, y1 - y0 + 1, field.dd);
+  // Silver border line, then the leaf vine running inside it.
+  b.rect(x0 + 1, y0 + 1, x1 - x0 - 1, y1 - y0 - 1, silver.dk);
+  b.rect(x0 + 2, y0 + 2, x1 - x0 - 3, y1 - y0 - 3, field.dk);
+  b.rect(x0 + 3, y0 + 3, x1 - x0 - 5, y1 - y0 - 5, field.base);
+  for (let x = x0 + 1; x <= x1 - 1; x++) {
+    if (x % 2 === 0) {
+      b.set(x, y0 + 1, silver.lt);
+      b.set(x, y1 - 1, silver.lt);
+    }
+  }
+  // Vine: leaves alternating on the dark band between border and field.
+  for (let x = x0 + 3; x < x1 - 2; x += 3) {
+    const c = (x / 3) % 2 ? leaf.lt : leaf.base;
+    b.set(x, y0 + 2, c);
+    b.set(x + 1, y1 - 2, c);
+  }
+  for (let y = y0 + 3; y < y1 - 2; y += 3) {
+    const c = (y / 3) % 2 ? leaf.lt : leaf.base;
+    b.set(x0 + 2, y, c);
+    b.set(x1 - 2, y + 1, c);
+  }
+  const fx = x0 + 3;
+  const fy = y0 + 3;
+  const fw = x1 - x0 - 5;
+  const fh = y1 - y0 - 5;
+  if (fw > 4 && fh > 4) {
+    // soft diagonal weave (twill)
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) if ((x + y * 2) % 6 === 0) b.set(fx + x, fy + y, field.lt);
+    // crescent sigils inside silver rings, spaced along the long axis
+    const horiz = fw >= fh;
+    const len = horiz ? fw : fh;
+    const span = horiz ? fh : fw;
+    const rad = Math.max(2, Math.min(4, Math.floor(span / 2) - 1));
+    const step = rad * 2 + 7;
+    const n = Math.max(1, Math.floor((len - 2) / step));
+    const start = Math.floor((len - (n - 1) * step) / 2);
+    for (let i = 0; i < n; i++) {
+      const c = start + i * step;
+      const cx = horiz ? fx + c : fx + Math.floor(fw / 2);
+      const cy = horiz ? fy + Math.floor(fh / 2) : fy + c;
+      for (let dy = -rad; dy <= rad; dy++) {
+        for (let dx = -rad; dx <= rad; dx++) {
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (Math.abs(d - rad) < 0.5) b.set(cx + dx, cy + dy, (dx + dy) < 0 ? silver.lt : silver.dk);
+          else if (d < rad - 0.5) {
+            // crescent: the disc minus a disc shifted to the right
+            const ex = dx - Math.max(1, Math.round(rad * 0.5));
+            const inMoon = d < rad - 1 && Math.sqrt(ex * ex + dy * dy) >= rad - 1;
+            b.set(cx + dx, cy + dy, inMoon ? (dx < 0 && dy < 0 ? silver.hi : glow) : field.dk);
+          }
+        }
+      }
+      // tiny leaves between sigils
+      if (i < n - 1) {
+        const mx = horiz ? cx + Math.floor(step / 2) : cx;
+        const my = horiz ? cy : cy + Math.floor(step / 2);
+        b.set(mx, my, leaf.lt);
+        b.set(mx + 1, my - 1, leaf.base);
+        b.set(mx - 1, my + 1, leaf.dk);
+      }
+    }
+  }
+  for (const [cx, cy] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]] as const) b.clear(cx, cy);
   return b;
 }
 

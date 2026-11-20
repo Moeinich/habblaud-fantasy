@@ -5,7 +5,8 @@
 //   nunca mudam de conteúdo, então podem ficar em cache por 1 ano (immutable);
 // - todo o resto (index.html e client/public: /assets/brand, /assets/art, manifest.json...) tem nome
 //   fixo e pode mudar a cada build: `no-cache` + ETag/Last-Modified, e o navegador revalida (304).
-import { createReadStream, statSync, type Stats } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, readFileSync, statSync, type Stats } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 import { tr } from '../../shared/i18n';
@@ -53,6 +54,11 @@ export function etagOf(st: Pick<Stats, 'size' | 'mtimeMs'>): string {
   return `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
 }
 
+/** Weak ETag from the content itself, for responses rewritten per request (index.html and manifest with the brand). */
+export function contentEtag(body: Buffer): string {
+  return `W/"${createHash('sha1').update(body).digest('hex').slice(0, 16)}"`;
+}
+
 /** A cópia do navegador ainda vale? (If-None-Match tem prioridade sobre If-Modified-Since.) */
 export function isNotModified(req: IncomingMessage, etag: string, mtimeMs: number): boolean {
   const inm = req.headers['if-none-match'];
@@ -70,7 +76,15 @@ export function isNotModified(req: IncomingMessage, etag: string, mtimeMs: numbe
   return false;
 }
 
-export function createStaticHandler(distDir: string): (req: IncomingMessage, res: ServerResponse, pathname: string) => void {
+export interface StaticOptions {
+  /** Rewrites index.html before it is sent (white-labeling: the brand name, see http/brand.ts). */
+  transformIndex?: (html: string) => string;
+}
+
+export function createStaticHandler(
+  distDir: string,
+  opts: StaticOptions = {},
+): (req: IncomingMessage, res: ServerResponse, pathname: string) => void {
   const root = resolve(distDir);
   const index = join(root, 'index.html');
 
@@ -100,6 +114,33 @@ export function createStaticHandler(distDir: string): (req: IncomingMessage, res
       .pipe(res);
   };
 
+  /** index.html through `transformIndex`: read and rewritten per request (small, no-cache), ETag from the result. */
+  const sendIndex = (req: IncomingMessage, res: ServerResponse, st: Stats) => {
+    const transform = opts.transformIndex;
+    if (!transform) return send(req, res, index, st, REVALIDATE);
+    let body: Buffer;
+    try {
+      body = Buffer.from(transform(readFileSync(index, 'utf8')), 'utf8');
+    } catch {
+      return send(req, res, index, st, REVALIDATE);
+    }
+    const etag = contentEtag(body);
+    const headers: Record<string, string | number> = {
+      'Cache-Control': REVALIDATE,
+      ETag: etag,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+    };
+    // Only the ETag counts (NaN never matches If-Modified-Since): the content depends on more than the file.
+    if (isNotModified(req, etag, Number.NaN)) {
+      res.writeHead(304, headers);
+      return void res.end();
+    }
+    res.writeHead(200, { ...headers, 'Content-Type': MIME['.html'], 'Content-Length': body.length });
+    res.end(req.method === 'HEAD' ? undefined : body);
+  };
+
   return (req, res, pathname) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' });
@@ -120,12 +161,13 @@ export function createStaticHandler(distDir: string): (req: IncomingMessage, res
     const file = resolve(root, `.${rel}`);
     const inside = file === root || file.startsWith(root + sep);
     const st = inside && file !== root ? fileStat(file) : undefined;
+    if (st && file === index) return sendIndex(req, res, st);
     if (st) return send(req, res, file, st, rel.startsWith(HASHED_DIR) ? IMMUTABLE : REVALIDATE);
     if (rel.startsWith('/assets/') || rel.startsWith(HASHED_DIR)) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       return void res.end(tr('Não encontrado'));
     }
     // SPA: qualquer outra rota cai no index.html.
-    send(req, res, index, indexStat, REVALIDATE);
+    sendIndex(req, res, indexStat);
   };
 }

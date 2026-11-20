@@ -1,5 +1,6 @@
 // Ícones da interface em pixel art (mapas de pixels -> SVG com bordas nítidas), coerentes com o escritório.
 // Cada '#' é um pixel pintado com currentColor; renderizados a 2 px de tela por pixel.
+import { wordmarkRows } from './wordmark';
 
 function pixelPaths(rows: readonly string[], palette: Readonly<Record<string, string>>): string {
   let out = '';
@@ -299,10 +300,6 @@ export const ICONS = {
   chevronDown: pixelIcon(['#......#', '##....##', '.##..##.', '..####..', '...##...']),
   chevronUp: pixelIcon(['...##...', '..####..', '.##..##.', '##....##', '#......#']),
   arrowDown: pixelIcon(['...##...', '...##...', '...##...', '#######.', '.#####..', '..###...', '...#....'].map((r) => r.padEnd(8, '.'))),
-  /** Cidade do Habblaud World (botão Mundo): prédios de alturas diferentes. */
-  city: pixelIcon(['......##..', '..##..##..', '..##.####.', '####.#..#.', '#..#.####.', '####.#..#.', '#..#.####.', '####.#..#.', '##########']),
-  /** O escritório (botão de volta da cidade): um prédio com porta. */
-  office: pixelIcon(['..######..', '..#.##.#..', '..######..', '..#.##.#..', '..######..', '..#.##.#..', '..##..##..', '..##..##..', '##########']),
 } as const;
 
 export type IconKey = keyof typeof ICONS;
@@ -330,9 +327,9 @@ export const FALLBACK_MARK = pixelIcon(
 );
 
 /**
- * Logotipo "Habblaud" em pixels, com a mesma fonte bitmap da placa da marca (assets/brand/signage.png, gerada por
- * scripts/assets/pixelart.py): a Pixelify Sans não fica nítida nesse tamanho.
- * c = "Hab" (pergaminho), t = "blaud" (dourado), s = sombra de 1 px.
+ * The hand-drawn "Habblaud" logo, in the bitmap font of the brand sign (assets/brand/signage.png, made by
+ * scripts/assets/pixelart.py): Pixelify Sans is not crisp at this size. c = "Hab" (parchment), t = "blaud" (gold),
+ * s = 1 px shadow. wordmark.ts draws any brand name in the same font; this is its reference (wordmark.test.ts).
  */
 export const WORDMARK_ROWS = [
   'c...c.......c.....t.....tt..................t',
@@ -345,4 +342,15 @@ export const WORDMARK_ROWS = [
   's...s..ssss.ssss..ssss..sss..ssss..ssss..ssss',
 ] as const;
 
-export const WORDMARK = pixelIcon(WORDMARK_ROWS, { s: 'rgba(12, 7, 3, 0.7)', c: '#f3e7c9', t: '#e9bb4f' }, 'ui-wordmark');
+const WORDMARK_PALETTE = { s: 'rgba(12, 7, 3, 0.7)', c: '#f3e7c9', t: '#e9bb4f' } as const;
+
+/**
+ * The pixel logo for a brand name as an SVG. Its size in CSS pixels comes from --wm-w/--wm-h (the grid in pixels),
+ * so styles.css keeps an integer scale for any name length.
+ */
+export function wordmarkSvg(name: string): string {
+  const rows = wordmarkRows(name);
+  const w = rows[0]?.length ?? 0;
+  const svg = pixelIcon(rows, WORDMARK_PALETTE, `ui-wordmark${w > 60 ? ' is-long' : ''}`);
+  return svg.replace('<svg ', `<svg style="--wm-w:${w};--wm-h:${rows.length}" `);
+}

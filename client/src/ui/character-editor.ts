@@ -1,7 +1,8 @@
 // Editor do personagem na gaveta do agente: nome, "Sortear" e as peças (pele, cabelo, roupa...) com prévia de corpo
-// inteiro (appearance-fields.ts, o mesmo do personagem do Habblaud World). "Salvar" grava o personagem do projeto (a
+// inteiro (appearance-fields.ts). "Salvar" grava o personagem do projeto (a
 // sala) no servidor; as regras puras (quando aparece, rótulos, o que vai em `parts`) estão em character-model.ts.
 import { NAME_MAX } from '../../../shared/appearance';
+import { raceOfRoom } from '../../../shared/race';
 import type { AgentInfo } from '../../../shared/types';
 import { appearanceFromSeed } from '../art';
 import type { Appearance } from '../art/api';
@@ -103,7 +104,7 @@ export class CharacterEditor {
     this.editing = true;
     setHidden(this.el, false);
     setAttr(this.button, 'aria-expanded', 'true');
-    this.fields.set({ ...this.base, ...a.parts });
+    this.fields.set({ ...this.base, ...a.parts }, raceOfRoom(a.roomId));
     this.nameInput.focus();
     this.nameInput.select();
   }

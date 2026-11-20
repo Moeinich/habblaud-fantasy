@@ -1,6 +1,5 @@
-// Geração determinística de aparência a partir de uma semente (puro, sem DOM). O sorteio e as paletas moraram aqui e
-// foram para shared/world/appearance-flat.ts (o mesmo sorteio serve o escritório e o Habblaud World); este módulo
-// re-exporta e guarda o que é só do editor do personagem.
+// Deterministic appearance from a seed (pure, no DOM). The draw and the palettes live in shared/appearance-flat.ts;
+// this module re-exports them and keeps what only the character editor needs.
 import { ACCESSORIES, BOTTOM_STYLES, FACIAL_HAIR, HAIR_STYLES, TOP_STYLES, type PartKey } from '../../../../shared/appearance';
 import {
   ACC_COLORS,
@@ -16,14 +15,14 @@ import {
   TIE_COLORS,
   TOP_COLORS,
   type SeedAppearance,
-} from '../../../../shared/world/appearance-flat';
+} from '../../../../shared/appearance-flat';
 import type { Appearance, TopStyle } from '../api';
 import { tr } from '../../../../shared/i18n';
 
-export { appearanceFromSeed, SKINS } from '../../../../shared/world/appearance-flat';
-export type { BottomStyle, FacialHair } from '../../../../shared/world/appearance-flat';
+export { appearanceFromSeed, SKINS } from '../../../../shared/appearance-flat';
+export type { BottomStyle, FacialHair } from '../../../../shared/appearance-flat';
 
-// O formato de shared/world/appearance-flat.ts e o da arte (art/api.ts) não podem se separar.
+// The shape in shared/appearance-flat.ts and the art's (art/api.ts) must not drift apart.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _sameAppearance: Same<SeedAppearance, Appearance> = true;
 void _sameAppearance;

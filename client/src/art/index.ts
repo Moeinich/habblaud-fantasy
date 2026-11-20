@@ -4,6 +4,7 @@
 // vira canvas, uma única vez por combinação de parâmetros (cache). As funções draw* chamadas a cada
 // quadro (telas, quadro, janela, relógio, pisos, paredes) só fazem fillRect/drawImage de tiles prontos.
 import { partsKey, type AppearanceParts } from '../../../shared/appearance';
+import type { Race } from '../../../shared/race';
 import { hash32 } from '../../../shared/hash';
 import {
   TILE,
@@ -104,15 +105,15 @@ export function characterSprite(req: CharacterFrameRequest): Sprite {
   const n = poseFrameCount(req.pose);
   const frame = ((Math.floor(req.frame) % n) + n) % n;
   const seated = isSeated(req.pose, req.seated);
-  const key = `${keyOf(req.appearance)}|${req.dir}|${req.pose}|${frame}|${req.held ?? 'none'}|${seated ? 1 : 0}|${req.costume ?? 'none'}`;
+  const key = `${keyOf(req.appearance)}|${req.dir}|${req.pose}|${frame}|${req.held ?? 'none'}|${seated ? 1 : 0}|${req.costume ?? 'none'}|${req.race ?? 'human'}`;
   return charCache.get(key, () => toSprite(renderCharacter({ ...req, frame, seated })));
 }
 
-export function avatarCanvas(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts } = {}): HTMLCanvasElement {
+export function avatarCanvas(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts; race?: Race } = {}): HTMLCanvasElement {
   const scale = Math.max(1, Math.round(opts.scale ?? 3));
-  const key = `${seed}|${opts.look ?? '-'}|${opts.sub ? 1 : 0}|${scale}|${partsKey(opts.parts)}`;
+  const key = `${seed}|${opts.look ?? '-'}|${opts.sub ? 1 : 0}|${scale}|${partsKey(opts.parts)}|${opts.race ?? 'human'}`;
   return avatarCache.get(key, () => {
-    const s = renderCharacter({ appearance: appearanceFromSeedPure(seed, opts), dir: 'down', pose: 'stand', frame: 0 });
+    const s = renderCharacter({ appearance: appearanceFromSeedPure(seed, opts), dir: 'down', pose: 'stand', frame: 0, race: opts.race });
     // Busto: cabeça + ombros (20x20 a partir do topo do cabelo).
     const crop = s.buf.crop(2, 2, CHAR_W - 4, 20);
     const out = new PixelBuf(crop.w * scale, crop.h * scale);

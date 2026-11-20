@@ -4,6 +4,7 @@
 import '@fontsource/pixelify-sans/400.css';
 import * as art from './index';
 import { pixelText, pixelTextWidth } from './pixelfont';
+import { THEME_COUNT } from './theme';
 import {
   FURNITURE,
   TILE,
@@ -693,6 +694,64 @@ function furniture(): void {
   });
 }
 
+// ------------------------------------------------------------------ rooms by race
+
+/** Mini project rooms for all 9 themes, one column per race (human / elf / orc), to compare the flavours. */
+function raceRooms(): void {
+  const s = section('racas', 'Rooms by race', 'All 9 room themes as mini rooms (floor by race, rug from the carpet colour, wall pattern, desks, chairs and screens). Columns: human (Alliance), elf (night-elf grove), orc (Horde).');
+  const CW = 10 * TILE;
+  const CH = 8 * TILE;
+  const GAP = 6;
+  const races = ['human', 'elf', 'orc'] as const;
+  canvas(s, 3 * (CW + GAP), 3 * (CH + 12), (ctx, t) => {
+    for (let i = 0; i < 9; i++) {
+      const theme = art.roomTheme(i);
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const ox = col * (CW + GAP);
+      const oy = row * (CH + 12);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ox, oy, CW, CH);
+      ctx.clip();
+      art.drawFloor(ctx, 'marble', ox, oy + 2 * TILE, CW, CH - 2 * TILE, { seed: i });
+      art.drawRug(ctx, ox + TILE / 2, oy + 3 * TILE + 4, 7 * TILE, 4 * TILE + 8, theme.carpet, i);
+      art.drawWallFace(ctx, ox, oy, CW, theme.wall, { doorways: [{ x: ox + 8 * TILE, w: 2 * TILE }] });
+      // The race banner the room layout hangs (world/layout/room.ts).
+      blit(ctx, art.furnitureSprites('poster', (['code', 'moon', 'coffee'] as const)[col]).base, ox + 2.5 * TILE, oy + 2 * TILE);
+      blit(ctx, art.furnitureSprites('poster', (['code', 'moon', 'coffee'] as const)[col]).base, ox + 5.5 * TILE, oy + 2 * TILE);
+      const ds: { y: number; draw: () => void }[] = [];
+      const furn = (kind: FurnitureKind, tx: number, ty: number, variant?: string, o: { dx?: number; seed?: number; screen?: ScreenMode } = {}) => {
+        const f = art.furnitureSprites(kind, variant, 0, { seed: o.seed });
+        const def = FURNITURE[kind];
+        const x = ox + tx * TILE + (def.footprint.w * TILE) / 2 + (o.dx ?? 0);
+        const y = oy + (ty + def.footprint.h) * TILE;
+        ds.push({
+          y,
+          draw: () => {
+            blit(ctx, f.base, x, y);
+            const r = f.base.rects?.screen;
+            if (r && o.screen) art.drawScreen(ctx, { x: x - f.base.ax + r.x, y: y - f.base.ay + r.y, w: r.w, h: r.h }, o.screen, t, tx + i);
+          },
+        });
+        if (f.front) ds.push({ y: y + 0.5, draw: () => blit(ctx, f.front as Sprite, x, y) });
+      };
+      for (let k = 0; k < 3; k++) {
+        const lx = 1 + k * 2;
+        furn('desk_back', lx, 4, theme.deskVariant, { seed: k + i });
+        furn('desk', lx, 5, theme.deskVariant, { seed: k * 2 + i, screen: (['code', 'terminal', 'docs'] as const)[k] });
+        furn('office_chair_front', lx, 3, theme.chairVariant, { dx: TILE / 2 });
+        furn('office_chair', lx, 6, theme.chairVariant, { dx: TILE / 2 });
+      }
+      furn('bookshelf', 7, 2, undefined, { seed: i });
+      furn('plant_tall', 8, 5, 'ficus', { seed: i });
+      ds.sort((a, b) => a.y - b.y).forEach((d) => d.draw());
+      ctx.restore();
+      label(ctx, `theme ${i} · ${races[col]}`, ox + 1, oy + CH + 3);
+    }
+  }, '#1f2431', 3);
+}
+
 // ------------------------------------------------------------------ superfícies
 
 function floors(): void {
@@ -727,6 +786,8 @@ function walls(): void {
       name: p,
       style: { base: p === 'brick' ? '#c98a6a' : p === 'tiles' ? '#e8eef2' : '#eef1f4', trim: '#9fb0c4', pattern: p },
     })),
+    { name: 'grove', style: { base: '#4e3a52', trim: '#2c2236', pattern: 'grove' } },
+    { name: 'moonstone', style: { base: '#7a7088', trim: '#3a3046', pattern: 'moonstone' } },
     { name: 'exterior', style: { base: '#8a6239', trim: '#4e3420', pattern: 'wood_panel', exterior: true } },
     { name: 'exterior tijolo', style: { base: '#8f897d', trim: '#4e4a40', pattern: 'brick', exterior: true } },
   ];
@@ -756,7 +817,7 @@ function screens(): void {
     // Linha de baixo: mesas com tela secundária e versos de monitor em cada variante.
     ctx.fillStyle = '#d3d9e2';
     ctx.fillRect(0, 112, cw * SCREENS.length, 56);
-    (['white', 'wood', 'dark'] as const).forEach((v, k) => {
+    (['white', 'wood', 'dark', 'moonwood'] as const).forEach((v, k) => {
       const x0 = k * 150 + 6;
       [1, 2, 4].forEach((seed, j) => {
         const d = art.furnitureSprites('desk', v, 0, { seed });
@@ -852,8 +913,8 @@ function clockAndIcons(): void {
   }, '#5b6b85');
   const th = document.createElement('div');
   s.appendChild(th);
-  canvas(th, 10 * 70, 76, (ctx, t) => {
-    for (let i = 0; i < 10; i++) {
+  canvas(th, THEME_COUNT * 70, 76, (ctx, t) => {
+    for (let i = 0; i < THEME_COUNT; i++) {
       const theme = art.roomTheme(i);
       const x = i * 70;
       art.drawFloor(ctx, 'carpet', x, 32, 64, 32, { seed: i, tint: theme.carpet, tint2: theme.carpet2 });
@@ -889,6 +950,7 @@ function avatars(): void {
 // ------------------------------------------------------------------ laço de animação
 
 sampleScene();
+raceRooms();
 shellWait();
 socialLife();
 characters();

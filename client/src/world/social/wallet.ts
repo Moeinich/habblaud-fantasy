@@ -3,10 +3,9 @@
 //
 // Fica no navegador (localStorage), por agente: cada navegador tem a sua economia (as apostas são
 // sorteadas na simulação local). Sem localStorage (testes, aba anônima bloqueada), só em memória.
-// Os agentes de um prédio do mundo visitado (ids `world:`, shared/world/office-from-world.ts) ficam numa chave à
+// Os agentes de um prédio do mundo visitado (ids `world:`, Sim visit mode) ficam numa chave à
 // parte (WORLD_STORAGE_KEY), apagada ao sair da visita: a visita não mexe na economia do escritório local.
 import { tr } from '../../../../shared/i18n';
-import { isWorldId } from '../../../../shared/world/office-from-world';
 
 /** Saldo de quem chega ao escritório. */
 export const START_COINS: Readonly<Record<'main' | 'sub', number>> = { main: 100, sub: 30 };
@@ -68,7 +67,7 @@ export interface StorageLike {
 type Part = 'office' | 'world';
 const PARTS: readonly Part[] = ['office', 'world'];
 const KEYS: Readonly<Record<Part, string>> = { office: STORAGE_KEY, world: WORLD_STORAGE_KEY };
-const partOf = (id: string): Part => (isWorldId(id) ? 'world' : 'office');
+const partOf = (id: string): Part => (id.startsWith('world:') ? 'world' : 'office');
 
 /**
  * Apaga as carteiras da visita guardadas no navegador (ao sair do prédio). Chame depois de descartar o `Sim` da

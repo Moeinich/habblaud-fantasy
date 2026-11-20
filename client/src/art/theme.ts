@@ -1,49 +1,58 @@
-// Room themes (pure): each project room belongs to a faction. Even entries are Alliance (cut stone, whitewashed
-// plaster with oak beams, blue/gold trim, `wood`/`white` desks, `blue`/`gray` chairs); odd entries are Horde
-// (spiked palisade logs, dark rough stone, red bands, `dark` desks, `red`/`black`/`green` chairs). Consecutive
-// seeds therefore always land on different factions, and neighbouring entries never share carpet or accent.
-// Carpet colours double as rug colours: Horde carpets are warm (hide/rust) and Alliance ones cool (royal blue),
-// which is how surfaces/rug.ts picks a hide rug vs. a heraldic runner.
+// Room themes (pure): every project room belongs to one race (shared/race.ts), and theme `i` belongs to
+// `RACES[i % 3]` — 0 human, 1 elf, 2 orc, 3 human, ... — so there are three themes per race and consecutive
+// seeds always land on different races. Neighbouring entries never share carpet or accent.
+// - Human (Alliance): cut stone, whitewashed plaster with oak beams, blue/gold trim, `wood`/`white` desks,
+//   `blue`/`gray` chairs, royal-blue carpets.
+// - Elf (night-elf grove): living moonwood, mossy moonstone, silver crescents, `moonwood` desks, `violet`/`teal`
+//   chairs, violet/plum carpets.
+// - Orc (Horde): spiked palisade logs, dark rough stone, red bands, `dark` desks, `red`/`black`/`green` chairs,
+//   warm hide carpets.
+// Carpet colours double as rug colours, which is how surfaces/rug.ts picks a look: cool blue = heraldic runner
+// (human), violet/plum = leaf-woven moon runner (elf), warm = hide rug (orc).
+import { RACES, ROOM_THEME_COUNT, themeIndexOfSeed, type Race } from '../../../shared/race';
 import type { RoomTheme } from './api';
 
-export type Faction = 'horde' | 'alliance';
+/** Faction of a room's furniture and surfaces: one per race. */
+export type Faction = 'horde' | 'alliance' | 'elf';
+
+const FACTION_OF_RACE: Readonly<Record<Race, Faction>> = { human: 'alliance', elf: 'elf', orc: 'horde' };
 
 const THEMES: readonly RoomTheme[] = [
-  // 0 Alliance: whitewashed half-timber, royal blue runner.
+  // 0 Human: whitewashed half-timber, royal blue runner.
   { carpet: '#3d5a8c', carpet2: '#34507e', wall: { base: '#e2d6ba', trim: '#2f4f9c', pattern: 'stripes' }, accent: '#3d63b8', deskVariant: 'wood', chairVariant: 'blue' },
-  // 1 Horde: palisade logs with red bands (also the faction of the Great Hall floor, seed 101).
+  // 1 Elf: living moonwood trunks with vines and a silver crescent band, violet runner, teal moonlight.
+  { carpet: '#74407e', carpet2: '#683a72', wall: { base: '#4e3a52', trim: '#2c2236', pattern: 'grove' }, accent: '#4fc8c0', deskVariant: 'moonwood', chairVariant: 'violet' },
+  // 2 Orc: palisade logs with red bands (also the Great Hall floor, seed 101 → 101 % 9 = 2).
   { carpet: '#9c4a30', carpet2: '#8a3f28', wall: { base: '#6e4a2c', trim: '#3a2416', pattern: 'wood_panel' }, accent: '#b8402e', deskVariant: 'dark', chairVariant: 'red' },
-  // 2 Alliance: dressed grey stone with a blue/gold frieze.
+  // 3 Human: dressed grey stone with a blue/gold frieze.
   { carpet: '#56688c', carpet2: '#4c5e80', wall: { base: '#a8a294', trim: '#2f4f9c', pattern: 'tiles' }, accent: '#e0b23c', deskVariant: 'white', chairVariant: 'gray' },
-  // 3 Horde: dark rough stone, hide rug.
+  // 4 Elf: mossy carved moonstone with moon glyphs, plum runner, lavender accent.
+  { carpet: '#643a6a', carpet2: '#58345e', wall: { base: '#7a7088', trim: '#3a3046', pattern: 'moonstone' }, accent: '#b48ae0', deskVariant: 'moonwood', chairVariant: 'teal' },
+  // 5 Orc: dark rough stone, hide rug.
   { carpet: '#a8825a', carpet2: '#9a754e', wall: { base: '#6a625a', trim: '#3a3a40', pattern: 'brick' }, accent: '#d4782c', deskVariant: 'dark', chairVariant: 'black' },
-  // 4 Alliance: plain plaster, oak trim.
+  // 6 Human: plain plaster, oak trim, deep royal blue.
   { carpet: '#2f4f9c', carpet2: '#29468c', wall: { base: '#ddd0b0', trim: '#8a6239', pattern: 'plain' }, accent: '#5a82d0', deskVariant: 'wood', chairVariant: 'blue' },
-  // 5 Horde: palisade with blood-red lashing, fel-green accent.
+  // 7 Elf: paler silver-barked grove, wine-plum runner, teal chairs, moss-green accent.
+  { carpet: '#6a3a5e', carpet2: '#5e3454', wall: { base: '#86788a', trim: '#3a2c40', pattern: 'grove' }, accent: '#7ad0a0', deskVariant: 'moonwood', chairVariant: 'teal' },
+  // 8 Orc: palisade with blood-red lashing, fel-green accent.
   { carpet: '#8a3a2c', carpet2: '#7a3226', wall: { base: '#7a5a38', trim: '#9c2f25', pattern: 'wood_panel' }, accent: '#6fa03a', deskVariant: 'dark', chairVariant: 'green' },
-  // 6 Alliance: grey stone, teal-blue runner.
-  { carpet: '#46667c', carpet2: '#3e5c70', wall: { base: '#9c968a', trim: '#2f4f9c', pattern: 'tiles' }, accent: '#d4a838', deskVariant: 'white', chairVariant: 'blue' },
-  // 7 Horde: dark stone, red trim, tan hide.
-  { carpet: '#b08a5a', carpet2: '#a07c50', wall: { base: '#5e5850', trim: '#9c2f25', pattern: 'brick' }, accent: '#9c2f25', deskVariant: 'dark', chairVariant: 'red' },
-  // 8 Alliance: half-timber with dark oak, slate-blue runner.
-  { carpet: '#62719c', carpet2: '#58678e', wall: { base: '#e6dcc4', trim: '#5a4028', pattern: 'stripes' }, accent: '#2f7a9c', deskVariant: 'wood', chairVariant: 'gray' },
-  // 9 Horde: blackened palisade, brown hide, bone accent.
-  { carpet: '#7a4a34', carpet2: '#6c412e', wall: { base: '#5e4028', trim: '#2a1c12', pattern: 'wood_panel' }, accent: '#c9a45a', deskVariant: 'dark', chairVariant: 'black' },
 ];
+
+if (THEMES.length !== ROOM_THEME_COUNT) throw new Error('theme.ts: THEMES must have ROOM_THEME_COUNT entries');
 
 export const THEME_COUNT = THEMES.length;
 
-function index(seed: number): number {
-  const n = THEMES.length;
-  return ((Math.floor(seed) % n) + n) % n;
-}
-
 export function roomTheme(seed: number): RoomTheme {
-  const t = THEMES[index(seed)];
+  const t = THEMES[themeIndexOfSeed(seed)];
   return { ...t, wall: { ...t.wall } };
 }
 
-/** Faction of the theme picked for `seed` (odd entries = Horde, even = Alliance). */
+/** Race of the theme picked for `seed` (theme `i` = `RACES[i % 3]`). */
+export function themeRace(seed: number): Race {
+  return RACES[themeIndexOfSeed(seed) % RACES.length];
+}
+
+/** Faction (furniture/surface flavour) of the theme picked for `seed`. */
 export function themeFaction(seed: number): Faction {
-  return index(seed) % 2 === 1 ? 'horde' : 'alliance';
+  return FACTION_OF_RACE[themeRace(seed)];
 }

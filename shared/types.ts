@@ -5,7 +5,6 @@
 // Renomear/remover campos quebra servidor, mundo e UI ao mesmo tempo.
 
 import type { AppearanceParts } from './appearance';
-import type { WorldMeta } from './world/api';
 
 export type AgentKind = 'main' | 'sub';
 
@@ -203,9 +202,12 @@ export interface MachineRef {
 }
 
 export interface RoomInfo {
-  /** Chave estável: cwd normalizado do projeto. */
+  /**
+   * Stable key: the project's folder name, lower-cased (server/model/rooms.ts, roomKey). The same project in different
+   * folders or on different machines shares one room, and an agent worktree counts as its repository.
+   */
   id: string;
-  /** Nome exibido (basename do cwd, desambiguado se repetido). */
+  /** Display name: the folder name of the room's most recent agent (this computer's first). */
   name: string;
   /** Caminho completo do projeto. */
   path: string;
@@ -383,16 +385,6 @@ export interface OfficeSnapshot {
     pty?: PtyStatus;
     /** Verificação de versão nova no GitHub (ausente nos testes e no timelapse). */
     updates?: UpdateStatus;
-    /**
-     * Habblaud World (server/world/): `enabled` = a seção aparece (HABBLAUD_WORLD não é 0 e o servidor do mundo foi
-     * aceito: o padrão, server.habblaud.com, ou uma HABBLAUD_WORLD_URL válida; recusada, o recurso fica desligado e nada
-     * do World aparece); `configured` = servidor do mundo aceito; `state` = a
-     * conta neste computador; `building` (aditivo, só com a conta aprovada e o personagem criado) = o resumo do prédio
-     * no mundo: conectado, pausado, andares e agentes da última remessa e a hora dela, se saiu do mundo e se o servidor
-     * do mundo o parou (sem o motivo, que só vai no status). Nada da conta além disso (o snapshot também vai ao celular
-     * e à linha do tempo). Ausente nos testes e no timelapse.
-     */
-    world?: WorldMeta;
   };
 }
 
@@ -409,11 +401,6 @@ export interface AccessInfo {
   terminal: boolean;
   /** Pode abrir agentes novos no app do Claude (POST /api/spawn). */
   spawn: boolean;
-  /**
-   * Pode usar a conta do Habblaud World (/api/world/*): recurso ligado (HABBLAUD_WORLD), trava do terminal e porta local
-   * com Host local. Ausente em servidores antigos.
-   */
-  world?: boolean;
 }
 
 export interface FeedItem {

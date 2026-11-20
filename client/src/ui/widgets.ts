@@ -2,7 +2,8 @@
 // de progresso.
 import type { AccountInfo, Activity, AgentInfo, AgentStatus, Provider } from '../../../shared/types';
 import { h, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
-import { WORDMARK } from './icons';
+import { wordmarkSvg } from './icons';
+import { brandName } from '../brand';
 import { shellDoneKind, shellLine, shellStage, statusLabel, type ShellWait } from './model';
 import { accountChipLabel, accountProvider, fallbackShort, showsProviderTag } from './provider';
 import { tr } from '../../../shared/i18n';
@@ -129,10 +130,11 @@ export function updateShellActivityLine(el: HTMLElement, wait: ShellWait, now: n
   );
 }
 
-/** Nome do produto como logotipo em pixels (o texto fica para leitores de tela). */
+/** The product (brand) name as the pixel logo; the text stays for screen readers. */
 export function wordmark(cls = 'ui-brand__name'): HTMLElement {
+  const name = brandName();
   const el = h('span', { class: cls });
-  el.innerHTML = WORDMARK;
-  el.append(h('span', { class: 'ui-sr', text: 'Habblaud' }));
+  el.innerHTML = wordmarkSvg(name);
+  el.append(h('span', { class: 'ui-sr', text: name }));
   return el;
 }

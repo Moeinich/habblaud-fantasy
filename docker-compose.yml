@@ -37,6 +37,10 @@ services:
       # 0 desliga a verificação de versão nova (consulta às releases no GitHub a cada 6 h).
       HABBLAUD_UPDATE_CHECK: ${HABBLAUD_UPDATE_CHECK:-}
       HABBLAUD_LANG: ${HABBLAUD_LANG:-}
+      # White-labeling: the name shown in the page title, the pixel logo, the home-screen app and the login page
+      # (1-24 characters; anything else falls back to Habblaud). HABBLAUD_BRAND_SHORT: the home-screen label.
+      HABBLAUD_BRAND_NAME: ${HABBLAUD_BRAND_NAME:-Habblaud}
+      HABBLAUD_BRAND_SHORT: ${HABBLAUD_BRAND_SHORT:-}
       # 0 desliga as sessões do Codex no escritório.
       HABBLAUD_CODEX: ${HABBLAUD_CODEX:-}
       # 1 liga o Novo agente pelo escritório (no Docker, quem começa a sessão é o auxiliar do host, npm run
@@ -50,15 +54,6 @@ services:
       HABBLAUD_REMOTE_INSECURE_HTTP: ${HABBLAUD_REMOTE_INSECURE_HTTP:-}
       # 1 lets other machines send their Claude Code sessions here (server/ingest/; remote port with HTTPS only).
       HABBLAUD_INGEST: ${HABBLAUD_INGEST:-}
-      # Habblaud World (ligado por padrão: server.habblaud.com; nada sai antes de criar a conta). HABBLAUD_WORLD=0 desliga tudo.
-      HABBLAUD_WORLD: ${HABBLAUD_WORLD:-}
-      HABBLAUD_WORLD_URL: ${HABBLAUD_WORLD_URL:-}
-      HABBLAUD_WORLD_DEV: ${HABBLAUD_WORLD_DEV:-}
-    # O host visto de dentro do container (servidor do Habblaud World local em teste: HABBLAUD_WORLD_URL=
-    # http://host.docker.internal:<porta> com HABBLAUD_WORLD_DEV=1). No Docker Desktop o nome já existe; no Linux,
-    # host-gateway o aponta para o host. Inofensivo sem o World.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     # Endurecimento: sistema de arquivos só leitura (exceto /data e /tmp), sem capabilities extras.
     read_only: true
     # /tmp em memória, com teto: sem `size` o Docker deixa usar metade da RAM do host.

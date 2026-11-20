@@ -1,9 +1,10 @@
 // Peças do personagem (pele, cabelo e estilo, olhos, roupa, calça, sapato, acessório, barba) com a prévia de corpo
-// inteiro: o miolo do editor de personagem, usado na gaveta do agente (character-editor.ts) e no personagem do Habblaud
-// World (world/settings-world.ts). Quem usa guarda o nome, salva e decide o que mandar; aqui só se escolhe a aparência.
+// inteiro: o miolo do editor de personagem, usado na gaveta do agente (character-editor.ts). Quem usa guarda o nome,
+// salva e decide o que mandar; aqui só se escolhe a aparência.
 import type { PartKey } from '../../../shared/appearance';
 import { characterSprite, editorConflict, editorOptions, fitToOptions } from '../art';
 import type { Appearance } from '../art/api';
+import type { Race } from '../../../shared/race';
 import { EDITOR_GROUPS, rowVisible, styleLabel, type EditorRow } from './character-model';
 import { h } from './dom';
 import { tr } from '../../../shared/i18n';
@@ -17,6 +18,8 @@ export class AppearanceFields {
   /** Grupos de peças (pele, cabelo...), redesenhados a cada escolha. */
   readonly groups: HTMLElement;
   private draft: Appearance | null = null;
+  /** Race the preview is drawn as (the race of the edited agent's room); the appearance itself has no race. */
+  private race: Race = 'human';
 
   constructor(private readonly onChange: (a: Appearance) => void = () => {}) {
     this.preview = h('canvas', { class: 'ui-char__preview', role: 'img', attrs: { 'aria-label': tr('Prévia do personagem') } });
@@ -28,9 +31,10 @@ export class AppearanceFields {
     return this.draft;
   }
 
-  /** Troca a aparência inteira (começo da edição, "Sortear") e redesenha. */
-  set(a: Appearance): void {
+  /** Troca a aparência inteira (começo da edição, "Sortear") e redesenha; `race` keeps the current one when absent. */
+  set(a: Appearance, race?: Race): void {
     this.draft = a;
+    if (race) this.race = race;
     this.paint();
   }
 
@@ -103,7 +107,7 @@ export class AppearanceFields {
 
   private drawPreview(a: Appearance): void {
     try {
-      const s = characterSprite({ appearance: a, dir: 'down', pose: 'stand', frame: 0 });
+      const s = characterSprite({ appearance: a, dir: 'down', pose: 'stand', frame: 0, race: this.race });
       const c = this.preview;
       c.width = s.canvas.width * PREVIEW_SCALE;
       c.height = s.canvas.height * PREVIEW_SCALE;

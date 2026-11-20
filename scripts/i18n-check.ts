@@ -45,22 +45,16 @@ const PT_JOINERS = /(?:^|\s)(?:de|em|e|ou|com|para|às|há)\s/;
 const PT_CHARS = /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]/;
 
 /**
- * Files allowed to hold Portuguese outside tr(): proper names, language names, internal ids, dev-only previews and
- * the Habblaud World folders (shared/world, server/world), which are not touched here.
+ * Files allowed to hold Portuguese outside tr(): proper names, language names, internal ids and dev-only previews.
  */
 const PT_ALLOWED = [
-  /^shared\/names\.ts$/,
   /^shared\/i18n\.ts$/,
-  /^shared\/world\//,
-  /^server\/world\//,
   /^server\/test\//,
   /^shared\/demo\//,
   /^client\/src\/art\/preview\.ts$/,
   /^client\/src\/world\/debug\.ts$/,
-  /^client\/src\/world\/city\/facade\.ts$/,
   /^client\/src\/world\/sim\/sim\.ts$/,
-  /^client\/src\/net\/world-stream\.ts$/,
-  /^scripts\/(shot|world-shots)\.mjs$/,
+  /^scripts\/shot\.mjs$/,
   /^scripts\/assets\//,
 ];
 

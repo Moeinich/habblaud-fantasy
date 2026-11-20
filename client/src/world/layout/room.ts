@@ -11,6 +11,7 @@
 // (descanso, impressão, verde, mesa de pé) e a coluna de apoio junto à parede.
 import { FURNITURE, type Dir, type FurnitureKind, type RoomTheme, type WallStyle } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
+import { raceOfSeed, type Race } from '../../../../shared/race';
 import { DOOR_W, DOOR_X, TILE } from '../constants';
 import { AreaBuilder, type SpotOpts } from './builder';
 import { slotRect, slotSide } from './geometry';
@@ -24,7 +25,15 @@ export interface RoomInput {
 
 const PLANTS_TALL = ['palm', 'ficus', 'monstera', 'bonsai'] as const;
 const PLANTS_SMALL = ['fern', 'succulent', 'flower'] as const;
-const POSTERS = ['code', 'coffee', 'rocket', 'cat', 'bug', 'ship_it'] as const;
+/**
+ * Wall posters by race: the race banner shows up twice as often as the neutral notices, and a room never hangs
+ * another race's banner ('code' = Alliance, 'coffee' = Horde, 'moon' = night-elf).
+ */
+const POSTERS: Readonly<Record<Race, readonly string[]>> = {
+  human: ['code', 'code', 'rocket', 'cat', 'bug', 'ship_it'],
+  elf: ['moon', 'moon', 'rocket', 'cat', 'bug', 'ship_it'],
+  orc: ['coffee', 'coffee', 'rocket', 'cat', 'bug', 'ship_it'],
+};
 const BEANBAGS = ['red', 'blue', 'yellow', 'green'] as const;
 
 /** Canto de reunião (assentos extras para subagentes). */
@@ -72,6 +81,7 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
   const rng = mulberry32(room.seed ^ 0x5eed);
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length) % arr.length];
   const v = roomVariant(room.seed);
+  const posters = POSTERS[raceOfSeed(room.seed)];
   const b = new AreaBuilder(room.id, 'room', rect);
   const area = b.area;
   area.side = side;
@@ -125,7 +135,7 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
   if (north) {
     wallItem('whiteboard', 4.5, undefined, { order: 0.6 });
     wallItem('clock', 10, undefined, { order: 0.7 });
-    wallItem('poster', 11.1, pick(POSTERS), { order: 0.5 });
+    wallItem('poster', 11.1, pick(posters), { order: 0.5 });
     wallItem('window', 12.75, undefined, { order: 0.4 });
     // interruptor ao lado da porta, na mureta (por dentro)
     wallItem('light_switch', DOOR_X - 0.5, 'on', { ly: 12, on: 'south', order: 0.8 });
@@ -134,7 +144,7 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
     wallItem('whiteboard', 2.5, undefined, { order: 0.6 });
     wallItem('light_switch', DOOR_X - 0.5, 'on', { order: 0.8 });
     wallItem('clock', 12.3, undefined, { order: 0.7 });
-    wallItem('poster', 13.35, pick(POSTERS), { order: 0.5 });
+    wallItem('poster', 13.35, pick(posters), { order: 0.5 });
     spot('switch', DOOR_X - 1, 2, 'up', { dy: -3 });
   }
   spot('whiteboard', north ? 4 : 2, 2, 'up', { dx: 8, dy: 2 });

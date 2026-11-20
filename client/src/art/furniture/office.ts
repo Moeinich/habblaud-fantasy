@@ -5,8 +5,8 @@ import { ramp, shade, type Ramp } from '../core/color';
 import { floorSheet, rectAt, type BufFurniture, type BufSprite } from '../core/sprite';
 import type { PixelBuf } from '../core/pixbuf';
 import {
-  FACTION, M, book, candle, contact, drape, foliage, frontFace, handAxe, ironBand, keyboard, leafBlade,
-  monitorBack, monitorFront, mouse, mug, papers, pencilCup, photoFrame, pick, pot, quillInk, rivet, rngOf, skullCandle,
+  FACTION, M, book, candle, contact, crescent, drape, foliage, frontFace, handAxe, ironBand, keyboard, leafBlade, leafSprig,
+  monitorBack, monitorFront, moonLantern, mouse, mug, papers, pencilCup, photoFrame, pick, pot, quillInk, rivet, rngOf, skullCandle,
   smallSucculent, staticScreen, topFace, tusk, underRect, woodGrain, type DeskItemTone, type Faction,
 } from './kit';
 
@@ -14,9 +14,9 @@ type Box = { x: number; y: number; w: number; h: number };
 
 // ------------------------------------------------------------------ mesas
 
-/** Facção da mesa: `dark` = Horda; `wood` e `white` = Aliança. */
+/** Desk faction: `dark` = Horde; `moonwood` = Elf; `wood` and `white` = Alliance. */
 function deskFaction(variant: string | undefined): Faction {
-  return variant === 'dark' ? 'horde' : 'alliance';
+  return variant === 'dark' ? 'horde' : variant === 'moonwood' ? 'elf' : 'alliance';
 }
 
 interface DeskMats {
@@ -34,6 +34,9 @@ function deskMats(variant: string | undefined): DeskMats {
     case 'dark':
       // Horda: tábuas grossas de madeira escura, pés de tronco, baú com cintas de ferro.
       return { top: ramp('#5e3d24', 0.07), edge: FACTION.horde.timber, legs: FACTION.horde.timber, ped: ramp('#553822', 0.07) };
+    case 'moonwood':
+      // Elf: polished violet heartwood top grown from living moonwood, bark edge and root legs.
+      return { top: ramp('#a8969e', 0.05), edge: FACTION.elf.bark, legs: FACTION.elf.bark, ped: FACTION.elf.bark };
     default:
       // Aliança: carvalho mel com friso de ouro.
       return { top: ramp('#b07d45', 0.07), edge: FACTION.alliance.oak, legs: FACTION.alliance.oak, ped: FACTION.alliance.oak };
@@ -75,6 +78,16 @@ function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
     ironBand(b, x, x + 2, 13, false);
     b.set(x + 1, 9, '#8a8a94');
     b.set(x + 1, 13, '#8a8a94');
+  } else if (faction === 'elf') {
+    // Living root: silver ring under the top, a vine with a leaf winding down, and a flared foot.
+    const e = FACTION.elf;
+    b.hline(x, x + 2, 8, e.silver.base);
+    b.set(x, 8, e.silver.hi);
+    b.set(x + 1, 10, e.leaf.base);
+    b.set(x, 11, e.leaf.lt);
+    b.set(x + 2, 12, e.leaf.dk);
+    b.set(x + (x === 0 ? 3 : -1), 15, m.legs.dk);
+    b.set(x + 1, 13, m.legs.dk);
   } else {
     const g = FACTION.alliance.gold;
     b.hline(x, x + 2, 8, g.base);
@@ -91,6 +104,8 @@ function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
 function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, back: boolean): void {
   const b = s.buf;
   const horde = faction === 'horde';
+  const elf = faction === 'elf';
+  const E = FACTION.elf;
   if (back) {
     // Painel do lado de quem olha cobrindo o vão, com estandarte da facção pendurado no meio.
     frontFace(b, 1, 8, 30, 6, m.ped);
@@ -101,6 +116,17 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       drape(b, 12, 8, 8, 8, FACTION.horde.red);
       clawMark(b, 13, 10, 4, '#2a1a14');
       b.hline(11, 20, 8, '#3a3a40');
+    } else if (elf) {
+      // Bark panel with flowing grooves, a silver vine line and a violet banner with a silver crescent.
+      for (const x of [5, 10, 22, 27]) {
+        b.vline(x, 9, 13, m.ped.dk);
+        b.set(x + 1, 10 + (x % 3), m.ped.lt);
+      }
+      b.hline(1, 30, 9, E.silver.dk);
+      for (let x = 2; x < 30; x += 4) b.set(x, 11, E.leaf.base);
+      drape(b, 12, 8, 8, 8, E.violet, { fringe: E.silver.lt });
+      crescent(b, 14, 9);
+      b.hline(11, 20, 8, E.silver.base);
     } else {
       b.hline(2, 29, 11, m.ped.lt);
       b.hline(1, 30, 9, FACTION.alliance.gold.dk);
@@ -120,6 +146,19 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       ironBand(b, 19, 28, 14);
       b.rect(23, 11, 2, 2, '#3a3a40');
       b.set(23, 11, '#c4a040');
+    } else if (elf) {
+      // Hollow-trunk cabinet: bark with an arched niche holding a glowing moon gem, a vine across the top.
+      frontFace(b, 19, 8, 10, 8, m.ped);
+      b.vline(20, 9, 14, m.ped.lt);
+      b.vline(27, 9, 14, m.ped.dk);
+      b.rect(22, 10, 4, 5, m.ped.dd);
+      b.hline(23, 24, 9, m.ped.dd);
+      b.set(23, 12, '#4fc8c0');
+      b.set(24, 12, E.moon);
+      b.set(24, 13, '#2f8a86');
+      b.hline(22, 25, 15, E.silver.dk);
+      for (const x of [19, 21, 26, 28]) b.set(x, 8 + (x & 1), E.leaf.base);
+      b.set(20, 9, E.leaf.lt);
     } else {
       // Gaveteiro de carvalho com puxadores de ouro.
       frontFace(b, 19, 8, 10, 8, m.ped);
@@ -131,7 +170,15 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
   }
   // Tampo (12 linhas) + espessura da borda (2 linhas).
   topFace(b, 0, -6, 32, 12, m.top);
-  if (horde) {
+  if (elf) {
+    // Polished heartwood: long flowing grain with a couple of knots and a thin silver leaf inlay.
+    woodGrain(b, 1, -5, 30, 10, m.top, seed);
+    const r = rngOf(seed, 9);
+    const kx = 10 + Math.floor(r() * 14);
+    b.set(kx, -3, m.top.dk);
+    b.set(kx + 1, -3, m.top.dd);
+    b.hline(1, 30, -5, m.top.base);
+  } else if (horde) {
     // Tábuas grossas com juntas e pregos.
     woodGrain(b, 1, -5, 30, 10, m.top, seed);
     for (const y of [-2, 2]) {
@@ -159,6 +206,15 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       b.hline(x, x + 3, 4, '#55555e');
       rivet(b, x + 1, 5);
     }
+  } else if (elf) {
+    // Silver filigree along the edge: a thin line with small scrolls, and leaves on the front corners.
+    b.hline(0, 31, 6, E.silver.base);
+    for (let x = 3; x < 31; x += 5) b.set(x, 7, E.silver.lt);
+    b.set(0, 6, E.silver.hi);
+    b.set(31, 6, E.silver.dk);
+    b.set(0, 5, E.leaf.lt);
+    b.set(1, 5, E.leaf.base);
+    b.set(31, 5, E.leaf.dk);
   } else {
     // Friso de ouro ao longo da borda.
     b.hline(0, 31, 6, FACTION.alliance.gold.base);
@@ -170,6 +226,12 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
     if (horde) {
       drape(b, 4, 5, 6, 8, FACTION.horde.red);
       clawMark(b, 5, 7, 3, '#2a1a14');
+    } else if (elf) {
+      drape(b, 4, 5, 6, 8, E.violet, { fringe: E.silver.lt });
+      b.set(6, 7, E.silver.hi);
+      b.set(5, 8, E.silver.lt);
+      b.set(5, 9, E.silver.base);
+      b.set(6, 10, E.silver.dk);
     } else {
       drape(b, 4, 5, 6, 8, FACTION.alliance.blue, { fringe: FACTION.alliance.gold.base });
       b.set(6, 8, FACTION.alliance.gold.hi);
@@ -179,10 +241,35 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
   }
 }
 
-/** Vela ou caveira-vela, conforme a facção. */
+/** Desk light by faction: skull candle (Horde), moon lantern (Elf) or candle in an iron holder (Alliance). */
 function deskLight(b: PixelBuf, x: number, y: number, faction: Faction): void {
   if (faction === 'horde') skullCandle(b, x, y);
+  else if (faction === 'elf') moonLantern(b, x, y - 2);
   else photoFrame(b, x, y);
+}
+
+/** Elf desk plant: a moonpetal sprig in a small silver-rimmed bark bowl. (x, y) = top-left of the bowl. */
+function moonpetal(b: PixelBuf, x: number, y: number): void {
+  const e = FACTION.elf;
+  b.rect(x, y, 4, 3, e.bark.base);
+  b.hline(x, x + 3, y, e.silver.base);
+  b.set(x + 3, y + 1, e.bark.dk);
+  b.set(x + 3, y + 2, e.bark.dd);
+  leafSprig(b, x + 1, y - 1, 1);
+  b.set(x + 2, y - 5, '#c8a8f0');
+  b.set(x + 3, y - 5, '#e8d8ff');
+}
+
+/** Owl-feather quill in a silver inkwell (Elf). (x, y) = base. */
+function owlQuill(b: PixelBuf, x: number, y: number): void {
+  const e = FACTION.elf;
+  b.rect(x, y - 1, 3, 2, '#2a2438');
+  b.hline(x, x + 2, y - 2, e.silver.base);
+  b.set(x, y - 2, e.silver.hi);
+  b.line(x + 1, y - 2, x + 4, y - 6, '#8a7a68');
+  b.set(x + 3, y - 5, '#d8ccb4');
+  b.set(x + 4, y - 5, '#5a4a3c');
+  b.set(x + 4, y - 7, '#e8dcc4');
 }
 
 /** Objetos sobre a mesa (variações por semente). Retorna o retângulo da tela principal e o da secundária. */
@@ -192,6 +279,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
   const v = seed % 6;
   const mugC = pick(r, MUG_COLORS);
   const horde = faction === 'horde';
+  const elf = faction === 'elf';
   let screen: Box;
   let screen2: Box | undefined;
   switch (v) {
@@ -207,11 +295,13 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
     case 2: {
       screen = monitorFront(b, 5, -17, 16, 11, faction);
       // Tomo aberto de pé à direita (página com runas), capa de couro (Horda) ou azul com cantos de ouro.
-      const cover = horde ? '#5a2a1c' : '#2f4f9c';
+      // Elf: violet cover with silver corners.
+      const cover = horde ? '#5a2a1c' : elf ? '#4a2f66' : '#2f4f9c';
+      const corner = horde ? '#e8dcc0' : elf ? FACTION.elf.silver.lt : '#e0b23c';
       b.rect(22, -9, 9, 6, cover);
-      b.hline(22, 30, -9, horde ? '#7a3a26' : '#3d63b8');
-      b.set(22, -9, horde ? '#e8dcc0' : '#e0b23c');
-      b.set(30, -9, horde ? '#e8dcc0' : '#e0b23c');
+      b.hline(22, 30, -9, horde ? '#7a3a26' : elf ? '#6a3f8a' : '#3d63b8');
+      b.set(22, -9, corner);
+      b.set(30, -9, corner);
       screen2 = { x: 23, y: -8, w: 7, h: 4 };
       staticScreen(b, screen2, 'ide', seed);
       b.rect(21, -3, 11, 2, '#e2d2a4');
@@ -220,13 +310,15 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
       b.hline(22, 31, -1, tone === 'onLight' ? 'rgba(40,46,70,0.3)' : 'rgba(60,40,40,0.2)');
       keyboard(b, 8, -1, 10, tone);
       if (horde) skullCandle(b, 1, -4);
+      else if (elf) moonpetal(b, 1, -3);
       else smallSucculent(b, 1, -3);
       break;
     }
     case 3: {
       screen = monitorFront(b, 8, -17, 16, 11, faction);
       // Selos de cera pregados na moldura.
-      b.rect(22, -15, 2, 2, horde ? '#9c2f25' : '#2f4f9c');
+      // Wax seals (Horde red, Alliance blue) or teal moonstones (Elf) on the frame.
+      b.rect(22, -15, 2, 2, horde ? '#9c2f25' : elf ? '#4fc8c0' : '#2f4f9c');
       b.rect(9, -15, 2, 2, '#d48a2c');
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
@@ -251,6 +343,14 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
       if (horde) {
         // Machado de mão deitado sobre a bancada.
         handAxe(b, 0, -2);
+      } else if (elf) {
+        // Leaf-bound scroll tied with a violet ribbon, a fallen leaf beside it.
+        b.rect(1, -3, 7, 2, '#dce8d4');
+        b.hline(1, 7, -2, '#a8bca0');
+        b.vline(4, -3, -2, '#6a3f8a');
+        b.set(0, -3, '#b8ccb0');
+        b.set(1, 0, FACTION.elf.leaf.base);
+        b.set(2, 0, FACTION.elf.leaf.lt);
       } else {
         // Pergaminho enrolado com fita azul.
         b.rect(1, -3, 7, 2, '#eadcb4');
@@ -260,6 +360,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
       }
       mug(b, 26, -3, mugC);
       if (horde) pencilCup(b, 28, 2);
+      else if (elf) owlQuill(b, 27, 2);
       else quillInk(b, 27, 2);
       break;
     }
@@ -270,6 +371,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
       mug(b, 3, -2, mugC);
       papers(b, 25, -4, 6, 4, tone);
       if (horde) skullCandle(b, 25, 0);
+      else if (elf) moonLantern(b, 26, -3);
       else smallSucculent(b, 26, 2);
       break;
     }
@@ -312,7 +414,10 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
     monitorBack(b, 17, -6, 13, 9, plastic, faction);
   } else {
     monitorBack(b, 8, -7, 16, 10, plastic, faction);
-    if (v === 2) smallSucculent(b, 26, 0);
+    if (v === 2) {
+      if (faction === 'elf') moonpetal(b, 26, 0);
+      else smallSucculent(b, 26, 0);
+    }
     else papers(b, 25, -1, 6, 4, tone);
     if (v === 3) deskLight(b, 2, -3, faction);
     else mug(b, 2, 0, mugC);
@@ -324,9 +429,11 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
 
 // ------------------------------------------------------------------ cadeiras
 
-/** Facção da cadeira: `red`, `black`, `green` = Horda; `blue`, `gray` = Aliança. */
+/** Chair faction: `red`, `black`, `green` = Horde; `blue`, `gray` = Alliance; `violet`, `teal` = Elf. */
 function chairFaction(variant: string | undefined): Faction {
-  return variant === 'blue' || variant === 'gray' ? 'alliance' : 'horde';
+  if (variant === 'blue' || variant === 'gray') return 'alliance';
+  if (variant === 'violet' || variant === 'teal') return 'elf';
+  return 'horde';
 }
 
 // Horda: couro tingido / pele escura / couro de musgo. Aliança: veludo azul real / veludo cinza-ardósia.
@@ -336,6 +443,8 @@ const CHAIR_COLORS: Readonly<Record<string, string>> = {
   red: '#a83a2a',
   green: '#5f7a34',
   gray: '#7a8296',
+  violet: '#7a4a9c',
+  teal: '#2f8a86',
 };
 
 function chairRamp(variant: string | undefined): Ramp {
@@ -370,6 +479,40 @@ function hideSeat(b: PixelBuf, c: Ramp, y: number): void {
   b.set(5, y + 1, c.hi);
 }
 
+/** Elf: a short moonwood trunk under the seat that splits into four curling roots. */
+function rootBase(b: PixelBuf): void {
+  const t = FACTION.elf.bark;
+  b.rect(6, 9, 4, 5, t.base);
+  b.vline(6, 9, 13, t.lt);
+  b.vline(9, 9, 13, t.dk);
+  b.set(7, 11, t.dk);
+  // Roots curling outwards.
+  b.line(6, 13, 3, 15, t.base);
+  b.line(9, 13, 12, 15, t.dk);
+  b.set(2, 15, t.lt);
+  b.set(13, 15, t.dd);
+  b.hline(5, 6, 15, t.base);
+  b.hline(9, 10, 15, t.dk);
+  // A vine with a leaf on the trunk.
+  b.set(7, 10, FACTION.elf.leaf.lt);
+  b.set(8, 12, FACTION.elf.leaf.base);
+}
+
+/** Elf seat: cloth cushion on a bark rim with a silver filigree edge and leaf tips at the corners. */
+function leafSeat(b: PixelBuf, c: Ramp, y: number): void {
+  const e = FACTION.elf;
+  b.rect(2, y, 12, 4, c.lt);
+  b.hline(3, 12, y, c.hi);
+  b.hline(2, 13, y + 3, c.base);
+  b.set(5, y + 1, c.hi);
+  b.hline(1, 14, y + 4, e.bark.base);
+  b.set(1, y + 4, e.bark.lt);
+  b.hline(1, 14, y + 5, e.bark.dk);
+  for (let x = 2; x < 14; x += 3) b.set(x, y + 4, e.silver.lt);
+  b.set(1, y + 3, e.leaf.lt);
+  b.set(14, y + 3, e.leaf.dk);
+}
+
 /** Pernas torneadas de carvalho (Aliança) com sapatas douradas. */
 function carvedLegs(b: PixelBuf): void {
   const oak = FACTION.alliance.oak;
@@ -402,13 +545,18 @@ function cushionSeat(b: PixelBuf, c: Ramp, y: number): void {
 
 export function officeChair(variant: string | undefined): BufFurniture {
   const c = chairRamp(variant);
-  const horde = chairFaction(variant) === 'horde';
+  const faction = chairFaction(variant);
+  const horde = faction === 'horde';
+  const elf = faction === 'elf';
   // Base: assento visto por trás (o encosto fica no `front`, por cima de quem senta).
   const base = floorSheet(1, 1, 6);
   const b = base.buf;
   if (horde) {
     stumpBase(b);
     hideSeat(b, c, 4);
+  } else if (elf) {
+    rootBase(b);
+    leafSeat(b, c, 4);
   } else {
     carvedLegs(b);
     cushionSeat(b, c, 4);
@@ -432,6 +580,29 @@ export function officeChair(variant: string | undefined): BufFurniture {
     f.rect(7, 13, 2, 1, t.base);
     tusk(f, 3, 12, 7, -1);
     tusk(f, 12, 12, 7, 1);
+  } else if (elf) {
+    // Back of the backrest: two moonwood branches arching into a pointed bough, cloth stretched between them,
+    // a silver crescent on the cloth and leaves sprouting at the tips.
+    const e = FACTION.elf;
+    const t = e.bark;
+    f.rect(5, 7, 6, 5, c.base);
+    f.hline(5, 10, 7, c.lt);
+    f.vline(10, 7, 11, c.dk);
+    crescent(f, 6, 7, e.silver.hi, e.silver.dk);
+    for (const x of [3, 12]) {
+      f.vline(x, 6, 13, x === 3 ? t.lt : t.dk);
+      f.vline(x + (x === 3 ? 1 : -1), 6, 13, t.base);
+    }
+    f.hline(5, 10, 5, t.base);
+    f.hline(6, 9, 4, t.lt);
+    f.set(4, 5, t.lt);
+    f.set(11, 5, t.dk);
+    f.hline(4, 11, 12, t.dd);
+    f.set(2, 4, e.leaf.lt);
+    f.set(3, 4, e.leaf.base);
+    f.set(13, 4, e.leaf.dk);
+    f.set(12, 4, e.leaf.base);
+    f.set(8, 3, e.leaf.hi);
   } else {
     // Verso do espaldar: tecido da cor do assento esticado num aro de carvalho, montantes com pinhas de ouro.
     const oak = FACTION.alliance.oak;
@@ -456,10 +627,51 @@ export function officeChair(variant: string | undefined): BufFurniture {
 
 export function officeChairFront(variant: string | undefined): BufFurniture {
   const c = chairRamp(variant);
-  const horde = chairFaction(variant) === 'horde';
+  const faction = chairFaction(variant);
+  const horde = faction === 'horde';
   const s = floorSheet(1, 1, 12);
   const b = s.buf;
-  if (horde) {
+  if (faction === 'elf') {
+    rootBase(b);
+    // Tall backrest to the north: two moonwood branches rising and meeting in a pointed arch, a violet/teal
+    // cloth panel with a silver crescent, and leafy shoots at the crown.
+    const e = FACTION.elf;
+    const t = e.bark;
+    for (const x of [2, 12]) {
+      b.rect(x, -7, 2, 13, t.base);
+      b.vline(x, -7, 5, t.lt);
+      b.vline(x + 1, -7, 5, t.dk);
+      b.set(x, -2, t.dk);
+      b.set(x + 1, 2, t.lt);
+    }
+    // Pointed arch.
+    b.hline(4, 11, -7, t.base);
+    b.hline(4, 5, -8, t.lt);
+    b.hline(10, 11, -8, t.dk);
+    b.hline(6, 9, -9, t.lt);
+    b.hline(7, 8, -10, t.base);
+    b.set(3, -8, t.lt);
+    b.set(12, -8, t.dk);
+    // Cloth panel.
+    b.rect(4, -6, 8, 11, c.base);
+    b.rect(5, -5, 6, 9, c.lt);
+    b.hline(5, 10, -5, c.hi);
+    b.vline(11, -6, 4, c.dk);
+    crescent(b, 6, -3, e.silver.hi, e.silver.dk);
+    b.set(9, 1, e.silver.lt);
+    b.set(6, 2, e.silver.base);
+    // Leaves at the crown and a vine on the left post.
+    b.set(7, -11, e.leaf.lt);
+    b.set(8, -11, e.leaf.hi);
+    b.set(6, -10, e.leaf.base);
+    b.set(9, -10, e.leaf.dk);
+    b.set(1, -6, e.leaf.lt);
+    b.set(1, -5, e.leaf.base);
+    b.set(14, -6, e.leaf.dk);
+    b.set(2, 0, e.leaf.base);
+    b.set(13, -3, e.leaf.dk);
+    leafSeat(b, c, 5);
+  } else if (horde) {
     stumpBase(b);
     // Encosto ao norte: couro esticado entre duas presas grandes, amarrado com tiras.
     b.rect(4, -5, 8, 10, c.base);
@@ -572,7 +784,9 @@ export function bookshelf(seed: number): BufFurniture {
         b.set(x + 2, bottom - 2, '#9c2f25');
         x += 7;
       } else if (kind < 0.3 && x < 25 && i > 0) {
-        skullCandle(b, x, bottom - 3);
+        // Candle stub on a dish (neutral: bookshelves stand in rooms of every race).
+        b.hline(x, x + 4, bottom, '#5a5550');
+        candle(b, x + 1, bottom - 1, 3);
         x += 6;
       } else {
         // Tomos grossos com faixas douradas na lombada (um às vezes deitado).
@@ -596,12 +810,12 @@ export function bookshelf(seed: number): BufFurniture {
       }
     }
   });
-  // Cantoneiras de ferro e coroamento com caveira-vela.
+  // Iron corner plates and a candle on the cornice (race-neutral: no skulls, crests or crescents).
   cornerIron(b, 0, -18);
   cornerIron(b, 29, -18);
   cornerIron(b, 0, 12);
   cornerIron(b, 29, 12);
-  skullCandle(b, 4, -25);
+  photoFrame(b, 5, -25);
   b.rect(20, -23, 7, 2, '#eadcb4');
   b.hline(20, 26, -22, '#b8a272');
   b.vline(23, -23, -22, '#9c2f25');

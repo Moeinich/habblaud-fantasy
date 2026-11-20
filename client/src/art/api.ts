@@ -23,6 +23,7 @@
 //   escuro (não preto); 3–4 tons por material; brilhos especulares; sombras de contato; muitos detalhes pequenos.
 
 import type { AppearanceParts } from '../../../shared/appearance';
+import type { Race } from '../../../shared/race';
 
 export const TILE = 16;
 
@@ -135,14 +136,19 @@ export interface CharacterFrameRequest {
   seated?: boolean;
   /** Acessório sazonal; ausente mantém a aparência original. */
   costume?: 'santa' | 'witch' | 'pumpkin' | 'vampire';
+  /**
+   * (Additive) Race the character is drawn as: the race of its room (shared/race.ts `raceOfRoom`). Only the
+   * rendering changes (skin tone, ears, tusks, eyes, trims); the stored appearance stays the same. Absent = 'human'.
+   */
+  race?: Race;
 }
 
 export type FurnitureKind =
   // --- escritório (salas de projeto)
-  | 'desk' // 2x1. Mesa com monitor virado para o SUL (tela visível para a câmera), teclado e caneca. rects.screen = área da tela.
+  | 'desk' // 2x1. Mesa com monitor virado para o SUL (tela visível para a câmera), teclado e caneca. rects.screen = área da tela. Variants by race: 'wood' | 'white' (human), 'moonwood' (elf), 'dark' (orc).
   | 'desk_back' // 2x1. Mesa vista pelo outro lado: vemos a TRASEIRA do monitor; a pessoa senta ao NORTE dela, virada para baixo (rosto visível). Para ilhas de mesas face a face. Mesmas variants de desk.
   | 'office_chair_front' // 1x1 assento virado para BAIXO (encosto ao norte, desenhado ANTES do personagem; sem front). Par da desk_back.
-  | 'office_chair' // 1x1 assento. Encosto ao sul (personagem senta virado para cima, de costas). front = encosto.
+  | 'office_chair' // 1x1 assento. Encosto ao sul (personagem senta virado para cima, de costas). front = encosto. Variants by race: 'blue' | 'gray' (human), 'violet' | 'teal' (elf), 'red' | 'black' | 'green' (orc).
   | 'bookshelf' // 2x1 encostada na parede norte. Livros coloridos.
   | 'filing_cabinet' // 1x1 arquivo de gavetas.
   | 'printer' // 1x1 impressora sobre móvel baixo.
@@ -159,7 +165,7 @@ export type FurnitureKind =
   | 'whiteboard' // 3 tiles de largura. Quadro kanban. rects.board = área onde o render desenha post-its.
   | 'window' // 2 tiles. Janela; rects.glass = vidro (o render desenha o céu antes da moldura).
   | 'clock' // 1 tile. Relógio; rects.face = mostrador (ponteiros desenhados pelo render).
-  | 'poster' // 1 tile. variants: 'code' | 'coffee' | 'rocket' | 'cat' | 'bug' | 'ship_it'
+  | 'poster' // 1 tile. variants: 'code' | 'coffee' | 'rocket' | 'cat' | 'bug' | 'ship_it' | 'moon'. Race banners: 'code' = Alliance (human), 'coffee' = Horde (orc), 'moon' = night-elf; the rest are neutral notices.
   | 'painting' // 2 tiles. Quadro com moldura; rects.art = área da pintura (pode receber imagem gerada por IA).
   | 'tv' // 2 tiles. TV de parede; rects.tv = tela.
   | 'light_switch' // 1 tile (o sprite é pequeno). variants: 'on' | 'off'
@@ -217,10 +223,10 @@ export interface FurnitureDef {
  * Ordenação de profundidade: por y da âncora no mundo (maior y = desenhado depois).
  */
 export const FURNITURE: Readonly<Record<FurnitureKind, FurnitureDef>> = {
-  desk: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: true, variants: ['wood', 'white', 'dark'] },
-  desk_back: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: true, variants: ['wood', 'white', 'dark'] },
-  office_chair_front: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: false, seat: true, variants: ['black', 'blue', 'red', 'green', 'gray'] },
-  office_chair: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: false, seat: true, variants: ['black', 'blue', 'red', 'green', 'gray'] },
+  desk: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: true, variants: ['wood', 'white', 'dark', 'moonwood'] },
+  desk_back: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: true, variants: ['wood', 'white', 'dark', 'moonwood'] },
+  office_chair_front: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: false, seat: true, variants: ['black', 'blue', 'red', 'green', 'gray', 'violet', 'teal'] },
+  office_chair: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: false, seat: true, variants: ['black', 'blue', 'red', 'green', 'gray', 'violet', 'teal'] },
   bookshelf: { mount: 'floor', footprint: { w: 2, h: 1 }, blocks: true },
   filing_cabinet: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
   printer: { mount: 'floor', footprint: { w: 1, h: 1 }, blocks: true },
@@ -236,7 +242,7 @@ export const FURNITURE: Readonly<Record<FurnitureKind, FurnitureDef>> = {
   whiteboard: { mount: 'wall', footprint: { w: 3, h: 0 }, blocks: false },
   window: { mount: 'wall', footprint: { w: 2, h: 0 }, blocks: false },
   clock: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false },
-  poster: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false, variants: ['code', 'coffee', 'rocket', 'cat', 'bug', 'ship_it'] },
+  poster: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false, variants: ['code', 'coffee', 'rocket', 'cat', 'bug', 'ship_it', 'moon'] },
   painting: { mount: 'wall', footprint: { w: 2, h: 0 }, blocks: false },
   tv: { mount: 'wall', footprint: { w: 2, h: 0 }, blocks: false },
   light_switch: { mount: 'wall', footprint: { w: 1, h: 0 }, blocks: false, variants: ['on', 'off'] },
@@ -276,7 +282,9 @@ export type FloorKind =
   | 'sidewalk' // calçada externa
   | 'street'; // rua externa (faixas desenhadas pelo render se quiser)
 
-export type WallPattern = 'plain' | 'stripes' | 'tiles' | 'wood_panel' | 'brick' | 'glass' | 'marble';
+export type WallPattern = 'plain' | 'stripes' | 'tiles' | 'wood_panel' | 'brick' | 'glass' | 'marble'
+  | 'grove' // (additive) elf: living moonwood trunks with vines, leaves and a silver crescent band
+  | 'moonstone'; // (additive) elf: mossy carved violet-grey stone with moon glyphs
 
 export interface WallStyle {
   /** Cor base da face da parede. */
@@ -373,5 +381,5 @@ export interface ArtModule {
    */
   footballLance?(t: number, seed: number): { lance: number; progress: number; right: boolean; period: number; goalAt: number };
   /** Avatar (cabeça + ombros) ampliado para a UI. `parts`: peças do personagem editado (ver AgentInfo.parts). */
-  avatarCanvas(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts }): HTMLCanvasElement;
+  avatarCanvas(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts; race?: Race }): HTMLCanvasElement;
 }

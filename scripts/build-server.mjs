@@ -1,7 +1,5 @@
-// Empacota o servidor (TypeScript) em um único arquivo ESM em dist/server e grava dist/build.json (commit e "cópia
-// modificada", ver scripts/build-info.mjs).
+// Bundles the server (TypeScript) into a single ESM file in dist/server.
 import { build } from 'esbuild';
-import { writeBuildInfo } from './build-info.mjs';
 
 await build({
   entryPoints: ['server/index.ts'],
@@ -27,6 +25,3 @@ await build({
   packages: 'external',
   logLevel: 'info',
 });
-
-const info = writeBuildInfo('dist/build.json');
-console.log(`  dist/build.json  ${info.commit === 'unknown' ? 'unknown' : info.commit.slice(0, 12)}${info.dirty ? ' (dirty)' : ''}`);

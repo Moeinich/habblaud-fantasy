@@ -1,5 +1,4 @@
-// Configurações (popover): opções do escritório, avisos, modo demonstração e Sobre (versão). O Habblaud World tem a
-// janela própria (ui/world/world-dialog.ts); daqui só sai a dica do tema em Aparência, que também vai para o prédio.
+// Settings (popover): office options, notifications, demo mode and About (version).
 import { access, remoteLogout } from '../net/access';
 import type { UiComponent, UiContext } from './context';
 import { h, iconButton, setAttr, setHidden, setText } from './dom';
@@ -9,7 +8,6 @@ import type { UiPrefs } from './prefs';
 import { SoundSettingsGroup } from './settings-sound';
 import type { SoundControl } from './sound';
 import { AboutGroup } from './version';
-import type { WorldThemeLink } from './world/world-dialog';
 import { LOCALE_STORAGE_KEY, LOCALES, normalizeLocale, tr, type Locale } from '../../../shared/i18n';
 
 type LanguageChoice = 'auto' | Locale;
@@ -103,8 +101,6 @@ export class SettingsPopover implements UiComponent {
     private ctx: UiContext,
     private notifier: Notifier,
     sound: SoundControl,
-    /** A janela do Habblaud World: a dica do tema em Aparência e o envio do tema ao prédio. */
-    private readonly world: WorldThemeLink,
   ) {
     const sw = (key: BoolPref | 'demo', label: string, hint: string, onToggle: () => void) => {
       const r = switchRow(label, hint, onToggle);
@@ -144,11 +140,7 @@ export class SettingsPopover implements UiComponent {
     this.theme = segmented<UiPrefs['theme']>(
       tr('Tema do escritório'),
       [['auto', tr('Automático')], ['none', tr('Nenhum')], ['christmas', tr('Natal')], ['halloween', tr('Halloween')]],
-      (v) => {
-        ctx.updatePrefs({ theme: v });
-        // Com o World ligado e a conta aprovada, o tema também vai para o prédio (clicar de novo reenvia).
-        void this.world.onThemePicked(v);
-      },
+      (v) => ctx.updatePrefs({ theme: v }),
     );
     this.theme.row.append(h('span', { class: 'ui-set__hint', text: tr('Automático: Halloween em outubro e Natal de 1º de novembro a 26 de dezembro; no resto do ano, o visual original. Nenhum: sempre o original.') }));
     this.soundGroup = new SoundSettingsGroup(ctx, sound);
@@ -188,7 +180,6 @@ export class SettingsPopover implements UiComponent {
       ),
     );
 
-    this.theme.row.append(world.themeNote);
     this.about = new AboutGroup(ctx);
 
     const close = iconButton(ICONS.close, tr('Fechar configurações'), () => this.hide(), 'ui-icon-btn--sm');

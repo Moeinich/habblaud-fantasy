@@ -12,6 +12,12 @@ one (0.**3**.0).
 
 ### Added
 
+- **White-labeling.** Set `HABBLAUD_BRAND_NAME` (and optionally `HABBLAUD_BRAND_SHORT` for the home-screen label) to
+  show your own name instead of "Habblaud" in the page title, the pixel logo (same font and colours), the home-screen
+  app and the phone login page. It applies at runtime, so the same Docker image works for any brand.
+- **Night-elf rooms.** Project rooms now come in three races: orc (Horde), human (Alliance) and a new night-elf grove
+  with moonwood walls, floors, desks, chairs, moon-crystal screens, rugs and banners. Each room only shows its own
+  race's decor.
 - **Multiple machines in one office.** A Habblaud server (for example a Raspberry Pi that is always on) can now show
   the Claude Code sessions of other computers. On each Mac, the new `habblaud-remote` plugin sends every session event
   in the background (it never slows the session down), and the permission, messages and usage plugins talk to the
@@ -32,6 +38,19 @@ one (0.**3**.0).
   removing the hash turns the link off.
 
 ### Changed
+
+- **Habblaud World removed.** The online city, the account and building sync, the World and Visit scenes, the
+  `/api/world/*` routes and the `HABBLAUD_WORLD`, `HABBLAUD_WORLD_URL` and `HABBLAUD_WORLD_DEV` settings are gone;
+  Habblaud no longer contacts server.habblaud.com.
+- **Agents look like the race of their room.** Humans in Alliance rooms, night elves (violet skin, long ears, glowing
+  eyes) in elf groves and orcs in Horde rooms, in the camp, the avatars and the character editor preview.
+- **Fantasy names.** Characters get original names in the style of their room's race (guttural orc names, medieval
+  human names, flowing night-elf names) instead of Brazilian first names. Existing installs switch on the next start;
+  characters picked in the editor are kept.
+- **One room per project.** A room is keyed by the project's folder name, so the same project checked out in
+  different places or on different machines shares one room, and agent worktrees (`.claude/worktrees/…`) join their
+  repository's room. The room shows the folder of its most recent agent (this computer's first), while the terminal
+  still opens each agent in its own folder. Room ids change once, so existing rooms get a new theme on the next start.
 
 - **Warcraft III-style rooms, Horde and Alliance.** Every remaining office object was redrawn: desks are war and scribe
   tables with rune tablets or scrying mirrors, chairs are tusked hide stumps (Horde) or carved high-back chairs

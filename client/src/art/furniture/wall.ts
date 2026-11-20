@@ -410,6 +410,42 @@ export function poster(variant: string | undefined): BufFurniture {
       }
       break;
     }
+    case 'moon': {
+      // Night-elf banner: violet swallowtail hung from a moonwood branch, silver trim, a large silver crescent
+      // cradling a moonlight star, and leaves sprouting from the branch.
+      const x = 2;
+      const y = -29;
+      const violet = ramp('#5a3a78', 0.09);
+      const silver = ramp('#c4ccd8', 0.06);
+      clothBanner(b, x, y, 12, 18, violet, silver.base, false, silver.hi);
+      // Branch instead of a timber pole: violet-brown bark with leaves.
+      b.hline(x - 2, x + 13, y - 1, '#5a4058');
+      b.set(x - 3, y - 2, '#4f9a78');
+      b.set(x - 3, y - 1, '#7ac8a0');
+      b.set(x + 14, y - 2, '#4f9a78');
+      b.set(x + 14, y - 1, '#2f6a58');
+      b.set(x + 5, y - 2, '#7ac8a0');
+      // Silver side stripes.
+      b.vline(x + 1, y + 2, y + 13, silver.dk);
+      b.vline(x + 10, y + 2, y + 13, silver.dk);
+      // Large crescent (opening to the upper right) with a moonlight star in its arms.
+      const cx = x + 3;
+      const cy = y + 3;
+      b.hline(cx + 2, cx + 3, cy, silver.hi);
+      b.hline(cx + 1, cx + 2, cy + 1, silver.lt);
+      b.vline(cx, cy + 2, cy + 4, silver.lt);
+      b.set(cx + 1, cy + 2, silver.hi);
+      b.set(cx + 1, cy + 5, silver.base);
+      b.hline(cx + 1, cx + 4, cy + 6, silver.dk);
+      b.hline(cx + 2, cx + 4, cy + 5, silver.base);
+      b.set(cx + 5, cy + 5, silver.dk);
+      b.set(cx + 4, cy + 2, '#9ff0e6');
+      b.set(cx + 3, cy + 3, '#e6fffb');
+      b.set(cx + 5, cy + 3, '#9ff0e6');
+      b.set(cx + 4, cy + 4, '#9ff0e6');
+      b.set(cx + 4, cy + 3, '#ffffff');
+      break;
+    }
     default: {
       // Alliance banner: royal blue swallowtail with gold border and a lion-head shield.
       const x = 2;

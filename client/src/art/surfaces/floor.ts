@@ -4,7 +4,7 @@
 import { TILE, type FloorKind } from '../api';
 import { mix, parseColor, ramp, shade, type RGBA } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
-import { themeFaction } from '../theme';
+import { themeRace } from '../theme';
 
 export const CHUNK_TILES = 8;
 export const CHUNK_PX = CHUNK_TILES * TILE;
@@ -344,12 +344,88 @@ const ALLY_STONE = stonePal(['#a8a294', '#9c968a', '#b2ac9e', '#949aa0']);
 const ALLY_GAP = rgba('#5e5850');
 
 /**
- * Floor of project rooms and the Great Hall ('marble'). The room theme (via the seed) picks the faction:
- * Horde = rough flagstones sunk in dirt and straw; Alliance = neat cut-stone slabs.
+ * Floor of project rooms and the Great Hall ('marble'). The room theme (via the seed) picks the race:
+ * orc = rough flagstones sunk in dirt and straw; human = neat cut-stone slabs; elf = polished moonwood planks
+ * with moss and fallen leaves.
  */
 function paintMarble(b: PixelBuf, x0: number, y0: number, seed: number): void {
-  if (themeFaction(seed) === 'horde') paintRoughFlags(b, x0, y0, seed);
+  const race = themeRace(seed);
+  if (race === 'orc') paintRoughFlags(b, x0, y0, seed);
+  else if (race === 'elf') paintMoonwood(b, x0, y0, seed);
   else paintAshlar(b, x0, y0, seed);
+}
+
+// Elf moonwood: violet-brown heartwood planks, a silvery sheen on each plank's top edge.
+const MOON_TONES = ['#6c5a62', '#66545e', '#726068', '#62525a'] as const;
+/** [tone][0 normal, 1 top sheen, 2 bottom, 3 grain, 4 joint, 5 ring (knot)]. */
+const MOONWOOD: readonly (readonly RGBA[])[] = MOON_TONES.map((t) =>
+  [t, mix(t, '#c4ccd8', 0.22), shade(t, -0.1), shade(t, -0.04), shade(t, -0.2), shade(t, -0.13)].map(rgba),
+);
+const MOSS = [rgba('#5a7a4c'), rgba('#4c6c44'), rgba('#6a8a56')] as const;
+/** Fallen leaves: teal-green, autumn gold and a violet petal. [body, light] */
+const FALLEN = [
+  [rgba('#4f9a78'), rgba('#7ac8a0')],
+  [rgba('#c89a48'), rgba('#e8c070')],
+  [rgba('#9a72c0'), rgba('#c8a8f0')],
+] as const;
+
+/** A small fallen leaf (5x3 lozenge with a midrib) at most one per 16px cell, rare. */
+function fallenLeafAt(wx: number, wy: number, seed: number): RGBA | null {
+  const cx = wx >> 4;
+  const cy = wy >> 4;
+  const hh = h3(cx, cy, 31, seed);
+  if (hh % 9 !== 0) return null;
+  const lx = (cx << 4) + 3 + ((hh >>> 4) % 9);
+  const ly = (cy << 4) + 3 + ((hh >>> 8) % 9);
+  const dx = wx - lx;
+  const dy = wy - ly;
+  const flip = (hh >>> 12) & 1 ? 1 : -1;
+  // lozenge tilted along the diagonal
+  const u = dx;
+  const v = dy - flip * Math.round(dx / 2);
+  if (Math.abs(u) > 2 || Math.abs(v) > (Math.abs(u) === 2 ? 0 : 1)) return null;
+  const pal = FALLEN[(hh >>> 16) % FALLEN.length];
+  return v === 0 ? pal[1] : pal[0];
+}
+
+/**
+ * Elf: polished moonwood planks (5px tall, 40px long, staggered), silvery sheen on the top edge, gentle grain
+ * and knots, soft moss creeping in irregular patches and a few fallen leaves. Kept low-contrast so desks and
+ * people stay readable on top.
+ */
+function paintMoonwood(b: PixelBuf, x0: number, y0: number, seed: number): void {
+  for (let py = 0; py < CHUNK_PX; py++) {
+    const wy = y0 + py;
+    const row = Math.floor(wy / 5);
+    const iy = wy - row * 5;
+    const off = h3(row, 0, 5, seed) % 40;
+    for (let px = 0; px < CHUNK_PX; px++) {
+      const wx = x0 + px;
+      const leaf = fallenLeafAt(wx, wy, seed);
+      if (leaf) {
+        b.put(px, py, leaf);
+        continue;
+      }
+      const sx = wx + off;
+      const plank = Math.floor(sx / 40);
+      const ix = sx - plank * 40;
+      const ph = h3(row, plank, 6, seed);
+      const t = MOONWOOD[ph % MOONWOOD.length];
+      // moss: soft noise patches, only on a few planks' edges and joints so it reads as creeping growth
+      const m = noise(wx, wy, 18, seed + 41) * 0.7 + noise(wx, wy, 5, seed + 43) * 0.3;
+      if (m > 0.79 && (iy === 4 || iy === 0 || ix < 3 || m > 0.85)) {
+        b.put(px, py, MOSS[h3(wx, wy, 8, seed) % (m > 0.85 ? 3 : 2)]);
+        continue;
+      }
+      let k = 0;
+      if (ix === 0) k = 4;
+      else if (iy === 4) k = 2;
+      else if (iy === 0) k = 1;
+      else if (iy === 2 && Math.abs(ix - (8 + ((ph >>> 12) % 24))) === 1 && (ph >>> 20) % 4 === 0) k = 5;
+      else if (iy === 1 + ((ph >>> 5) % 3) && (ix + (ph >>> 8)) % 19 < 8) k = 3;
+      b.put(px, py, t[k]);
+    }
+  }
 }
 
 /** Horde: irregular flagstones (Voronoi ~14px) with wide dirt gaps, some missing (bare dirt + straw). */

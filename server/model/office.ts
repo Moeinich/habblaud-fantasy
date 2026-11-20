@@ -31,9 +31,9 @@ import { describeGitHubEvent, githubEventKey, RoomEffects, type GitHubEvent } fr
 import { hash32 } from '../../shared/hash';
 import { applyPermission } from '../permissions/registry';
 import type { NameStore, StoredCharacter } from './names';
-import { normalizeCwd, roomDisplayNames, SlotAllocator } from './rooms';
+import { projectPath, roomDisplayNames, roomKey, SlotAllocator } from './rooms';
+import { raceOfRoom } from '../../shared/race';
 import { tr } from '../../shared/i18n';
-import type { WorldMeta } from '../../shared/world/api';
 
 export const OFFLINE_GRACE_MS = 20_000;
 export const DONE_GRACE_MS = 25_000;
@@ -79,8 +79,6 @@ export interface OfficeDeps {
   updates?: () => UpdateStatus;
   /** Terminais interativos (PtyManager): estado do recurso e os abertos. */
   ptys?: () => { status: PtyStatus; list: PtyInfo[] };
-  /** Habblaud World (WorldService.meta; ver OfficeSnapshot.meta.world). */
-  world?: () => WorldMeta;
   now?: () => number;
 }
 
@@ -124,6 +122,9 @@ export interface SubInput {
 
 interface AgentRecord {
   info: AgentInfo;
+  /** The agent's own folder (subagents: the parent's). Rooms group several folders (see roomKey), so the terminal
+   * and anything else that opens the folder uses this, never the room's path. */
+  cwd: string;
   history: Activity[];
   removeAt?: number;
   /** Início do turno atual (para "Concluiu em X"). */
@@ -199,6 +200,10 @@ const byStart = (a: ShellJob, b: ShellJob) => a.startedAt - b.startedAt || a.id.
 
 export class Office {
   private agents = new Map<string, AgentRecord>();
+  /**
+   * Real rooms, keyed by roomKey (the project's folder name). `path` and `machine` are the ones of the agent that
+   * created the room: the snapshot shows the folder of the room's most recently active agent (roomView).
+   */
   private rooms = new Map<string, { path: string; createdAt: number; machine?: MachineRef }>();
   private slots = new SlotAllocator(SLOT_COOLDOWN_MS);
   private roomNames = new Map<string, string>();
@@ -290,9 +295,19 @@ export class Office {
     return [...this.agents.values()].map((r) => r.info);
   }
 
-  /** Pasta do projeto da sala (cwd original, sem normalizar). */
+  /** The room's project folder: the one of its most recently active agent, local ones first (see roomView). */
   roomPath(roomId: string): string | undefined {
-    return this.rooms.get(roomId)?.path;
+    return this.rooms.has(roomId) ? this.roomView(roomId).path : undefined;
+  }
+
+  /** Every project folder of the room's agents, the representative one (roomPath) first. */
+  roomPaths(roomId: string): string[] {
+    return this.rooms.has(roomId) ? this.roomView(roomId).paths : [];
+  }
+
+  /** The agent's own folder (its session cwd), not the room's: rooms group folders with the same name. */
+  agentCwd(id: string): string | undefined {
+    return this.agents.get(id)?.cwd;
   }
 
   roomName(roomId: string): string {
@@ -325,12 +340,12 @@ export class Office {
       this.setStatus(p.id, p.status, p.waitingFor);
       return;
     }
-    const roomId = normalizeCwd(p.cwd);
-    this.ensureRoom(roomId, now, p.machine);
+    const roomId = roomKey(p.cwd);
+    this.ensureRoom(roomId, projectPath(p.cwd), now, p.machine);
     const chosen = this.roomCharacter(roomId, p.id, p.sessionId);
     // A mesma sessão retomada noutro processo (ex.: "Assumir aqui") mantém o nome, mesmo com o processo antigo
     // ainda saindo do escritório.
-    const person = chosen ?? this.deps.names.assign(p.sessionId, this.takenNames(undefined, p.sessionId));
+    const person = chosen ?? this.deps.names.assign(p.sessionId, raceOfRoom(roomId), this.takenNames(undefined, p.sessionId));
     const info: AgentInfo = {
       id: p.id,
       kind: 'main',
@@ -356,7 +371,7 @@ export class Office {
       if (chosen.parts) info.parts = { ...chosen.parts };
     }
     if (p.status === 'waiting') info.waitingFor = p.waitingFor ?? tr('responder no terminal');
-    const rec: AgentRecord = { info, history: [] };
+    const rec: AgentRecord = { info, cwd: p.cwd, history: [] };
     if (p.status === 'working') rec.turnStart = now;
     this.agents.set(p.id, rec);
     const acc = this.deps.accountName(p.account);
@@ -593,7 +608,7 @@ export class Office {
       this.reactivateSub(p.id);
       return true;
     }
-    const person = this.deps.names.assign(p.id, this.takenNames());
+    const person = this.deps.names.assign(p.id, raceOfRoom(parent.info.roomId), this.takenNames());
     const info: AgentInfo = {
       id: p.id,
       kind: 'sub',
@@ -617,7 +632,7 @@ export class Office {
     if (parent.info.machine) info.machine = { ...parent.info.machine };
     if (p.title) info.title = p.title;
     if (p.background) info.background = true;
-    this.agents.set(p.id, { info, history: [], turnStart: now });
+    this.agents.set(p.id, { info, cwd: parent.cwd, history: [], turnStart: now });
     this.markDirty();
     return true;
   }
@@ -857,7 +872,7 @@ export class Office {
     const owner = this.deps.names.character(info.roomId)?.owner;
     if (owner === undefined || owner === info.sessionId) this.deps.names.clearCharacter(info.roomId);
     if (info.custom) {
-      const person = this.deps.names.assign(info.sessionId, this.takenNames(id));
+      const person = this.deps.names.assign(info.sessionId, raceOfRoom(info.roomId), this.takenNames(id));
       info.name = person.name;
       info.look = person.look;
       info.seed = hash32(id);
@@ -958,7 +973,12 @@ export class Office {
 
   private build(): OfficeSnapshot {
     const now = this.now();
-    const entries = new Map(this.rooms);
+    this.recomputeRoomNames();
+    const entries = new Map<string, { path: string; createdAt: number; machine?: MachineRef }>();
+    for (const [id, r] of this.rooms) {
+      const view = this.roomView(id);
+      entries.set(id, view.machine ? { path: view.path, createdAt: r.createdAt, machine: view.machine } : { path: view.path, createdAt: r.createdAt });
+    }
     for (const r of this.demoSnap?.rooms ?? []) entries.set(r.id, { path: r.path, createdAt: r.createdAt });
     this.slots.sync(entries.keys(), now);
     const rooms: RoomInfo[] = [...entries]
@@ -1013,7 +1033,6 @@ export class Office {
         messages: this.deps.messages !== undefined,
         ...(ptys ? { pty: ptys.status } : {}),
         updates: this.deps.updates?.(),
-        ...(this.deps.world ? { world: this.deps.world() } : {}),
       },
     };
   }
@@ -1048,19 +1067,46 @@ export class Office {
     return out;
   }
 
-  private ensureRoom(roomId: string, now: number, machine?: MachineRef): void {
+  private ensureRoom(roomId: string, path: string, now: number, machine?: MachineRef): void {
     if (this.rooms.has(roomId)) return;
-    this.rooms.set(roomId, machine ? { path: roomId, createdAt: now, machine: { ...machine } } : { path: roomId, createdAt: now });
+    this.rooms.set(roomId, machine ? { path, createdAt: now, machine: { ...machine } } : { path, createdAt: now });
     this.recomputeRoomNames();
     this.notice('room', roomId, 'info', tr('🏗️ Nova sala: {0}', [this.roomName(roomId)]), roomId);
   }
 
+  /**
+   * What a real room shows: the project folder of its most recently active agent, preferring the agents of this
+   * computer (`paths` lists every folder of its agents, that one first), and the machine only when every agent of the room comes from the same other machine
+   * (a room shared by this computer and a remote one, or by two remote ones, is nobody's in particular).
+   */
+  private roomView(roomId: string): { path: string; paths: string[]; machine?: MachineRef } {
+    const stored = this.rooms.get(roomId);
+    const members = [...this.agents.values()].filter((r) => r.info.roomId === roomId);
+    if (!members.length) return { path: stored?.path ?? roomId, paths: stored ? [stored.path] : [], ...(stored?.machine ? { machine: { ...stored.machine } } : {}) };
+    const ranked = members
+      .slice()
+      .sort(
+        (a, b) =>
+          // A folder of this computer first: "New session" in the room opens a terminal here, in RoomInfo.path.
+          Number(!!a.info.machine) - Number(!!b.info.machine) ||
+          b.info.lastEventAt - a.info.lastEventAt ||
+          b.info.startedAt - a.info.startedAt ||
+          a.info.id.localeCompare(b.info.id),
+      );
+    const paths = [...new Set(ranked.map((r) => projectPath(r.cwd)))];
+    const first = members[0].info.machine;
+    const sameMachine = first && members.every((r) => r.info.machine?.id === first.id);
+    return sameMachine ? { path: paths[0], paths, machine: { ...first } } : { path: paths[0], paths };
+  }
+
   private recomputeRoomNames(): void {
-    const paths = new Map([...this.rooms].map(([id, r]) => [id, r.path]));
-    for (const r of this.demoSnap?.rooms ?? []) paths.set(r.id, r.path);
-    this.roomNames = roomDisplayNames(paths);
-    for (const [id, path] of paths) {
-      const alias = this.deps.roomAlias?.(path);
+    const paths = new Map<string, string[]>();
+    for (const id of this.rooms.keys()) paths.set(id, this.roomView(id).paths);
+    for (const r of this.demoSnap?.rooms ?? []) paths.set(r.id, [r.path]);
+    this.roomNames = roomDisplayNames(new Map([...paths].map(([id, list]) => [id, list[0] ?? id])));
+    for (const [id, list] of paths) {
+      // A rename is stored per folder: any folder of the room counts, the representative one first.
+      const alias = list.map((p) => this.deps.roomAlias?.(p)).find(Boolean);
       if (alias) this.roomNames.set(id, alias);
     }
   }

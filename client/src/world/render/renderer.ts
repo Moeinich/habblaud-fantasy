@@ -14,6 +14,7 @@ import type { Character } from '../sim/character';
 import type { RoomState } from '../sim/room-state';
 import { cobwebScale, hourglassIcon, HOURGLASS_FLIP_MS, STORM_LIFT } from '../sim/shell';
 import type { Sim } from '../sim/sim';
+import { raceOfRoom, type Race } from '../../../../shared/race';
 import { buildAnim, furnitureScale, NO_ANIM, sweepDelay, type BuildAnim } from './anim';
 import { daylightModeOf, parseHourParam } from './daylight';
 import { RoomFxRenderer } from './github-fx';
@@ -101,6 +102,18 @@ function paintRoadRuts(ctx: CanvasRenderingContext2D, x0: number, width: number,
       ctx.fillRect(x + 1, ty - 1, 1, 3);
     }
   }
+}
+
+/** Agents are drawn as the race of their room (shared/race.ts); memoized since it is asked every frame. */
+const raceMemo = new Map<string, Race>();
+function roomRace(roomId: string): Race {
+  let r = raceMemo.get(roomId);
+  if (!r) {
+    if (raceMemo.size > 512) raceMemo.clear();
+    r = raceOfRoom(roomId);
+    raceMemo.set(roomId, r);
+  }
+  return r;
 }
 
 export class Renderer {
@@ -869,6 +882,7 @@ export class Renderer {
     req.held = ch.held;
     req.seated = ch.seated;
     req.costume = seasonalCostume(this.theme, ch.info.seed);
+    req.race = roomRace(ch.roomId);
     try {
       sprite = this.charSprite(req, ch.animT);
     } catch {
@@ -1072,6 +1086,7 @@ export class Renderer {
       req.held = ch.pose === 'groom' ? ch.held : 'none';
       req.seated = false;
       req.costume = seasonalCostume(this.theme, ch.info.seed);
+      req.race = roomRace(ch.roomId);
       let s: Sprite;
       try {
         s = this.charSprite(req, ch.animT);

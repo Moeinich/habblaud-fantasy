@@ -82,7 +82,6 @@ party) or 10 min. A push only shows a notice. The same CI seen again within 2 mi
 | `GET /api/mod/summary?account=&session=` | `ModSummary` for the Claude Code mod: `{version, agents, working, waiting:[{id, name, room, account, waitingFor, since, answerable}]}`, without the demo and without the asker's own session (see below) |
 | `GET /api/updates` | `{version, ...UpdateStatus}`: the version in use and the result of the new-version check (see below) |
 | `POST /api/updates/check` | "Check now": queries GitHub (at most once every 30 s) and returns `{version, ...UpdateStatus}` |
-| `/api/world/*` | Habblaud World (account, character and building; on by default, `HABBLAUD_WORLD=0` turns it off): only through the local port with a local `Host`; see below |
 | `POST /api/permissions` | (hook) registers a permission request: `201 {id, expiresAt}` or `200 {skip}`; only with a local bind (see below) |
 | `GET /api/permissions/:id/wait` | (hook) long-poll of up to 25 s (`?timeout=` in seconds): `{status: 'pending' \| 'decided' \| 'released', ...}` |
 | `GET /api/permissions/:id` | (page) request detail with the arguments (`PermissionRequestInfo` with `input`) |
@@ -321,10 +320,6 @@ cookie login, with `Authorization: Bearer <machine token>`; on port 4747 they do
   tool ran (PostToolUse) or its turn ended (Stop), and only after 1.5 s (a late event of an earlier call must not
   release a fresh request). Codex requests from other machines are skipped (`unsupported-tool`).
 - **Off for remote agents:** the terminal, take over and end (`PtyManager` answers 409), New agent and dictation.
-- **Habblaud World never sees other machines** (`ingest/isolation.ts`): `index.ts` hands the uplink
-  `localAgents(office.list())` and, with ingest on, a separate "My day" tracker over `localSnapshot(...)` in
-  `<dataDir>/stats-local` for the building's tokens. Nothing in `world/` changes; `ingest/isolation.test.ts` runs the
-  real uplink against the fake world server with remote agents in the office.
 
 ## Project character
 
@@ -396,124 +391,6 @@ sessions carry `provider: 'codex'` (absent = Claude Code). Ids: `<account>:<thre
   `/ack` (same lock as messages). `canMessage` = there is a deliverer (binary found, or helper seen within the last 10 s).
   Return 0 = it entered the session's queue (`delivered`); Codex consumes the queue every ~10 s, when the session goes idle.
 
-## Habblaud World
-
-On by default, pointing at `server.habblaud.com` (`DEFAULT_WORLD_URL` in `config.ts`); nothing leaves the computer
-before the person creates an account and signs in, and `HABBLAUD_WORLD=0` turns everything off (what leaves the computer:
-`docs/world/privacidade.md`; how to change it: `shared/world/README.md`). The protocol with the world server is `shared/world/protocol.ts` (source of truth, with
-`schema.json`). On this side, `world/`:
-
-- `settings.ts`: `<dataDir>/world.json` `{deviceId, token, email, access, player?, paused?, left?, updatedAt, theme?}`, mode 600
-  and atomic writes. The device token only leaves here in the `Authorization: Bearer` header of calls to the world
-  server and in the WebSocket `hello`: never in the browser, the snapshot, the log or the URL. `theme` (the Appearance choice,
-  `auto` by default) stays even without a session (the file becomes just `{theme}`); `paused` and `left` (left the world,
-  always with `paused`) belong to the session.
-- `client.ts`: the `/v1/*` routes with native `fetch` (15 s timeout, no following of redirects, response of up to
-  256 KB copied field by field; the data export, up to 8 MB and as received). A world server error comes back as
-  `{status, code}` (maintenance, `503 maintenance`); network, timeout and a response in the wrong shape get
-  `world_unreachable`, `world_timeout` and `world_bad_response`.
-- `altcha.ts`: the anti-bot challenge for sign-up and email requests, solved here by brute force (SHA-256), in
-  batches of 5,000 attempts that hand control back to the event loop.
-- `service.ts`: the account (one operation at a time). `/v1/me` is re-read at most every 30 s (or with `?refresh=1`) and, on the
-  waiting list, by itself every 30 min (`waitingPollMs`; a timer that does not hold the process open), so that approval reaches the
-  snapshot without anyone clicking; a 401 from the world server on a route with a token deletes the session here (`lastError:
-  session_expired`); signing in again revokes the previous device; signing out deletes `world.json` even without a response from the
-  server. `lastError` carries only known codes (`worldLastError` in `shared/world/api.ts`): network and timeout become
-  `network`, anything else the interface does not know becomes `unknown`. Pausing, resuming and leaving the world go to the world
-  server in a queue (in the order requested); a resume with no response (network, timeout, 429, 5xx) retries with the uplink's
-  reconnection backoff (2 s to 60 s), until it succeeds or the building is paused again. Deleting the account (Phase 6): the code
-  comes from `POST /v1/me/delete`; with `POST /v1/me/delete/confirm` accepted (or a `goodbye: deleted`), it closes the uplink and
-  waits, deletes the entire `world.json` (theme included, `store.erase`) and the last shipment, and the status becomes no account with
-  `lastError: account_deleted`. Exporting the data (`GET /v1/me/export`) just relays the JSON.
-- `uplink.ts`: the building in the world, over WebSocket (Node's global `WebSocket`) at `<HABBLAUD_WORLD_URL>/v1/socket`
-  (`wss://`; `ws://127.0.0.1` and `ws://host.docker.internal` only in dev mode). It connects only with an approved account, the character created and the
-  terminal lock; paused or out of the world, only while the World scene is open (the viewer signals it through `cityChanged`) and with
-  no `uplink` at all (not even the `welcome`'s): only `hello`, `ping`/`pong` and the scene's commands. It sends the `hello` (`{v, version, build: {commit, dirty}, locale, token}`) and, on each `welcome`, the
-  whole packet; afterwards, on each change in the office (`Office.onChange`) or every minute, it projects
-  (`shared/world/projection.ts`) and sends if it changed: 3 s after the first change, at most one shipment every 5 s.
-  `{t: 'ping'}` every 30 s (no reply for 75 s, reconnects). Reconnection from 2 s to 60 s (doubles, ±25 %). `goodbye`:
-  `deploy` reconnects (during world maintenance, `deploy` on every `hello`: the wait grows up to the ceiling and only resets with a
-  `welcome`); `banned`, `suspended`, `update` and `other-device` stop until resumed (or reopened); `waiting`, `no_player`
-  and `unauthorized` stop until the session changes and notify the account (`service.goodbye`); `deleted` stops and the account deletes the
-  session. From the `welcome` it keeps, in memory only and only for the status, the account id (`me.id`, in the subject of the email
-  resource) and the "unverified" badge of the building itself (`building.unverified`, which the scene's `area`/`area.patch` also
-  updates). `uplink.ack {error:
-  'left'}` (the account left the world, here or on another computer) and `left: true` from `/v1/me` store `left` and `paused`
-  (`service.leftElsewhere`): no packet until the join (the connection only stays with the scene open). The last shipment
-  `{at, bytes, uplink, ack}` is kept in memory and in `<dataDir>/world-last-uplink.json` (mode 600; only for the same session,
-  deleted on sign-out). It notifies the snapshot (`markDirty`) on connect, drop, pause, resume and on each ack. Tasks and
-  compactions (`signals.ts`) are observed through the same `Office.onChange`, at most once per second, with or without a
-  connection; during the office boot (`Office.isBooting`) nothing is observed or sent.
-- `ids.ts`: the world ids, in memory only (`f_` + 10 hex per room, `a_` + 8 hex per agent, `crypto.randomBytes`),
-  each with a lifetime of 24 h ± 6 h drawn per id; anything that disappears and returns (or a restarted Habblaud) gets a new id.
-- `tokens.ts`: the building's tokens (input + output) for today and the last 7 rolling days, from "My day" with the `real` source (the
-  demo never enters), rounded to 2 significant digits; past days are stored, today's is re-read every 15 s.
-- `theme.ts`: the chosen theme resolved for the packet (the automatic one follows the office calendar, by the server's local
-  date: in Docker, UTC). `signals.ts`: tasks completed in the day per agent and new compactions (`/clear`
-  does not count).
-- `http.ts`: the `/api/world/*` routes (list and shapes in `shared/world/api.ts`). `http/app.ts` only serves them through the
-  local port with a local `Host` (the phone port gets 403 `local_only`, even with a login); everything except `status` requires
-  the terminal lock (403 `terminal_off`); with `HABBLAUD_WORLD_URL` refused, 409 `not_configured`; `HABBLAUD_WORLD=0`, 404.
-  Errors: `{error: {code, message?, retryAfter?}}`, with the world server's status and code when they come from there.
-  For the building: `PUT /api/world/theme` `{theme}` (with or without an account), `POST /api/world/pause` (stops sending before
-  responding, closing the uplink if the World scene is not open, and notifies `POST /v1/me/building/pause`),
-  `POST /api/world/resume` (notifies `/resume` and reconnects, or sends the whole packet over the scene's connection),
-  `POST /api/world/leave` ("Leave the world": stores `left` and `paused`, stops sending like the pause and responds after
-  `DELETE /v1/me/building`; without a good response, it stays just paused and returns the error), `POST /api/world/join` ("Return to the
-  world": `POST /v1/me/building/join` and, only with a good response, clears `left` and `paused` and reopens the uplink; a 404 here
-  does not count as done; the `/resume` while out of the world goes through it and, if it had not left, it is the `/resume`) and
-  `GET /api/world/last-uplink` (`{at, bytes, uplink, ack?}` or `{}`, without the terminal lock, like the status). The
-  `GET /api/world/status` gains `building` (approved account with a character) and `theme`; without `?refresh=1` it responds from
-  memory and re-reads `/v1/me` in the background when it has expired. For the account (Phase 6): `POST /api/world/delete-account` (`202
-  {}`: the code goes to the email), `POST /api/world/delete-account/confirm` `{code}` (responds with the no-account status after
-  closing the building and deleting `world.json`), `GET /api/world/export` (the JSON as the attachment `habblaud-world-dados.json`;
-  like the stream, only through the page itself, because it uses up the day's quota; `HEAD` does not call the world server) and the
-  optional `notifyInactivity` on `PUT /api/world/visibility`.
-
-The state goes in the snapshot at `meta.world` (`{enabled, configured, state, building?, scene?}`, nothing from the account; `building` =
-`{connected, paused, floors, agents, lastUplinkAt?, left?, stopped?}`, with `connected` = lit and sending (the scene-only
-connection, while paused, does not count) and `stopped: true` without the reason, which only goes in the status; `scene` = `{available}` with the
-approved account and the character, `available` with the terminal lock and without a stop of `banned`, `suspended`, `update`,
-`other-device` or `deleted`: the World button in the bar) and in `GET /api/access` (`world`). The build writes
-`dist/build.json` (`{commit, dirty, builtAt}`, `scripts/build-info.mjs`; without git, `unknown`;
-`HABBLAUD_BUILD_COMMIT`/`HABBLAUD_BUILD_DIRTY` override git), read by `readBuildInfo()` (`build.ts`) on each uplink
-connection: the `hello` carries only `{commit, dirty}`.
-
-### World scene: stream and commands
-
-The city (Phase 3) comes down over the same connection as the building and only with the World scene open in the browser. `world/viewer.ts` is
-the "viewer"; the state and rules live in `shared/world/scene.ts` (pure, the browser can use the same one), and the geometry
-in `shared/world/city.ts` (source of truth; the world server keeps the exact copy).
-
-- `GET /api/world/stream` (SSE, the same locks as the account routes, and only through the page itself: an `Origin` from another host
-  or `Sec-Fetch-Site` cross-site/same-site gets 403 `local_only`). At most 4 open (429 `too_many_streams`).
-  Events: `world.snapshot` (`WorldSceneSnapshot` from `shared/world/api.ts`: `{stream, connected, viewing, district?,
-  me?, pos?, afk, chunks: [{chunk, rev, buildings}], players, minimap}`) on connect and on each restart (connection opened
-  or dropped, `view` again): the browser replaces the whole state; then `world` with each city message as it came
-  (`area`, `area.patch`, `players`, `player.join`, `player.leave`, `pos`, `minimap`, `afk`, `profile`, `notice`,
-  `like.update`, `greeting`, `building`, `building.patch`), in order and already without `rev` gaps; `: ping` every 15 s.
-  A client with more than 1 MB accumulated is disconnected (the EventSource reconnects).
-- The first stream (with the connection accepted) sends `view`; the last one to close sends `view.off`. On each `welcome` with an
-  open stream, `view` again; on each drop, the city here is forgotten and a snapshot goes out with `connected: false`.
-  Paused or out of the world, the connection only exists with the scene open: opening the first stream connects (`hello`, `view`) and
-  closing the last sends `view.off` and closes; no `uplink` goes out through it.
-- State rules: `area` replaces the chunk and the `rev` (even a lower one); `area.patch` only with `rev` = last + 1 (an item
-  with `lot` replaces the building, without `lot` merges, `removed` removes); a gap, an unknown chunk or a partial building item
-  for a building that is not here ask for `resync {chunk}` (at most one every 5 s per chunk) and the patch does not pass; only the 3×3
-  chunks around my position are kept (the last `pos`, my id in a `players` or the last `move`); `players` only touches
-  those already present (by id); `player.join` replaces the profile; `afk` holds until walking or turning, `view` or `profile`. All in
-  memory only, nothing in the log.
-- `POST /api/world/cmd` `{stream, cmds}` → `202 {sent}`: 1 to 20 commands, only `move`, `profile`, `resync`, `view`,
-  `view.off`, `enter`, `leave`, `like`, `unlike`, `greet`, `block`, `unblock` and `report`, rebuilt field by field
-  (`parseSceneCommand`; `hello`, `uplink` and `ping` never: 400 `invalid`); from each batch only the last `move`. Up to 5 batches
-  per second per stream (bucket of 5, refill of 5/s: one batch every 200 ms is never refused; 429 `rate_limited` with
-  `Retry-After: 1`). A stream that is not open: 409 `no_stream`; without the connection: 409 `not_connected`. `view` and
-  `view.off` say whether that stream wants the city (the viewer decides what goes to the world; `view` with the city open
-  restarts everything).
-- In the browser, `client/src/net/world-stream.ts`: `createWorldStream({mock})` with `on`, `send` (queue and one batch every
-  200 ms) and `close`; in demo mode, `FakeWorldStream` (20 buildings with mine on lot (3,1), 5 people walking
-  on the sidewalks and one sitting on a bench in the square, minimap, `afk` after 60 s; `?perf=N` fills N lots).
-
 ## Environment variables
 
 | Variable | Default | Use |
@@ -532,13 +409,12 @@ in `shared/world/city.ts` (source of truth; the world server keeps the exact cop
 | `HABBLAUD_UPDATE_CHECK` | on | `0` turns off the new-version check (releases of the `package.json` repository on GitHub, every 6 h) |
 | `HABBLAUD_LANG` | system language (`LC_ALL`/`LANG`/Intl), otherwise `en` | language of the texts assembled by the server: `en`, `pt-BR`, `es` or `fr` (shared/i18n.ts) |
 | `HABBLAUD_DEMO` | off | `1` turns demo mode on at startup |
+| `HABBLAUD_BRAND_NAME` | `Habblaud` | white-labeling (shared/brand.ts): trimmed, 1-24 characters, no control characters, otherwise the default. Injected at runtime into index.html (static handler, or a Vite plugin in dev), `/manifest.webmanifest` and the remote login page (http/brand.ts); the client reads it from `<meta name="habblaud-brand">` and draws the pixel wordmark from it (client/src/ui/wordmark.ts) |
+| `HABBLAUD_BRAND_SHORT` | the brand name | manifest `short_name` and `apple-mobile-web-app-title` |
 | `HABBLAUD_IN_DOCKER` | auto (`/.dockerenv`) | `1` = does not check PIDs (they belong to the host) |
 | `HABBLAUD_ACCOUNTS` | — | JSON with account metadata coming from the host (Docker): `[{id, configDir, mountDir, short, name, email, organization, plan, color, cachedUsage}]`, matched by `id`, `mountDir` or `configDir` |
 | `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` (Docker: `/usage`) | folder of the usage captured by the statusline tap or by the Claude Code mod, re-read every 5 s |
 | `HABBLAUD_ALLOWED_HOSTS` | — | extra names accepted in `Host`/`Origin` (comma-separated); `localhost`, `*.localhost` and IPs always work |
-| `HABBLAUD_WORLD_URL` | `https://server.habblaud.com` | Habblaud World server: only `https://` or `wss://`, with no path; `http://127.0.0.1:*` only in dev mode (refused, World stays off). The building goes up over the WebSocket on the same origin (`/v1/socket`) |
-| `HABBLAUD_WORLD` | on | `0` (`false`, `off`, `no`) turns off Habblaud World: routes 404, nothing in the interface and nothing leaves |
-| `HABBLAUD_WORLD_DEV` | off (`--dev` turns it on) | `1` accepts the world server at `http://127.0.0.1` or `ws://127.0.0.1` |
 | `HABBLAUD_INGEST` | off | `1` turns on `/api/ingest/*` for other machines, only with the remote port over HTTPS (see [Other machines](#other-machines-ingest)) |
 
 On a machine that sends its sessions to another Habblaud (Claude Code environment, the settings `env` written by
@@ -594,9 +470,8 @@ The repository is also a Claude Code plugin marketplace (`.claude-plugin/marketp
 - `history/` — the timelapse timeline recorder (`timeline.ts`) and the My day statistics: sampling, persistence and retention (`daystats.ts`; the pure accumulator lives in `shared/daystats.ts`).
 - `permissions/` — answering through the office (permissions and questions): request registry (`registry.ts`), routes (`http.ts`) and the transcript call lookup (`transcript.ts`).
 - `messages/` — messages through the office: queue, session presence and deadlines (`registry.ts`) and routes (`http.ts`).
-- `ingest/` — other machines (`HABBLAUD_INGEST`): machine tokens (`machines.ts`), validation (`protocol.ts`), the agents rebuilt from hook events (`source.ts`), their accounts and usage (`accounts.ts`), the routes (`http.ts`) and the World isolation (`isolation.ts`).
+- `ingest/` — other machines (`HABBLAUD_INGEST`): machine tokens (`machines.ts`), validation (`protocol.ts`), the agents rebuilt from hook events (`source.ts`), their accounts and usage (`accounts.ts`), and the routes (`http.ts`).
 - `updates/` — new-version check against GitHub releases (`checker.ts`).
-- `world/` — Habblaud World: session in `world.json` (`settings.ts`), world server client (`client.ts`), ALTCHA (`altcha.ts`), the account (`service.ts`), the `/api/world/*` routes (`http.ts`) and the building in the world (`uplink.ts`, with `ids.ts`, `tokens.ts`, `theme.ts` and `signals.ts`).
 
 Tests: `npx vitest run server shared` (synthetic fixtures in `server/test/fixtures.ts`; the host scripts —
 statusline tap, permission hook (run as a process against a test server), installers and

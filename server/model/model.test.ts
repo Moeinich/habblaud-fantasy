@@ -4,12 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { Activity } from '../../shared/types';
 import { nameKey } from '../../shared/appearance';
 import { hash32 } from '../../shared/hash';
-import { NAME_POOL } from '../../shared/names';
+import { FANTASY_NAME_POOLS, isFantasyName } from '../../shared/fantasy-names';
+import { raceOfRoom } from '../../shared/race';
 import { setQuiet } from '../log';
 import { tempDir } from '../test/fixtures';
 import { NameStore } from './names';
 import { DONE_GRACE_MS, Office, OFFLINE_GRACE_MS, SNAPSHOT_RECENT } from './office';
-import { normalizeCwd, roomDisplayNames, SlotAllocator } from './rooms';
+import { isLegacyRoomId, normalizeCwd, projectPath, roomDisplayNames, roomKey, SlotAllocator } from './rooms';
 
 setQuiet(true);
 
@@ -51,6 +52,35 @@ describe('salas', () => {
   });
 });
 
+describe('room identity (roomKey)', () => {
+  it('two different paths with the same folder name are the same room, across case and trailing slashes', () => {
+    expect(roomKey('/Users/ana/GitHub/tilbudsmodul')).toBe('tilbudsmodul');
+    expect(roomKey('/Users/ana/kode/tilbudsmodul/')).toBe('tilbudsmodul');
+    expect(roomKey('/home/ana/Code/Tilbudsmodul')).toBe('tilbudsmodul');
+    expect(roomKey('C:\\Users\\ana\\kode\\tilbudsmodul')).toBe('tilbudsmodul');
+  });
+
+  it('different folder names are different rooms', () => {
+    expect(roomKey('/p/shop')).not.toBe(roomKey('/p/shop-api'));
+    expect(roomKey('/p/api')).not.toBe(roomKey('/p/web'));
+  });
+
+  it('an agent worktree is the room of its repository (also a subfolder of it, and Codex worktrees)', () => {
+    expect(projectPath('/p/GitHub/shop/.claude/worktrees/feat-x')).toBe('/p/GitHub/shop');
+    expect(roomKey('/p/GitHub/shop/.claude/worktrees/feat-x')).toBe('shop');
+    expect(roomKey('/p/GitHub/shop/.claude/worktrees/feat-x/server')).toBe('shop');
+    expect(roomKey('/p/shop/.codex/worktrees/abc')).toBe('shop');
+  });
+
+  it('root and legacy ids', () => {
+    expect(roomKey('/')).toBe('/');
+    expect(isLegacyRoomId('/p/api')).toBe(true);
+    expect(isLegacyRoomId('C:\\p\\api')).toBe(true);
+    expect(isLegacyRoomId('api')).toBe(false);
+    expect(isLegacyRoomId('/')).toBe(false);
+  });
+});
+
 describe('NameStore', () => {
   it('nomes únicos entre os presentes e persistidos entre reinícios', () => {
     const tmp = tempDir();
@@ -58,19 +88,20 @@ describe('NameStore', () => {
       const file = join(tmp.dir, 'dados', 'names.json');
       const a = new NameStore(file);
       const used = new Set<string>();
-      const first = a.assign('sess-1', used);
+      const first = a.assign('sess-1', 'orc', used);
       used.add(first.name);
-      const second = a.assign('sess-2', used);
+      const second = a.assign('sess-2', 'orc', used);
       expect(second.name).not.toBe(first.name);
-      expect(NAME_POOL.some((p) => p.name === first.name && p.look === first.look)).toBe(true);
+      expect(FANTASY_NAME_POOLS.orc.some((p) => p.name === first.name && p.look === first.look)).toBe(true);
+      expect(FANTASY_NAME_POOLS.orc.some((p) => p.name === second.name)).toBe(true);
       a.flush();
       expect(JSON.parse(readFileSync(file, 'utf8')).names['sess-1'].name).toBe(first.name);
 
       const b = new NameStore(file);
       b.load();
-      expect(b.assign('sess-1', new Set()).name).toBe(first.name);
+      expect(b.assign('sess-1', 'orc', new Set()).name).toBe(first.name);
       // Se o nome persistido colidir com alguém presente, escolhe outro.
-      expect(b.assign('sess-1', new Set([first.name])).name).not.toBe(first.name);
+      expect(b.assign('sess-1', 'orc', new Set([first.name])).name).not.toBe(first.name);
     } finally {
       tmp.cleanup();
     }
@@ -86,26 +117,26 @@ describe('NameStore: personagem de cada sala', () => {
     try {
       const file = join(tmp.dir, 'names.json');
       const a = new NameStore(file, { now: () => NOW });
-      a.setCharacter('/p/api', { name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' } });
-      a.setCharacter('/p/web', { name: 'Bia', look: 'f', seed: 8 });
+      a.setCharacter('api', { name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' } });
+      a.setCharacter('web', { name: 'Bia', look: 'f', seed: 8 });
       a.flush();
-      expect(JSON.parse(readFileSync(file, 'utf8')).rooms['/p/api']).toEqual({ name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' }, at: NOW });
+      expect(JSON.parse(readFileSync(file, 'utf8')).rooms['api']).toEqual({ name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' }, at: NOW });
 
       const b = new NameStore(file, { now: () => NOW });
       b.load();
-      expect(b.character('/p/api')).toEqual({ name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' }, at: NOW });
-      expect([...b.reservedNames('/p/api')]).toEqual([['Bia', '/p/web']]);
+      expect(b.character('api')).toEqual({ name: 'Ana', look: 'f', seed: 7, parts: { hairStyle: 'bob' }, at: NOW });
+      expect([...b.reservedNames('api')]).toEqual([['Bia', 'web']]);
       expect(b.reservedNames().size).toBe(2);
-      b.character('/p/api')!.parts!.hairStyle = 'long';
-      expect(b.character('/p/api')!.parts).toEqual({ hairStyle: 'bob' });
-      b.clearCharacter('/p/api');
-      expect(b.character('/p/api')).toBeUndefined();
+      b.character('api')!.parts!.hairStyle = 'long';
+      expect(b.character('api')!.parts).toEqual({ hairStyle: 'bob' });
+      b.clearCharacter('api');
+      expect(b.character('api')).toBeUndefined();
     } finally {
       tmp.cleanup();
     }
   });
 
-  it('names.json antigo ou com rooms inválido: os nomes continuam e só o que não presta é descartado', () => {
+  it('names.json with an invalid rooms: the names stay and only what is broken is dropped', () => {
     const tmp = tempDir();
     try {
       const file = join(tmp.dir, 'names.json');
@@ -113,31 +144,74 @@ describe('NameStore: personagem de cada sala', () => {
       writeFileSync(
         file,
         JSON.stringify({
-          version: 1,
+          version: 2,
           names,
           rooms: {
-            '/ok': { name: ' Ana   Paula ', look: 'f', seed: 1, at: NOW },
-            '/cor': { name: 'Bia', look: 'f', seed: 1, parts: { skin: 'red' }, at: NOW },
-            '/seed': { name: 'Caio', look: 'm', seed: -1, at: NOW },
-            '/look': { name: 'Davi', look: 'x', seed: 1, at: NOW },
-            '/nome': { name: '', look: 'm', seed: 1, at: NOW },
-            '/lixo': 'x',
+            'ok': { name: ' Ana   Paula ', look: 'f', seed: 1, at: NOW },
+            'cor': { name: 'Bia', look: 'f', seed: 1, parts: { skin: 'red' }, at: NOW },
+            'seed': { name: 'Caio', look: 'm', seed: -1, at: NOW },
+            'look': { name: 'Davi', look: 'x', seed: 1, at: NOW },
+            'nome': { name: '', look: 'm', seed: 1, at: NOW },
+            'lixo': 'x',
           },
         }),
       );
       const s = new NameStore(file, { now: () => NOW });
       s.load();
-      expect(s.assign('s1', new Set()).name).toBe('Marina');
-      expect(s.character('/ok')?.name).toBe('Ana Paula');
-      for (const r of ['/cor', '/seed', '/look', '/nome', '/lixo']) expect(s.character(r)).toBeUndefined();
+      expect(s.assign('s1', 'human', new Set()).name).toBe('Marina');
+      expect(s.character('ok')?.name).toBe('Ana Paula');
+      for (const r of ['cor', 'seed', 'look', 'nome', 'lixo']) expect(s.character(r)).toBeUndefined();
 
       for (const rooms of ['x', [1], null]) {
-        writeFileSync(file, JSON.stringify({ version: 1, names, rooms }));
+        writeFileSync(file, JSON.stringify({ version: 2, names, rooms }));
         const t = new NameStore(file, { now: () => NOW });
         t.load();
-        expect(t.assign('s1', new Set()).name).toBe('Marina');
+        expect(t.assign('s1', 'human', new Set()).name).toBe('Marina');
         expect(t.reservedNames().size).toBe(0);
       }
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it('names.json from before the fantasy names: old names are re-picked in the race style, chosen characters stay', () => {
+    const tmp = tempDir();
+    try {
+      const file = join(tmp.dir, 'names.json');
+      writeFileSync(
+        file,
+        JSON.stringify({
+          version: 1,
+          names: { old: { name: 'Marina', look: 'f', at: NOW }, fantasy: { name: 'Aldric', look: 'm', at: NOW } },
+          rooms: {
+            '/Users/ana/GitHub/shop': { name: 'Zé Backend', look: 'm', seed: 42, owner: 's1', at: NOW - 1_000 },
+            '/Users/ana/kode/shop': { name: 'Bia', look: 'f', seed: 3, at: NOW },
+            '/Users/ana/web': { name: 'Caio', look: 'm', seed: 5, at: NOW },
+          },
+        }),
+      );
+      const s = new NameStore(file, { now: () => NOW });
+      s.load();
+      expect(s.get('old')).toBeUndefined();
+      const repicked = s.assign('old', 'orc', new Set());
+      expect(FANTASY_NAME_POOLS.orc.some((p) => p.name === repicked.name)).toBe(true);
+      expect(s.assign('fantasy', 'elf', new Set()).name).toBe('Aldric');
+      // Characters move to the folder-name room; two folders of the same project: the most recently used one wins.
+      expect(s.character('shop')).toMatchObject({ name: 'Bia', seed: 3 });
+      expect(s.character('web')).toMatchObject({ name: 'Caio' });
+      expect(s.character('/Users/ana/web')).toBeUndefined();
+      s.flush();
+      const saved = JSON.parse(readFileSync(file, 'utf8'));
+      expect(saved.version).toBe(2);
+      expect(Object.keys(saved.rooms).sort()).toEqual(['shop', 'web']);
+
+      // Version 2: a name outside the pools (a character kept as a session name) is not migrated again.
+      s.remember('custom', { name: 'Zé', look: 'm' });
+      s.flush();
+      const t = new NameStore(file, { now: () => NOW });
+      t.load();
+      expect(t.get('custom')?.name).toBe('Zé');
+      expect(t.get('old')?.name).toBe(repicked.name);
     } finally {
       tmp.cleanup();
     }
@@ -154,24 +228,24 @@ describe('NameStore: personagem de cada sala', () => {
           version: 1,
           names: {},
           rooms: {
-            '/ok': { ...base, name: 'Ana', owner: 'sess-1' },
-            '/limite': { ...base, name: 'Bia', owner: 'x'.repeat(200) },
-            '/numero': { ...base, name: 'Caio', owner: 5 },
-            '/vazio': { ...base, name: 'Davi', owner: '' },
-            '/longo': { ...base, name: 'Eva', owner: 'x'.repeat(201) },
+            'ok': { ...base, name: 'Ana', owner: 'sess-1' },
+            'limite': { ...base, name: 'Bia', owner: 'x'.repeat(200) },
+            'numero': { ...base, name: 'Caio', owner: 5 },
+            'vazio': { ...base, name: 'Davi', owner: '' },
+            'longo': { ...base, name: 'Eva', owner: 'x'.repeat(201) },
           },
         }),
       );
       const s = new NameStore(file, { now: () => NOW });
       s.load();
-      expect(s.character('/ok')).toEqual({ ...base, name: 'Ana', owner: 'sess-1' });
-      expect(s.character('/limite')?.owner).toBe('x'.repeat(200));
-      for (const [r, name] of [['/numero', 'Caio'], ['/vazio', 'Davi'], ['/longo', 'Eva']]) {
+      expect(s.character('ok')).toEqual({ ...base, name: 'Ana', owner: 'sess-1' });
+      expect(s.character('limite')?.owner).toBe('x'.repeat(200));
+      for (const [r, name] of [['numero', 'Caio'], ['vazio', 'Davi'], ['longo', 'Eva']]) {
         expect(s.character(r), r).toEqual({ ...base, name });
       }
-      s.claimCharacter('/numero', 'sess-2');
+      s.claimCharacter('numero', 'sess-2');
       s.flush();
-      expect(JSON.parse(readFileSync(file, 'utf8')).rooms['/numero']).toEqual({ ...base, name: 'Caio', owner: 'sess-2' });
+      expect(JSON.parse(readFileSync(file, 'utf8')).rooms['numero']).toEqual({ ...base, name: 'Caio', owner: 'sess-2' });
     } finally {
       tmp.cleanup();
     }
@@ -183,17 +257,17 @@ describe('NameStore: personagem de cada sala', () => {
       const file = join(tmp.dir, 'names.json');
       let clock = NOW;
       const s = new NameStore(file, { now: () => clock });
-      s.setCharacter('/velho', { name: 'Otto', look: 'm', seed: 1 });
-      s.setCharacter('/usado', { name: 'Nina', look: 'f', seed: 2 });
+      s.setCharacter('velho', { name: 'Otto', look: 'm', seed: 1 });
+      s.setCharacter('usado', { name: 'Nina', look: 'f', seed: 2 });
       clock += 59 * DAY;
-      s.claimCharacter('/usado', 's1');
+      s.claimCharacter('usado', 's1');
       clock += 2 * DAY;
       s.flush();
-      expect(s.character('/velho')).toBeUndefined();
+      expect(s.character('velho')).toBeUndefined();
       const r = new NameStore(file, { now: () => clock });
       r.load();
-      expect(r.character('/velho')).toBeUndefined();
-      expect(r.character('/usado')?.name).toBe('Nina');
+      expect(r.character('velho')).toBeUndefined();
+      expect(r.character('usado')?.name).toBe('Nina');
     } finally {
       tmp.cleanup();
     }
@@ -452,7 +526,7 @@ describe('Office', () => {
     expect(snap.meta.demo).toBe(true);
     const slots = snap.rooms.map((r) => r.slot);
     expect(new Set(slots).size).toBe(slots.length);
-    expect(snap.rooms.find((r) => r.id === '/p/real')!.slot).toBe(0);
+    expect(snap.rooms.find((r) => r.id === 'real')!.slot).toBe(0);
     expect(snap.agents.some((a) => a.id.startsWith('demo:'))).toBe(true);
     expect(snap.accounts.map((a) => a.short)).toEqual(['C', 'X', 'Y', 'Z']);
     const demoAgent = snap.agents.find((a) => a.id.startsWith('demo:'))!;
@@ -510,7 +584,7 @@ describe('Office: personagem do projeto', () => {
     const before = office.get('acc:1')!.name;
     expect(office.setCharacter('acc:1', { name: 'Zé Backend', seed: 42, parts })).toEqual({ result: 'ok' });
     expect(office.get('acc:1')).toMatchObject({ name: 'Zé Backend', seed: 42, parts, custom: true });
-    expect(names.character('/p/api')).toMatchObject({ name: 'Zé Backend', look: office.get('acc:1')!.look, seed: 42, parts });
+    expect(names.character('api')).toMatchObject({ name: 'Zé Backend', look: office.get('acc:1')!.look, seed: 42, parts });
     expect(office.commit().notices.map((n) => n.text)).toContain(`✏️ ${before} agora é Zé Backend em api`);
     expect(office.setCharacter('acc:1', { name: 'Zé Backend', seed: 43, parts: {} })).toEqual({ result: 'ok' });
     expect(office.get('acc:1')!.parts).toBeUndefined();
@@ -608,7 +682,7 @@ describe('Office: personagem do projeto', () => {
     expect(a).toMatchObject({ ...drawn, seed: hash32('acc:1') });
     expect(a.parts).toBeUndefined();
     expect(a.custom).toBeUndefined();
-    expect(names.character('/p/api')).toBeUndefined();
+    expect(names.character('api')).toBeUndefined();
   });
 
   it('/clear mantém o personagem e não grava o nome escolhido como nome da sessão nova', () => {
@@ -649,7 +723,7 @@ describe('Office: personagem do projeto', () => {
         expect(after.office.get('acc:2')).toMatchObject({ name: drawn, seed: hash32('acc:2') });
         expect(after.office.get('acc:2')!.custom).toBeUndefined();
         expect(after.office.get('acc:1')).toMatchObject({ name: 'Zé Backend', seed: 42, parts, custom: true });
-        expect(after.names.character('/p/api')?.owner).toBe('s1');
+        expect(after.names.character('api')?.owner).toBe('s1');
         after.names.flush();
       } finally {
         tmp.cleanup();
@@ -668,7 +742,7 @@ describe('Office: personagem do projeto', () => {
         after.office.addMain(main('acc:2', 's2', '/p/api', after.now()));
         expect(after.office.get('acc:2')).toMatchObject({ name: drawn, seed: hash32('acc:2') });
         expect(after.office.get('acc:2')!.custom).toBeUndefined();
-        expect(after.names.character('/p/api')?.owner).toBe('s1');
+        expect(after.names.character('api')?.owner).toBe('s1');
         after.names.flush();
       } finally {
         tmp.cleanup();
@@ -686,7 +760,7 @@ describe('Office: personagem do projeto', () => {
         const after = restart(names, file);
         after.office.addMain(main('acc:3', 's3', '/p/api', after.now()));
         expect(after.office.get('acc:3')).toMatchObject({ name: 'Zé Backend', seed: 42, parts, custom: true });
-        expect(after.names.character('/p/api')?.owner).toBe('s3');
+        expect(after.names.character('api')?.owner).toBe('s3');
         after.names.flush();
       } finally {
         tmp.cleanup();
@@ -711,7 +785,7 @@ describe('Office: personagem do projeto', () => {
         const { office, now } = makeOffice(names);
         office.addMain(main('acc:2', 's2', '/p/api', now()));
         expect(office.get('acc:2')).toMatchObject({ name: 'Zé Backend', seed: 42, custom: true });
-        expect(names.character('/p/api')?.owner).toBe('s2');
+        expect(names.character('api')?.owner).toBe('s2');
         names.flush();
       } finally {
         tmp.cleanup();
@@ -724,7 +798,7 @@ describe('Office: personagem do projeto', () => {
         const file = join(tmp.dir, 'names.json');
         const { office, names, drawn } = ownerAndOther(file);
         office.switchSession('acc:1', 's1b');
-        expect(names.character('/p/api')?.owner).toBe('s1b');
+        expect(names.character('api')?.owner).toBe('s1b');
         const after = restart(names, file);
         after.office.addMain(main('acc:2', 's2', '/p/api', after.now()));
         after.office.addMain(main('acc:1', 's1b', '/p/api', after.now()));
@@ -771,7 +845,7 @@ describe('Office: personagem do projeto', () => {
     office.addMain(main('acc:2', 's2', '/p/api', now()));
     office.setCharacter('acc:2', { name: 'Bia', seed: 3, parts: {} });
     expect(office.resetCharacter('acc:1')).toBe('ok');
-    expect(names.character('/p/api')).toMatchObject({ name: 'Bia', owner: 's2' });
+    expect(names.character('api')).toMatchObject({ name: 'Bia', owner: 's2' });
     expect(office.get('acc:2')).toMatchObject({ name: 'Bia', custom: true });
   });
 
@@ -790,10 +864,106 @@ describe('Office: personagem do projeto', () => {
     office.setCharacter('acc:1', { name: 'Zé', seed: 9, parts });
     office.addMain(main('acc:2', 's2', '/p/api', now()));
     office.setCharacter('acc:2', { name: 'Bia', seed: 3, parts: {} });
-    expect(names.character('/p/api')?.owner).toBe('s2');
+    expect(names.character('api')?.owner).toBe('s2');
     office.switchSession('acc:1', 's1b');
-    expect(names.character('/p/api')?.owner).toBe('s2');
+    expect(names.character('api')?.owner).toBe('s2');
     office.switchSession('acc:2', 's2b');
-    expect(names.character('/p/api')?.owner).toBe('s2b');
+    expect(names.character('api')?.owner).toBe('s2b');
+  });
+});
+
+describe('Office: one room per project folder name', () => {
+  const main = (id: string, sessionId: string, cwd: string, now: number, machine?: { id: string; name: string }) => ({
+    id,
+    account: 'acc',
+    sessionId,
+    cwd,
+    role: 'Agente principal',
+    startedAt: now,
+    status: 'working' as const,
+    ...(machine ? { machine } : {}),
+  });
+
+  it('two paths with the same folder name share one room; each agent keeps its own folder', () => {
+    const { office, advance, now } = makeOffice();
+    office.addMain(main('acc:1', 's1', '/Users/ana/GitHub/tilbudsmodul', now()));
+    advance(1_000);
+    office.addMain(main('acc:2', 's2', '/Users/ana/kode/Tilbudsmodul', now()));
+    const snap = office.commit().snapshot;
+    expect(snap.rooms).toHaveLength(1);
+    expect(snap.rooms[0]).toMatchObject({ id: 'tilbudsmodul', slot: 0, seed: hash32('tilbudsmodul') });
+    expect(snap.agents.map((a) => a.roomId)).toEqual(['tilbudsmodul', 'tilbudsmodul']);
+    // The room shows the folder of the most recently active agent.
+    expect(snap.rooms[0]).toMatchObject({ path: '/Users/ana/kode/Tilbudsmodul', name: 'Tilbudsmodul' });
+    advance(1_000);
+    office.addActivity('acc:1', act('a1', now()), true);
+    expect(office.commit().snapshot.rooms[0]).toMatchObject({ path: '/Users/ana/GitHub/tilbudsmodul', name: 'tilbudsmodul' });
+    expect(office.roomPaths('tilbudsmodul')).toEqual(['/Users/ana/GitHub/tilbudsmodul', '/Users/ana/kode/Tilbudsmodul']);
+    expect(office.agentCwd('acc:1')).toBe('/Users/ana/GitHub/tilbudsmodul');
+    expect(office.agentCwd('acc:2')).toBe('/Users/ana/kode/Tilbudsmodul');
+    office.addSub({ id: 's2:x', parentId: 'acc:2', sessionId: 's2', role: 'Explore', background: false, startedAt: now() });
+    expect(office.agentCwd('s2:x')).toBe('/Users/ana/kode/Tilbudsmodul');
+  });
+
+  it('different folder names are different rooms', () => {
+    const { office, now } = makeOffice();
+    office.addMain(main('acc:1', 's1', '/p/api', now()));
+    office.addMain(main('acc:2', 's2', '/p/web', now()));
+    expect(office.commit().snapshot.rooms.map((r) => r.id)).toEqual(['api', 'web']);
+  });
+
+  it('an agent worktree joins the room of its repository, which shows the repository folder', () => {
+    const { office, advance, now } = makeOffice();
+    office.addMain(main('acc:1', 's1', '/p/GitHub/shop', now()));
+    advance(1_000);
+    office.addMain(main('acc:2', 's2', '/p/GitHub/shop/.claude/worktrees/feat-x', now()));
+    const snap = office.commit().snapshot;
+    expect(snap.rooms).toMatchObject([{ id: 'shop', name: 'shop', path: '/p/GitHub/shop' }]);
+    expect(office.agentCwd('acc:2')).toBe('/p/GitHub/shop/.claude/worktrees/feat-x');
+  });
+
+  it('machine: kept while every agent of the room comes from the same other machine; a local folder is preferred', () => {
+    const { office, advance, now } = makeOffice();
+    const mac = { id: 'mac-a', name: 'mac-a' };
+    office.addMain(main('r:mac-a:1', 's1', '/Users/bo/code/shop', now(), mac));
+    expect(office.commit().snapshot.rooms[0]).toMatchObject({ id: 'shop', machine: mac, path: '/Users/bo/code/shop' });
+    office.addMain(main('acc:2', 's2', '/Users/ana/GitHub/shop', now()));
+    advance(1_000);
+    office.addActivity('r:mac-a:1', act('r1', now()), true);
+    const room = office.commit().snapshot.rooms[0];
+    expect(room.machine).toBeUndefined();
+    // The remote agent is the most recent, but "New session" opens a terminal here: the local folder wins.
+    expect(room.path).toBe('/Users/ana/GitHub/shop');
+    office.closeMain('acc:2');
+    advance(OFFLINE_GRACE_MS + 1);
+    office.tick();
+    expect(office.commit().snapshot.rooms[0]).toMatchObject({ machine: mac, path: '/Users/bo/code/shop' });
+  });
+
+  it('a room renamed by any of its folders keeps the name', () => {
+    const aliases = new Map([['/p/old/shop', 'Loja']]);
+    const office = new Office({
+      names: new NameStore(null),
+      roomAlias: (path) => aliases.get(path),
+      version: 't',
+      startedAt: 0,
+      accounts: () => [],
+      sources: () => [],
+      accountName: () => undefined,
+    });
+    office.addMain(main('acc:1', 's1', '/p/new/shop', 0));
+    expect(office.commit().snapshot.rooms[0].name).toBe('shop');
+    office.addMain(main('acc:2', 's2', '/p/old/shop', 0));
+    expect(office.commit().snapshot.rooms[0].name).toBe('Loja');
+  });
+
+  it('agents get fantasy names in the style of their room race', () => {
+    const { office, now } = makeOffice();
+    for (const [i, folder] of ['api', 'web', 'shop', 'docs', 'infra', 'mobile'].entries()) {
+      office.addMain(main(`acc:${i}`, `s${i}`, `/p/${folder}`, now()));
+      const a = office.get(`acc:${i}`)!;
+      expect(FANTASY_NAME_POOLS[raceOfRoom(a.roomId)].some((p) => p.name === a.name && p.look === a.look), a.name).toBe(true);
+    }
+    expect(office.list().every((a) => isFantasyName(a.name))).toBe(true);
   });
 });

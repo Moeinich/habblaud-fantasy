@@ -5,7 +5,7 @@ import { ACCESSORIES, BOTTOM_STYLES, FACIAL_HAIR, HAIR_STYLES, PART_KEYS, TOP_ST
 import { FURNITURE, TILE, type Accessory, type Appearance, type Dir, type FloorKind, type FurnitureKind, type HairStyle, type HeldItem, type Pose, type ScreenMode, type TopStyle, type WallPattern } from './api';
 import { appearanceFromSeed, appearanceKey, editorConflict, editorOptions, fitToOptions } from './character/appearance';
 import { HAIR, HEAD_BASE } from './character/hair';
-import { CHAR_AX, CHAR_AY, CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, orcSkin, renderCharacter } from './character/render';
+import { CHAR_AX, CHAR_AY, CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, renderCharacter } from './character/render';
 import { PixelBuf } from './core/pixbuf';
 import type { BufSprite } from './core/sprite';
 import { drawBoard, drawClock, drawScreen, drawWindowView, runeTint } from './dynamic';
@@ -13,7 +13,8 @@ import { normalizeFurniture, renderFurniture } from './furniture/index';
 import { ICON_NAMES, iconTemplates, renderIcon } from './icons';
 import { CHUNK_PX, floorChunk } from './surfaces/floor';
 import { southWallTile, wallFaceTile } from './surfaces/walls';
-import { THEME_COUNT, roomTheme } from './theme';
+import { THEME_COUNT, roomTheme, themeRace } from './theme';
+import { ROOM_THEME_COUNT, raceOfSeed } from '../../../shared/race';
 
 const DIRS: Dir[] = ['down', 'left', 'up', 'right'];
 
@@ -267,13 +268,13 @@ describe("pose 'wait' (esperando o shell) e o balde de pipoca", () => {
 
   it('sem item: braços cruzados acima do tampo da desk_back, com a mão batendo os dedos', () => {
     for (const a of cast) {
-      const skin = (frame: number) => countColor(wait(a, 'down', frame, 'none').buf.crop(5, 20, 3, 6), orcSkin(a.skin));
+      const skin = (frame: number) => countColor(wait(a, 'down', frame, 'none').buf.crop(5, 20, 3, 6), a.skin);
       // A mão sobre o braço esquerdo aparece nos dois quadros e muda de altura (dedos batendo).
       expect(skin(0)).toBeGreaterThan(0);
       expect(skin(1)).toBeGreaterThan(0);
       const rowsWithSkin = (frame: number) => {
         const b = wait(a, 'down', frame, 'none').buf;
-        return [20, 21, 22, 23, 24].filter((y) => countColor(b.crop(5, y, 2, 1), orcSkin(a.skin)) > 0).join(',');
+        return [20, 21, 22, 23, 24].filter((y) => countColor(b.crop(5, y, 2, 1), a.skin) > 0).join(',');
       };
       expect(rowsWithSkin(0)).not.toBe(rowsWithSkin(1));
       // Visível com a desk_back na frente: braços (manga ou pele) acima da linha de corte.
@@ -314,7 +315,7 @@ describe('vida social: poses, itens e gestos', () => {
   };
   /** Pixels com cor próxima da pele (luz, base e sombra do ramp). */
   const skinIn = (b: PixelBuf, x0: number, x1: number, y0: number, y1: number) => {
-    const n = parseInt(orcSkin(A.skin).slice(1), 16);
+    const n = parseInt(A.skin.slice(1), 16);
     const [sr, sg, sb] = [n >> 16, (n >> 8) & 255, n & 255];
     let c = 0;
     for (let y = y0; y < y1; y++) {
@@ -499,13 +500,13 @@ describe('legibilidade das mesas, sofá e olhos', () => {
   }
 
   it('o verso da laje rúnica (desk_back) é pedra clara/média, nunca escura como a face', () => {
-    for (const v of ['white', 'wood', 'dark']) {
+    for (const v of ['white', 'wood', 'dark', 'moonwood']) {
       for (let seed = 0; seed < 4; seed++) {
         const f = renderFurniture('desk_back', v, 0, seed);
         // Centro da carcaça do monitor (x 8..23 ou 2..16 na variação 1; y -7..2).
         const cx = seed % 4 === 1 ? 6 : 13;
         const l = lumAt(f.base, 2, 1, cx, -4);
-        expect(l, `${v}/${seed}`).toBeGreaterThan(v === 'dark' ? 0.4 : 0.5);
+        expect(l, `${v}/${seed}`).toBeGreaterThan(v === 'dark' || v === 'moonwood' ? 0.4 : 0.5);
       }
     }
   });
@@ -596,7 +597,7 @@ describe('pisos e paredes', () => {
   });
 
   it('paredes renderizam todos os padrões', () => {
-    const patterns: WallPattern[] = ['plain', 'stripes', 'tiles', 'wood_panel', 'brick', 'glass', 'marble'];
+    const patterns: WallPattern[] = ['plain', 'stripes', 'tiles', 'wood_panel', 'brick', 'glass', 'marble', 'grove', 'moonstone'];
     for (const p of patterns) {
       const face = wallFaceTile({ base: '#eef1f4', trim: '#9fb0c4', pattern: p }, 1, 0);
       expect(face.w).toBe(TILE);
@@ -680,6 +681,23 @@ describe('ícones e temas', () => {
     }
     expect(roomTheme(THEME_COUNT)).toEqual(roomTheme(0));
     expect(roomTheme(-1)).toEqual(roomTheme(THEME_COUNT - 1));
+  });
+
+  it('each theme matches the race of its seed (desk, chair and wall flavour)', () => {
+    expect(THEME_COUNT).toBe(ROOM_THEME_COUNT);
+    const desks = { human: ['wood', 'white'], elf: ['moonwood'], orc: ['dark'] };
+    const chairs = { human: ['blue', 'gray'], elf: ['violet', 'teal'], orc: ['red', 'black', 'green'] };
+    const walls = { human: ['stripes', 'tiles', 'plain'], elf: ['grove', 'moonstone'], orc: ['wood_panel', 'brick'] };
+    for (let seed = -20; seed < 40; seed++) {
+      const race = raceOfSeed(seed);
+      const t = roomTheme(seed);
+      expect(themeRace(seed)).toBe(race);
+      expect(desks[race]).toContain(t.deskVariant);
+      expect(chairs[race]).toContain(t.chairVariant);
+      expect(walls[race]).toContain(t.wall.pattern);
+    }
+    // The Great Hall floor (seed 101) is orc.
+    expect(themeRace(101)).toBe('orc');
   });
 });
 

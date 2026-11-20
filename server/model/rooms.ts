@@ -1,4 +1,4 @@
-// Salas do escritório: identidade (cwd normalizado), nome exibido e posição (slot) no prédio.
+// Rooms of the office: identity (the project's folder name), displayed name and position (slot) in the building.
 
 /** cwd normalizado: sem barras repetidas nem barra final. */
 export function normalizeCwd(cwd: string): string {
@@ -8,6 +8,34 @@ export function normalizeCwd(cwd: string): string {
 
 function segments(path: string): string[] {
   return path.split(/[\\/]+/).filter(Boolean);
+}
+
+/** Agent worktrees (`<project>/.claude/worktrees/<name>`, also under `.codex`), with an optional subfolder. */
+const WORKTREE = /^(.*?)[\\/]\.(claude|codex)[\\/]worktrees[\\/][^\\/]+([\\/].*)?$/;
+
+/** The project folder of a session cwd: a worktree of an agent counts as its project (the repository). */
+export function projectPath(cwd: string): string {
+  const p = normalizeCwd(cwd);
+  const wt = WORKTREE.exec(p);
+  return wt && wt[1] ? wt[1] : p;
+}
+
+/**
+ * Room id of a session cwd: the project's folder name, case-insensitive (NFC, lower case). The same project checked
+ * out in different places ("~/GitHub/shop" and "~/code/Shop") or on different machines (ingest) is ONE room, and an
+ * agent worktree is the room of its repository. Ids never contain a slash (older ids were the full cwd: see
+ * isLegacyRoomId).
+ */
+export function roomKey(cwd: string): string {
+  const segs = segments(projectPath(cwd));
+  const base = segs.length ? segs[segs.length - 1] : cwd.trim() || '/';
+  // A bare Windows drive ("C:") or the root keeps its own room.
+  return base.normalize('NFC').toLowerCase().replace(/[\\/]/g, '') || '/';
+}
+
+/** Room id from before rooms were keyed by folder name (the normalized cwd, with slashes). */
+export function isLegacyRoomId(id: string): boolean {
+  return /[\\/]/.test(id) && id !== '/';
 }
 
 /**

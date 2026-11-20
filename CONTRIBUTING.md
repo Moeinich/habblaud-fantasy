@@ -62,9 +62,6 @@ Use the path of the plugin you changed (`mod/habblaud-permissoes` or `mod/habbla
 - For visual changes, include a screenshot or GIF if it helps show the result. Take screenshots in demo mode
   (`?mock=1` in the URL or `npm run demo`), which shows only fictional agents.
 - Update the **Unreleased** section of `CHANGELOG.md` when the change brings something visible to Habblaud users.
-- PRs that touch `shared/world/` or `server/world/` (Habblaud World) explain what changes in what leaves the
-  computer, and the review checks the list in [`docs/world/privacidade.md`](docs/world/privacidade.md) against the
-  code. Read [`shared/world/README.md`](shared/world/README.md) first.
 - Don't include personal data, credentials or private session content in screenshots, examples or logs.
 
 If something isn't clear, ask on the related issue before heading in a direction that could change how the project behaves.

@@ -35,17 +35,20 @@ function setup() {
 }
 
 describe('IngestSource', () => {
-  it('the same session id on two machines gives two agents, rooms and accounts', () => {
+  it('the same session id on two machines gives two agents and accounts, in the one room of the project', () => {
     const { office, source, ev } = setup();
     source.apply(MAC_A, ev('SessionStart', { source: 'startup' }));
+    expect(office.commit().snapshot.rooms).toMatchObject([{ id: 'shop', machine: MAC_A }]);
     source.apply(MAC_B, ev('SessionStart', { source: 'startup' }));
     const mains = office.list().filter((a) => a.kind === 'main');
     expect(mains.map((a) => a.id).sort()).toEqual([`r:mac-a:${SID}`, `r:mac-b:${SID}`]);
     expect(mains.map((a) => a.account).sort()).toEqual(['r:mac-a:.claude', 'r:mac-b:.claude']);
-    expect(new Set(mains.map((a) => a.roomId)).size).toBe(2);
+    expect(new Set(mains.map((a) => a.roomId))).toEqual(new Set(['shop']));
     expect(mains.find((a) => a.id === `r:mac-a:${SID}`)!.machine).toEqual(MAC_A);
+    // A room shared by two machines belongs to neither.
     const snap = office.commit().snapshot;
-    expect(snap.rooms.every((r) => r.machine)).toBe(true);
+    expect(snap.rooms).toHaveLength(1);
+    expect(snap.rooms[0].machine).toBeUndefined();
   });
 
   it('status follows the newest event, even when async hooks arrive out of order', () => {

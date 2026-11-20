@@ -96,7 +96,7 @@ describe('fonte do Codex: presença pelos locks', () => {
       provider: 'codex',
       account: '.codex',
       sessionId: T,
-      roomId: '/projetos/loja',
+      roomId: 'loja',
       role: 'Agente principal (Codex)',
       status: 'working',
       title: 'Rode os testes da loja',
@@ -264,7 +264,7 @@ describe('fonte do Codex: presença pelos locks', () => {
     ctx.home.rollout(T, [R.meta(T, { at: old, cwd: '/projetos/velho' }), R.user(T, 't', 'u', 'antigo', old), R.taskComplete('t', old + 10)], { mtime: old });
     ctx.home.lock(T, ctx.now() - 30_000);
     ctx.source.boot();
-    expect(ctx.agent()).toMatchObject({ roomId: '/projetos/velho', status: 'idle', title: 'antigo' });
+    expect(ctx.agent()).toMatchObject({ roomId: 'velho', status: 'idle', title: 'antigo' });
     // Lock sem rollout esquecido há mais de 12 h (crash antes do primeiro prompt): fora.
     ctx.home.lock(C, ctx.now() - 13 * 3600_000);
     ctx.poll();
@@ -281,9 +281,9 @@ describe('fonte do Codex: presença pelos locks', () => {
     ctx.home.rollout(T, [R.meta(T, { at: ctx.now(), cwd: '/projetos/api' }), R.taskStarted('t1', ctx.now()), R.user(T, 't1', 'u1', 'Comece', ctx.now())]);
     ctx.advance(3_100);
     ctx.poll();
-    expect(ctx.agent()).toMatchObject({ roomId: '/projetos/api', status: 'working', title: 'Comece' });
+    expect(ctx.agent()).toMatchObject({ roomId: 'api', status: 'working', title: 'Comece' });
     const rooms = ctx.office.commit().snapshot.rooms.map((r) => r.id);
-    expect(rooms).toEqual(['/projetos/api']);
+    expect(rooms).toEqual(['api']);
   });
 
   it('lock sem rollout: um hook que diz o projeto faz o agente entrar na hora, já na sala certa', () => {
@@ -293,7 +293,7 @@ describe('fonte do Codex: presença pelos locks', () => {
     ctx.poll();
     expect(ctx.agent()).toBeUndefined();
     expect(ctx.hook({ hook_event_name: 'SessionStart', session_id: T, cwd: '/projetos/api', transcript_path: null, model: 'gpt-teste-codex', source: 'startup' })).toBe(true);
-    expect(ctx.agent()).toMatchObject({ roomId: '/projetos/api', status: 'idle', provider: 'codex' });
+    expect(ctx.agent()).toMatchObject({ roomId: 'api', status: 'idle', provider: 'codex' });
   });
 
   it('threads internos (guardian, revisão) ficam fora', () => {
@@ -338,7 +338,7 @@ describe('fonte do Codex: subagentes', () => {
       role: 'Explorer',
       title: 'Procure onde o login é validado',
       status: 'working',
-      roomId: '/projetos/loja',
+      roomId: 'loja',
     });
     ctx.advance(1_000);
     ctx.home.append(sub, [R.agent(C, 's1', 'sa', 'Está em auth.ts', ctx.now()), R.taskComplete('s1', ctx.now() + 1)]);
@@ -427,7 +427,7 @@ describe('fonte do Codex: eventos de hook', () => {
     const ctx = setup();
     ctx.source.boot();
     expect(ctx.hook(ev('SessionStart', { source: 'startup' }))).toBe(true);
-    expect(ctx.agent()).toMatchObject({ roomId: '/projetos/api', provider: 'codex', status: 'idle' });
+    expect(ctx.agent()).toMatchObject({ roomId: 'api', provider: 'codex', status: 'idle' });
   });
 
   it('prompt, ferramenta (sem duplicar com o item concluído), aprovação e fim do turno', () => {

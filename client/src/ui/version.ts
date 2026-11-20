@@ -6,6 +6,7 @@ import type { UiComponent, UiContext } from './context';
 import { h, setAttr, setHidden, setText, setTitle, setVariant } from './dom';
 import { formatDateTime, relativeTime } from './format';
 import { pixelIcon } from './icons';
+import { brandName } from '../brand';
 import { safeLocalStorage } from './prefs';
 import { tr } from '../../../shared/i18n';
 
@@ -156,7 +157,7 @@ export class AboutGroup {
       'div',
       { class: 'ui-set-group ui-about', attrs: { id: 'ui-about' } },
       h('h3', { text: tr('Sobre'), tabIndex: -1 }),
-      h('div', { class: 'ui-about__head' }, h('span', { class: 'ui-about__name' }, 'Habblaud ', this.name), this.checkBtn),
+      h('div', { class: 'ui-about__head' }, h('span', { class: 'ui-about__name' }, `${brandName()} `, this.name), this.checkBtn),
       this.status,
       this.fresh,
       this.repo,
