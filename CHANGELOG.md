@@ -24,6 +24,11 @@ one (0.**3**.0).
   roads.
 - **The interface uses dark wood, parchment and gold trim**, and the sounds are axe chops, anvil strikes and a low
   horn when an agent needs you.
+- **English is the fallback language.** On a computer or browser in a language Habblaud does not speak (Danish,
+  German, a Raspberry Pi with `C.UTF-8`...), activities, notices and the interface now show in English instead of
+  Portuguese. An English system language is no longer ignored. `HABBLAUD_LANG` and **Settings › Language** still pin
+  a language. The last log and script messages that were still in Portuguese are now in English, and
+  `npm run i18n:check` fails on Portuguese text outside `tr()`.
 
 ## [1.0.3] - 2026-10-16
 

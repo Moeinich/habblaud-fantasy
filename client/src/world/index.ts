@@ -254,7 +254,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
       if (playback) sim.applySnapshot(rebaseSnapshot(snap, worldNow - snap.serverTime), worldNow);
       else sim.applySnapshot(snap, Date.now());
     } catch (err) {
-      console.error('[mundo] snapshot inválido ignorado', err);
+      console.error('[world] ignored invalid snapshot', err);
     }
   };
   const offSnapshot = store.on('snapshot', onSnapshot);

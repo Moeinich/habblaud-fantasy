@@ -2,11 +2,11 @@
 // e passa por tr(), que devolve a tradução do idioma ativo ou, na falta dela, o próprio texto em PT.
 // Assim nada muda para quem usa em português, e uma tradução incompleta nunca quebra a interface.
 //
-// Escolha do idioma (uma vez, ao carregar este módulo):
-// - navegador: preferência salva (Configurações > Idioma), senão os idiomas do navegador;
-// - servidor: HABBLAUD_LANG, senão o idioma do sistema (LC_ALL / LC_MESSAGES / LANG / Intl), menos o inglês (ver
+// Locale selection (once, when this module loads):
+// - browser: the saved preference (Settings > Language), else the browser languages, else English;
+// - server: HABBLAUD_LANG, else the system language (LC_ALL / LC_MESSAGES / LANG / Intl), else English (see
 //   serverLocale).
-// Os textos de atividade são montados pelo servidor, então seguem o idioma do servidor.
+// Activity texts are built by the server, so they follow the server's locale.
 import { DICTIONARIES } from './locales/all';
 
 export type Locale = 'pt-BR' | 'en' | 'es' | 'fr';
@@ -42,19 +42,18 @@ export function normalizeLocale(v: string | null | undefined): Locale | undefine
 }
 
 /**
- * Idioma do servidor (atividades, avisos, logs). HABBLAUD_LANG vale para qualquer idioma. Do sistema (LC_ALL,
- * LC_MESSAGES, LANG e, por último, o Intl) vale francês, espanhol ou português, mas não o inglês: muitas máquinas e
- * containers vêm em inglês por padrão (en_US, ou o en-US do Node sem LANG), mesmo para quem usa outra língua, e o
- * escritório mudaria de idioma sozinho. Para o servidor em inglês: HABBLAUD_LANG=en.
+ * Server locale (activities, notices, logs). HABBLAUD_LANG wins; then the first supported system language (LC_ALL,
+ * LC_MESSAGES, LANG and, last, Intl). A system in an unsupported language (Danish, German, `C.UTF-8`...) falls back to
+ * English, never to the Portuguese source text.
  */
 export function serverLocale(env: Record<string, string | undefined>, intl?: string): Locale {
   const own = normalizeLocale(env.HABBLAUD_LANG);
   if (own) return own;
   for (const v of [env.LC_ALL, env.LC_MESSAGES, env.LANG, intl]) {
     const n = normalizeLocale(v);
-    if (n && n !== 'en') return n;
+    if (n) return n;
   }
-  return 'pt-BR';
+  return 'en';
 }
 
 function detect(): Locale {
@@ -75,7 +74,7 @@ function detect(): Locale {
       const n = normalizeLocale(l);
       if (n) return n;
     }
-    return 'pt-BR';
+    return 'en';
   }
   const env = g.process?.env ?? {};
   // Os testes comparam textos em PT: ficam em PT mesmo numa máquina em outro idioma.

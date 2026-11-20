@@ -417,7 +417,7 @@ export class OfficeStore {
     try {
       return JSON.parse((ev as MessageEvent).data) as T;
     } catch (err) {
-      console.warn(`[store] ${what} inválido ignorado`, err);
+      console.warn(`[store] ignored invalid ${what}`, err);
       return null;
     }
   }
@@ -430,7 +430,7 @@ export class OfficeStore {
     try {
       es = this.openStream('/api/stream');
     } catch (err) {
-      console.error('[store] não foi possível abrir o stream', err);
+      console.error('[store] could not open the stream', err);
       this.setConnection('closed');
       this.scheduleRetry();
       return;

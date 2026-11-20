@@ -489,7 +489,7 @@ in `shared/world/city.ts` (source of truth; the world server keeps the exact cop
 | `HABBLAUD_DATA_DIR` | `~/.habblaud` (Docker: `/data`) | Habblaud state (names and characters of the projects persisted in `names.json`, timeline in `timeline/`, My day statistics in `stats/`, last version check in `updates.json`) |
 | `HABBLAUD_TIMELINE` | on | `0` turns off recording of the timelapse timeline |
 | `HABBLAUD_UPDATE_CHECK` | on | `0` turns off the new-version check (releases of the `package.json` repository on GitHub, every 6 h) |
-| `HABBLAUD_LANG` | system language (`LC_ALL`/`LANG`/Intl) | language of the texts assembled by the server: `pt-BR` or `fr` (shared/i18n.ts) |
+| `HABBLAUD_LANG` | system language (`LC_ALL`/`LANG`/Intl), otherwise `en` | language of the texts assembled by the server: `en`, `pt-BR`, `es` or `fr` (shared/i18n.ts) |
 | `HABBLAUD_DEMO` | off | `1` turns demo mode on at startup |
 | `HABBLAUD_IN_DOCKER` | auto (`/.dockerenv`) | `1` = does not check PIDs (they belong to the host) |
 | `HABBLAUD_ACCOUNTS` | — | JSON with account metadata coming from the host (Docker): `[{id, configDir, mountDir, short, name, email, organization, plan, color, cachedUsage}]`, matched by `id`, `mountDir` or `configDir` |
