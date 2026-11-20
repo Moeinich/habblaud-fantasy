@@ -12,7 +12,8 @@ import { posixShell } from './fixtures';
 
 const ROOT = resolve(__dirname, '../..');
 const SH = posixShell();
-const PLUGINS = ['habblaud', 'habblaud-permissoes', 'habblaud-mensagens'];
+// habblaud-remote (sending this machine's sessions to a central Habblaud) is installed by npm run remote:install.
+const PLUGINS = ['habblaud', 'habblaud-permissoes', 'habblaud-mensagens', 'habblaud-remote'];
 
 type Rec = Record<string, unknown>;
 
