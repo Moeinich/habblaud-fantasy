@@ -28,7 +28,7 @@
 //   mudar a porta não pede aprovação nova; mudar a espera muda o timeout do PermissionRequest e pede.
 // Rodar de novo não duplica (o grupo do Habblaud é reconhecido pelo comando).
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -313,6 +313,9 @@ export function discoverCodexHomes(env: NodeJS.ProcessEnv, home: string): { dirs
 export interface HookConfig {
   port: number;
   permissionTimeoutS: number;
+  /** Central server (npm run remote:install): the hook sends every event there instead of the local Habblaud. */
+  server?: string;
+  token?: string;
 }
 
 export interface RunOptions {
@@ -391,18 +394,44 @@ export function readHookConfig(home: string): Partial<HookConfig> | undefined {
     const out: Partial<HookConfig> = {};
     if (typeof j.port === 'number') out.port = j.port;
     if (typeof j.permissionTimeoutS === 'number') out.permissionTimeoutS = j.permissionTimeoutS;
+    if (typeof j.server === 'string') out.server = j.server;
+    if (typeof j.token === 'string') out.token = j.token;
     return out;
   } catch {
     return undefined;
   }
 }
 
-/** Grava a configuração do hook se mudou. Devolve true se gravou. */
+/** Writes the hook config with port and wait (keeping a central server already there) if it changed. True = written. */
 function writeHookConfig(home: string, cfg: HookConfig): boolean {
   const cur = readHookConfig(home);
   if (cur?.port === cfg.port && cur.permissionTimeoutS === cfg.permissionTimeoutS) return false;
+  saveHookConfig(home, { ...cfg, ...(cur?.server && cur.token ? { server: cur.server, token: cur.token } : {}) });
+  return true;
+}
+
+/** Writes the whole hook config; with a token in it the file is readable only by its owner (mode 600). */
+function saveHookConfig(home: string, cfg: Partial<HookConfig>): void {
   mkdirSync(join(home, '.habblaud'), { recursive: true });
-  writeFileSync(configPath(home), `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o644 });
+  const file = configPath(home);
+  writeFileSync(file, `${JSON.stringify(cfg, null, 2)}\n`, { mode: cfg.token ? 0o600 : 0o644 });
+  try {
+    chmodSync(file, cfg.token ? 0o600 : 0o644);
+  } catch {
+    // the file keeps its previous mode
+  }
+}
+
+/**
+ * Sets (or, with undefined, removes) the central server in the hook config, keeping port and wait. Returns true when
+ * the file changed. Used by npm run remote:install / remote:uninstall.
+ */
+export function setHookRemote(home: string, remote: { server: string; token: string } | undefined): boolean {
+  const cur = readHookConfig(home) ?? {};
+  if (remote ? cur.server === remote.server && cur.token === remote.token : !cur.server && !cur.token) return false;
+  const next: Partial<HookConfig> = { port: cur.port ?? DEFAULT_PORT, permissionTimeoutS: cur.permissionTimeoutS ?? DEFAULT_WAIT_S };
+  if (remote) Object.assign(next, remote);
+  saveHookConfig(home, next);
   return true;
 }
 
@@ -516,7 +545,9 @@ export async function run(opts: RunOptions, ctx: RunContext): Promise<number> {
     const cfg = readHookConfig(home);
     out(
       cfg
-        ? tr('Configuração do hook ({0}): porta {1}, espera {2} s.', [cfgFile, cfg.port ?? DEFAULT_PORT, cfg.permissionTimeoutS ?? DEFAULT_WAIT_S])
+        ? cfg.server
+          ? tr('Configuração do hook ({0}): eventos vão para o servidor central {1}.', [cfgFile, cfg.server])
+          : tr('Configuração do hook ({0}): porta {1}, espera {2} s.', [cfgFile, cfg.port ?? DEFAULT_PORT, cfg.permissionTimeoutS ?? DEFAULT_WAIT_S])
         : tr('Configuração do hook ({0}): não existe (o hook usa HABBLAUD_PORT ou a porta {1} e espera {2} s).', [cfgFile, DEFAULT_PORT, DEFAULT_WAIT_S]),
     );
     const port = cfg?.port ?? opts.port;
@@ -556,7 +587,7 @@ export async function run(opts: RunOptions, ctx: RunContext): Promise<number> {
 }
 
 /** Versão de um Node: o do shell de login do Codex (`$SHELL -lc`, bin ausente) ou de um caminho. Falha = undefined. */
-function probeNode(bin: string | undefined): string | undefined {
+export function probeNode(bin: string | undefined): string | undefined {
   try {
     const opts = { encoding: 'utf8' as const, timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] as ['ignore', 'pipe', 'ignore'] };
     const out = bin ? execFileSync(bin, ['--version'], opts) : execFileSync(process.env.SHELL || '/bin/sh', ['-lc', 'node --version'], opts);

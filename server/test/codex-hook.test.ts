@@ -18,7 +18,8 @@ const HOOK = resolve(__dirname, '../../mod/habblaud-codex/hook.mjs');
 
 /** Funções exportadas pelo hook (JavaScript puro, sem tipos). */
 interface HookModule {
-  readConfig(env: NodeJS.ProcessEnv): { port: number; waitMs: number };
+  readConfig(env: NodeJS.ProcessEnv): { port: number; waitMs: number; remote?: { base: string; token: string } };
+  ingestBody(input: Record<string, unknown>, account: string, now?: number): Record<string, unknown> | undefined;
   codexHomeOf(env: NodeJS.ProcessEnv, input: unknown): string;
   accountOf(codexHome: string): string;
   eventBody(input: Record<string, unknown>, account: string, codexHome: string): Record<string, unknown>;
@@ -264,5 +265,23 @@ describe('hook.mjs do Codex (funções)', () => {
     expect(hook.decisionOutput({ status: 'released', reason: 'terminal' })).toBeUndefined();
     expect(hook.decisionOutput({ status: 'pending' })).toBeUndefined();
     expect(hook.decisionOutput(undefined)).toBeUndefined();
+  });
+
+  it('central server: codex-hook.json with server and token sends ingest events (provider codex)', () => {
+    const token = `hbl1.mac-anna.${'a'.repeat(43)}`;
+    mkdirSync(join(home, '.habblaud'), { recursive: true });
+    writeFileSync(join(home, '.habblaud', 'codex-hook.json'), JSON.stringify({ port: 4747, server: 'https://pi.tail.ts.net/', token }));
+    expect(hook.readConfig({ HOME: home }).remote).toEqual({ base: 'https://pi.tail.ts.net', token });
+    writeFileSync(join(home, '.habblaud', 'codex-hook.json'), JSON.stringify({ server: 'http://pi.tail.ts.net', token }));
+    expect(hook.readConfig({ HOME: home }).remote).toBeUndefined();
+    const body = hook.ingestBody(
+      { hook_event_name: 'PostToolUse', session_id: CODEX_MAIN, cwd: '/w', tool_name: 'apply_patch', tool_use_id: 'call_1', tool_input: { command: 'x'.repeat(5_000) }, tool_response: 'secret output', transcript_path: '/t' },
+      '.codex',
+      1,
+    )!;
+    expect(body).toMatchObject({ v: 1, at: 1, event: 'PostToolUse', provider: 'codex', account: '.codex', session_id: CODEX_MAIN, cwd: '/w', tool_name: 'apply_patch' });
+    expect((body.tool_input as { command: string }).command).toHaveLength(2_000);
+    expect(body).not.toHaveProperty('tool_response');
+    expect(body).not.toHaveProperty('transcript_path');
   });
 });

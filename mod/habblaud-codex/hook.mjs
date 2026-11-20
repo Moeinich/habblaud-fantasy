@@ -21,11 +21,17 @@
 //    do ar ou sem página aberta): sai sem imprimir nada e o Codex segue a aprovação normal. Atenção: o Codex só mostra
 //    a aprovação no terminal DEPOIS que o hook termina (enquanto isso, o terminal mostra o statusMessage do hook).
 //
+// Central server (the "Multiple machines" setup, `npm run remote:install`): when codex-hook.json also has `server`
+// and `token` (or HABBLAUD_SERVER_URL / HABBLAUD_SERVER_TOKEN reach the hook), every event goes, fire-and-forget, to
+// POST <server>/api/ingest/events with `Authorization: Bearer <token>` and `provider: "codex"` instead of the local
+// Habblaud. Approval requests then stay in the terminal (the office only shows the agent as waiting).
+//
 // Regras: Node puro (22+), só `node:*`, sem dependências; nunca trava nem quebra a sessão: todo erro = sair com 0 e
 // sem saída (nunca com 2, que no Codex recusa o pedido). Nunca imprime updatedInput, updatedPermissions nem interrupt
 // (o Codex não os aceita: o hook "falha" sem decidir). Nos eventos de observação, nada vai para o stdout (no
 // UserPromptSubmit e no SessionStart ele viraria contexto do modelo). Só fala com 127.0.0.1.
 // HABBLAUD_HOOK_DEBUG=1 escreve o que acontece no stderr.
+import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
@@ -55,6 +61,19 @@ const MAX_STRING = 8_000;
 /** Corpo do pedido (o servidor recusa acima de 256 KB). */
 const MAX_BODY = 200_000;
 
+/**
+ * Deadline of one event sent to a central server (it may be across the network): under the 5 s timeout of the
+ * observation events; SessionEnd (1 s, foreground) and PermissionRequest (the terminal approval waits for the hook) get
+ * a short one.
+ */
+const REMOTE_TIMEOUT_MS = 3_500;
+const REMOTE_SHORT_TIMEOUT_MS = 700;
+/** Body of one event sent to a central server (it refuses above 256 KB). */
+const REMOTE_MAX_BODY = 120_000;
+/** Texts inside tool arguments and results sent to a central server (it only shows previews). */
+const REMOTE_MAX_STRING = 2_000;
+const TOKEN = /^hbl1\.[a-z0-9-]{1,32}\.[A-Za-z0-9_-]{43}$/;
+
 const debug = process.env.HABBLAUD_HOOK_DEBUG === '1' ? (msg) => process.stderr.write(`[habblaud-codex] ${msg}\n`) : () => {};
 
 const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -64,6 +83,23 @@ const validPort = (p) => Number.isInteger(p) && p > 0 && p < 65_536;
 function expandHome(p, home) {
   const abs = resolve(p.trim().replace(/^~(?=[\\/]|$)/, home).replace(/\$\{HOME\}|\$HOME\b/g, home));
   return abs.length > 1 ? abs.replace(/[\\/]+$/, '') : abs;
+}
+
+/** The central server ({base, token}) from `server`/`token`, or undefined when missing or invalid. */
+export function remoteOf(server, token) {
+  const url = typeof server === 'string' ? server.trim().replace(/\/+$/, '') : '';
+  const tok = typeof token === 'string' ? token.trim() : '';
+  if (!url || !TOKEN.test(tok)) return undefined;
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) return undefined;
+  if (u.username || u.password || u.search || u.hash || (u.pathname !== '/' && u.pathname !== '')) return undefined;
+  return { base: `${u.protocol}//${u.host}`, token: tok };
 }
 
 /**
@@ -82,10 +118,13 @@ export function readConfig(env = process.env) {
   const filePort = Number(f.port);
   const envPort = Number.parseInt(env.HABBLAUD_PORT ?? '', 10);
   const wait = Number(f.permissionTimeoutS);
-  return {
+  const out = {
     port: validPort(filePort) ? filePort : validPort(envPort) ? envPort : DEFAULT_PORT,
     waitMs: (Number.isFinite(wait) && wait > 0 ? Math.min(MAX_WAIT_S, Math.max(MIN_WAIT_S, wait)) : DEFAULT_WAIT_S) * 1_000,
   };
+  const remote = remoteOf(f.server, f.token) ?? remoteOf(env.HABBLAUD_SERVER_URL, env.HABBLAUD_SERVER_TOKEN);
+  if (remote) out.remote = remote;
+  return out;
 }
 
 /**
@@ -132,6 +171,60 @@ export function eventBody(input, account, codexHome) {
   const body = { account, codexHome, event: input };
   body.event = fitted(input, (event) => JSON.stringify({ ...body, event }).length);
   return body;
+}
+
+/** Tool results travel to a central server only where the office reads them: shell commands and GitHub MCP tools. */
+function wantsResponse(tool) {
+  return typeof tool === 'string' && (/^(Bash|shell|shell_command|local_shell|exec_command)$/.test(tool) || /^mcp__.*github/i.test(tool));
+}
+
+/** Body of POST /api/ingest/events (shared/ingest.ts, IngestEvent) for a central server; undefined = not an event. */
+export function ingestBody(input, account, now = Date.now()) {
+  if (!isObject(input) || typeof input.session_id !== 'string' || !input.session_id) return undefined;
+  const str = (v, max) => (typeof v === 'string' && v ? v.slice(0, max) : undefined);
+  const body = { v: 1, id: randomUUID().replace(/-/g, ''), at: now, event: input.hook_event_name, provider: 'codex', account, session_id: input.session_id };
+  const put = (k, v) => {
+    if (v !== undefined) body[k] = v;
+  };
+  put('cwd', str(input.cwd, 1024));
+  put('agent_id', str(input.agent_id, 128));
+  put('agent_type', str(input.agent_type, 80));
+  put('source', str(input.source, 32));
+  put('reason', str(input.reason, 32));
+  put('prompt', str(input.prompt, 4_000));
+  put('tool_name', str(input.tool_name, 128));
+  put('tool_use_id', str(input.tool_use_id, 128));
+  if (input.tool_input !== undefined) put('tool_input', trimInput(input.tool_input, REMOTE_MAX_STRING));
+  if (input.tool_response !== undefined && wantsResponse(input.tool_name)) put('tool_response', trimInput(input.tool_response, 6_000));
+  put('model', typeof input.model === 'string' ? input.model.slice(0, 128) : str(input.model?.id, 128));
+  put('permission_mode', str(input.permission_mode, 32));
+  // Still too big (a huge patch): the arguments become a short preview, or go away.
+  if (JSON.stringify(body).length > REMOTE_MAX_BODY) {
+    if (body.tool_input !== undefined) body.tool_input = trimInput(body.tool_input, 200);
+    if (body.tool_response !== undefined) body.tool_response = trimInput(body.tool_response, 400);
+    if (JSON.stringify(body).length > REMOTE_MAX_BODY) {
+      delete body.tool_input;
+      delete body.tool_response;
+    }
+  }
+  return body;
+}
+
+/** Sends one event to the central server. Returns the HTTP status, or 0 (network failure). */
+async function sendRemote(remote, body, timeoutMs) {
+  try {
+    const res = await fetch(`${remote.base}/api/ingest/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${remote.token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    await res.text().catch(() => '');
+    return res.status;
+  } catch (err) {
+    debug(`remote: ${err?.name ?? 'error'} ${err?.message ?? ''}`);
+    return 0;
+  }
 }
 
 /** Corpo de POST /api/permissions: só o que o Habblaud usa (nada do transcript_path). */
@@ -215,6 +308,11 @@ export async function run(env = process.env, stdinText) {
     const cfg = readConfig(env);
     const codexHome = codexHomeOf(env, input);
     const account = accountOf(codexHome);
+    if (cfg.remote) {
+      const body = ingestBody(input, account);
+      if (body) debug(`${event} -> ${cfg.remote.base}: ${await sendRemote(cfg.remote, body, event === 'SessionEnd' || event === 'PermissionRequest' ? REMOTE_SHORT_TIMEOUT_MS : REMOTE_TIMEOUT_MS)}`);
+      return undefined;
+    }
     const base = `http://127.0.0.1:${cfg.port}`;
     const sent = await call(base, 'POST', '/api/codex/events', eventBody(input, account, codexHome), event === 'SessionEnd' ? SESSION_END_TIMEOUT_MS : EVENT_TIMEOUT_MS);
     debug(`${event}: ${sent ? `${sent.status} ${JSON.stringify(sent.json ?? null)}` : 'Habblaud fora do ar'}`);
@@ -253,6 +351,7 @@ export async function main() {
   const { waitMs } = readConfig();
   // Rede de segurança: nada mantém o processo vivo além da espera (o Codex também tem o tempo limite do hook).
   setTimeout(() => process.exit(0), waitMs + 15_000).unref();
+  // (with a central server the hook never waits for a decision: REMOTE_TIMEOUT_MS + the stdin deadline at most)
   const out = await run();
   // Sem process.exit() logo depois do fetch: no Windows (Node 23 até 24.19) ele derruba o processo com 0xC0000409
   // enquanto o V8 ainda compila em segundo plano o parser do fetch (nodejs/node#56645). O processo sai sozinho quando

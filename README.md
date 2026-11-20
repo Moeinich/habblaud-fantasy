@@ -343,6 +343,14 @@ HABBLAUD_SERVER_TOKEN=hbl1.mac-anna.… npm run remote:install -- --server https
 agent's card. `npm run remote:status` shows the setup and `npm run remote:uninstall` removes it. The Mac does not need
 to run a Habblaud server of its own.
 
+**Codex on the same Mac:** `remote:install` also sets up Codex when it finds a Codex folder (`~/.codex*`, `CODEX_HOME`
+or `HABBLAUD_CODEX_DIRS`; skip it with `--no-codex`). It installs the Habblaud hooks in each folder's `hooks.json` (as
+`npm run codex:install`) and writes the server and the token in `~/.habblaud/codex-hook.json` (mode 600), so the hook
+sends every Codex event to the server. Approve the Habblaud hooks in `/hooks` inside Codex the first time. Codex
+agents show up with the machine's name like the Claude Code ones; their approval requests show them as waiting, but
+are answered in the Codex terminal (approving from the office and sending messages to them only work on the server's
+own machine).
+
 **What works for agents of other machines:** status, activities, tasks, subagents, plan usage (5h and weekly), GitHub
 effects (party for an opened or merged PR and a release, alarm for red CI), approving or denying permissions and
 answering questions, and sending messages. **What doesn't** (shown as off in the interface): the terminal (the

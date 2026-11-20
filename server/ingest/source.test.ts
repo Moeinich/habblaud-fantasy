@@ -178,4 +178,19 @@ describe('IngestSource', () => {
     expect(office.get(`r:mac-a:${SID}`)!.status).toBe('offline');
     expect(office.get(`r:mac-b:${SID}`)!.status).not.toBe('offline');
   });
+
+  it('Codex sessions come in with the Codex provider, its tool texts and PermissionRequest = waiting', () => {
+    const { office, source, ev } = setup();
+    const id = `r:mac-a:${SID}`;
+    source.apply(MAC_A, ev('SessionStart', { provider: 'codex', account: '.codex', source: 'startup' }));
+    const a = office.get(id)!;
+    expect(a.provider).toBe('codex');
+    expect(a.account).toBe('r:mac-a:.codex');
+    source.apply(MAC_A, ev('PreToolUse', { provider: 'codex', account: '.codex', tool_name: 'apply_patch', tool_use_id: 'call_1', tool_input: { command: '*** Begin Patch\n*** Add File: docs/x.md\n+hi\n*** End Patch' } }));
+    expect(office.get(id)!.recent.some((x) => x.tool === 'Write' && x.text.includes('x.md'))).toBe(true);
+    source.apply(MAC_A, ev('PermissionRequest', { provider: 'codex', account: '.codex', tool_name: 'Bash', tool_input: { command: 'rm -rf build' } }));
+    expect(office.get(id)!.status).toBe('waiting');
+    source.apply(MAC_A, ev('Stop', { provider: 'codex', account: '.codex' }));
+    expect(office.get(id)!.status).toBe('idle');
+  });
 });
