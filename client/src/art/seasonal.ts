@@ -1,4 +1,4 @@
-// Decorações procedurais em pixel art. Mesma escala dos móveis do escritório.
+// Procedural seasonal decorations (winter feast + Halloween), same scale as the office furniture.
 import { PixelBuf } from './core/pixbuf';
 import type { BufSprite } from './core/sprite';
 
@@ -8,39 +8,84 @@ export function renderSeasonalProp(kind: SeasonalProp): BufSprite {
   const b = new PixelBuf(40, 64);
   const rect = (x: number, y: number, w: number, h: number, c: string) => b.rect(x, y, w, h, c);
   if (kind === 'tree') {
+    // Winter-feast pine: layered dark boughs dusted with snow, hung with glowing lanterns and red war-banner
+    // ribbons, a carved rune lantern on top; a mead keg and a rope-tied supply bundle at its foot.
     b.shadow(20, 59, 17, 3, '#252c39', 0.22);
-    rect(17, 49, 6, 9, '#80573d');
+    rect(17, 49, 6, 9, '#6a4a30');
+    b.vline(17, 49, 57, '#8a6239');
     for (let row = 0; row < 4; row++) {
       const y = 13 + row * 8;
       const half = 6 + row * 3;
-      rect(20 - half, y, half * 2 + 1, 9, '#245644');
-      rect(22 - half, y, half * 2 - 4, 6, '#387956');
-      rect(22 - half, y + 1, half - 1, 3, '#4d9361');
+      rect(20 - half, y, half * 2 + 1, 9, '#1f4a3a');
+      rect(22 - half, y, half * 2 - 4, 6, '#2e6448');
+      rect(22 - half, y + 1, half - 1, 3, '#3f7c52');
+      // jagged bough tips
+      for (let x = 20 - half; x <= 20 + half; x += 3) b.set(x, y + 9, '#1f4a3a');
+      // snow on the upper edge of each tier
+      b.hline(21 - half, 19, y, '#e8eef2');
+      b.hline(23 - half, 17, y + 1, '#c8d4dc');
     }
-    b.vline(20, 5, 13, '#ffe0a0');
-    b.hline(16, 24, 9, '#ffe0a0');
-    rect(18, 7, 5, 5, '#ffc45d');
-    for (const [x, y] of [[16, 20], [24, 24], [13, 31], [25, 36], [9, 42], [20, 43], [31, 44]]) {
-      rect(x, y, 3, 3, '#e05250');
-      b.set(x, y, '#ffb27b');
+    // red war-banner ribbon swagged across the tiers
+    for (const [y0, x0, x1] of [[22, 13, 27], [30, 10, 30], [38, 7, 33]] as const) {
+      for (let x = x0; x <= x1; x++) {
+        const sag = Math.round(Math.sin(((x - x0) / (x1 - x0)) * Math.PI) * 3);
+        b.set(x, y0 + sag, '#9c2f25');
+        b.set(x, y0 + sag + 1, '#6e1f18');
+      }
     }
-    for (const [x, y] of [[21, 17], [15, 26], [23, 30], [15, 38], [26, 42], [11, 47]]) {
-      rect(x, y, 2, 2, '#ffe8b2');
+    // banner tails hanging from the lowest swag
+    rect(7, 38, 2, 5, '#9c2f25');
+    b.set(7, 43, '#9c2f25');
+    rect(32, 38, 2, 5, '#9c2f25');
+    b.set(33, 43, '#9c2f25');
+    // rune lantern finial (iron frame, warm glow) instead of a star
+    rect(18, 3, 5, 2, '#3a3a40');
+    rect(17, 5, 7, 7, '#3a3a40');
+    rect(18, 6, 5, 5, '#ffc45d');
+    b.vline(20, 6, 10, '#c9762c');
+    b.set(19, 8, '#c9762c');
+    b.set(21, 8, '#c9762c');
+    b.hline(17, 23, 12, '#3a3a40');
+    // small hanging lanterns
+    for (const [x, y] of [[15, 25], [25, 27], [12, 34], [26, 35], [9, 44], [20, 45], [30, 45]]) {
+      b.set(x + 1, y - 1, '#3a3a40');
+      rect(x, y, 3, 3, '#ffb53d');
+      b.set(x + 1, y + 1, '#fff0be');
+      b.hline(x, x + 2, y + 3, '#3a3a40');
     }
-    rect(3, 52, 10, 8, '#a82d42');
-    rect(6, 51, 2, 9, '#e5c17b');
-    rect(3, 54, 10, 1, '#e5c17b');
-    rect(26, 51, 10, 9, '#e6b357');
-    rect(30, 50, 2, 10, '#b33549');
-    rect(26, 54, 10, 1, '#b33549');
+    // mead keg (left) and rope-tied bundle (right)
+    rect(2, 50, 11, 10, '#8a6239');
+    rect(3, 50, 3, 10, '#a8784a');
+    b.hline(2, 12, 52, '#3a3a40');
+    b.hline(2, 12, 57, '#3a3a40');
+    rect(6, 54, 3, 2, '#5a3e24');
+    rect(26, 52, 11, 8, '#b08a5a');
+    rect(26, 52, 11, 2, '#c9a46e');
+    b.vline(31, 51, 59, '#e6dcc4');
+    b.hline(26, 36, 55, '#e6dcc4');
+    rect(30, 49, 3, 3, '#e6dcc4');
   } else if (kind === 'gift') {
-    b.shadow(20, 59, 9, 2, '#252c39', 0.2);
-    rect(11, 49, 17, 11, '#bf3849');
-    rect(11, 49, 17, 3, '#e35a58');
-    rect(18, 49, 3, 11, '#efd1a0');
-    rect(11, 54, 17, 2, '#efd1a0');
-    rect(14, 46, 5, 3, '#e8b860');
-    rect(21, 46, 5, 3, '#e8b860');
+    // Feast supplies: an iron-banded crate tied with rope, with a small mead keg leaning on it.
+    b.shadow(20, 59, 11, 2, '#252c39', 0.2);
+    rect(9, 47, 16, 13, '#8a6239');
+    rect(9, 47, 16, 3, '#a8784a');
+    b.hline(9, 24, 50, '#5e3f27');
+    b.vline(10, 47, 59, '#5e3f27');
+    b.vline(23, 47, 59, '#5e3f27');
+    b.hline(9, 24, 54, '#6e4a2c');
+    // rope cross with a knot
+    b.vline(16, 46, 59, '#e6dcc4');
+    b.vline(17, 46, 59, '#c9b483');
+    b.hline(9, 24, 53, '#e6dcc4');
+    rect(15, 44, 4, 3, '#e6dcc4');
+    b.set(14, 43, '#c9b483');
+    b.set(19, 43, '#c9b483');
+    // keg
+    rect(24, 51, 8, 9, '#9a6c42');
+    rect(25, 51, 2, 9, '#b8875a');
+    b.hline(24, 31, 53, '#3a3a40');
+    b.hline(24, 31, 57, '#3a3a40');
+    b.set(30, 55, '#e0b23c');
   } else if (kind === 'pumpkin') {
     b.shadow(20, 59, 11, 2, '#252c39', 0.2);
     rect(18, 41, 3, 6, '#557342');

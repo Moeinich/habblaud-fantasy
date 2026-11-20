@@ -23,7 +23,20 @@ one (0.**3**.0).
   same party and alarm. The terminal, taking over, New agent and dictation stay off for them. Habblaud World never
   receives agents of other machines. See "Multiple machines" in the README.
 
+- **Sign in on a screen without a keyboard.** With `HABBLAUD_REMOTE_KIOSK_TOKEN_HASH` (the SHA-256 of a random token)
+  in `.env`, opening `https://<address>/login/kiosk?token=<token>` on the remote port signs in without typing the user
+  and password, for a TV or a wall display. Only the hash is stored, wrong tokens count against the login throttle and
+  removing the hash turns the link off.
+
 ### Changed
+
+- **Warcraft III-style rooms, Horde and Alliance.** Every remaining office object was redrawn: desks are war and scribe
+  tables with rune tablets or scrying mirrors, chairs are tusked hide stumps (Horde) or carved high-back chairs
+  (Alliance), and project rooms alternate between the two factions in floors, walls, rugs and furniture. The
+  reception is the Great Hall, the kitchen is the Mess Hall, the restrooms are the Bathhouse and the lounge is the
+  Tavern, with ice chests, potion cabinets, fur thrones, a war-game table, a goblin fortune machine and latrine
+  booths. Walls carry quest boards, banners, tapestries, torch sconces and arched windows; the corridor and the road
+  are dirt paths. Christmas became the Winter Feast: lantern pines, supply crates and no Santa hats.
 
 - **The office is now a fantasy camp.** The whole look was redrawn in an original fantasy-RTS style. Desks are
   workbenches, monitors are stone slabs with glowing runes, chairs are stumps and hide-covered seats, and the printer

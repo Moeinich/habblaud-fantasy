@@ -75,6 +75,34 @@ const WEB_MAX_OUT = 9;
 const VIGNETTE_ALPHA = 0.2;
 const VIGNETTE_EDGE = `rgba(18,40,26,${VIGNETTE_ALPHA})`;
 
+/** Dirt road: two pairs of wavy wheel ruts (dark groove + lit lip) and grass tufts on the crown; no lane markings. */
+function paintRoadRuts(ctx: CanvasRenderingContext2D, x0: number, width: number, y: number, h: number): void {
+  for (const f of [0.22, 0.4, 0.62, 0.8]) {
+    const ry = y + Math.round(h * f);
+    for (let x = x0; x < x0 + width; x += 2) {
+      const wob = Math.round(Math.sin(x / 37 + f * 9) * 0.8 + Math.sin(x / 11 + f * 3) * 0.4);
+      // worn patches: the groove fades in and out along the road
+      const depth = 0.5 + Math.sin(x / 53 + f * 17) * 0.25;
+      if (depth < 0.32) continue;
+      ctx.fillStyle = `rgba(70,50,32,${depth.toFixed(2)})`;
+      ctx.fillRect(x, ry + wob, 2, 2);
+      ctx.fillStyle = 'rgba(176,146,108,0.45)';
+      ctx.fillRect(x, ry + wob + 2, 2, 1);
+    }
+  }
+  // grass tufts on the crown between the two lanes and along the verges
+  for (const f of [0.51, 0.04, 0.96]) {
+    const ty = y + Math.round(h * f);
+    for (let x = x0 + 5; x < x0 + width; x += 13 + ((x * 7) % 11)) {
+      ctx.fillStyle = '#5f8f45';
+      ctx.fillRect(x, ty, 1, 2);
+      ctx.fillRect(x + 2, ty, 1, 2);
+      ctx.fillStyle = '#7aa858';
+      ctx.fillRect(x + 1, ty - 1, 1, 3);
+    }
+  }
+}
+
 export class Renderer {
   readonly ctx: CanvasRenderingContext2D;
   readonly areas = new Map<string, AreaVis>();
@@ -186,10 +214,7 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     ctx.translate(-this.baseX, -this.baseY);
     paintShell(this.art, ctx, this.exterior.floors, []);
-    // faixas da rua
-    const ly = this.exterior.streetY + Math.round(this.exterior.streetH / 2) - 1;
-    ctx.fillStyle = 'rgba(255,236,170,0.75)';
-    for (let x = this.baseX + 4; x < this.baseX + c.width; x += 24) ctx.fillRect(x, ly, 12, 2);
+    paintRoadRuts(ctx, this.baseX, c.width, this.exterior.streetY, this.exterior.streetH);
     this.shells = [];
     this.shellWindows = [];
     for (let col = CORE_COLS; col < cols; col++) {

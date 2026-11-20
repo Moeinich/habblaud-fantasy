@@ -1,4 +1,5 @@
-// Área externa: grama, árvores, calçada e rua; pátio/jardim nos slots sem sala.
+// Exterior: grass, trees, cobbled verges and a dirt road (the 'sidewalk'/'street' floor kinds are painted as
+// cobbles and packed earth by art/surfaces/floor.ts); patio/garden in slots without a room.
 import type { WallStyle } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
 import { BUILDING_H, COL_W, CORE_COLS, CORRIDOR_Y, EXT_EAST, EXT_NORTH, EXT_SOUTH, EXT_WEST, SOUTH_Y, TILE } from '../constants';
@@ -14,7 +15,7 @@ export interface ExteriorLayout {
   props: ExteriorProp[];
   /** Faixas da rua (y em px) e sentido (+1 = leste, -1 = oeste). */
   lanes: { y: number; dir: 1 | -1 }[];
-  /** Linha central da rua (px), para as faixas tracejadas. */
+  /** Top of the dirt road and its height (px); the renderer paints the wheel ruts from these. */
   streetY: number;
   streetH: number;
 }

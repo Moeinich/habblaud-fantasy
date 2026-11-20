@@ -4,6 +4,7 @@
 import { TILE, type FloorKind } from '../api';
 import { mix, parseColor, ramp, shade, type RGBA } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
+import { themeFaction } from '../theme';
 
 export const CHUNK_TILES = 8;
 export const CHUNK_PX = CHUNK_TILES * TILE;
@@ -84,8 +85,9 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
     case 'carpet': {
       // Esteira de palha trançada: fiapos curtos em direções alternadas (xadrez de trama) e algumas
       // hastes soltas mais claras.
-      const c1 = o.tint ?? '#b89a62';
-      const c2 = o.tint2 ?? shade(c1, -0.04);
+      // Theme tints only colour the straw lightly (dyed rushes), so it always reads as a hay mat.
+      const c1 = o.tint ? mix(o.tint, '#b89a62', 0.6) : '#b89a62';
+      const c2 = o.tint2 ? mix(o.tint2, '#a98c56', 0.6) : shade(c1, -0.04);
       const odd = (tx + ty) & 1;
       const base = mix(c1, c2, odd ? 0.6 : 0.1);
       b.rect(0, 0, TILE, TILE, base);
@@ -198,12 +200,12 @@ function rgba(c: string): RGBA {
 
 // Tábuas rústicas, mais escuras e com mais variação de tom.
 const WOOD_TONES = ['#9a6c42', '#8e6239', '#a6784c', '#86603a'] as const;
-/** [tom][0 normal, 1 topo, 2 base, 3 veio, 4 emenda, 5 após emenda, 6 nó]. */
+/** [tone][0 normal, 1 top, 2 bottom, 3 grain, 4 joint, 5 after joint, 6 knot, 7 iron nail]. */
 const WOOD: readonly (readonly RGBA[])[] = WOOD_TONES.map((t) =>
-  [t, shade(t, 0.03), shade(t, -0.075), shade(t, -0.03), shade(t, -0.1), shade(t, 0.03), shade(t, -0.12)].map(rgba),
+  [t, shade(t, 0.03), shade(t, -0.075), shade(t, -0.03), shade(t, -0.1), shade(t, 0.03), shade(t, -0.12), '#3a3a40'].map(rgba),
 );
 
-/** Tábuas de madeira: 4px de altura, 48px de comprimento, emendas desencontradas, veios e nós. */
+/** Rough planks: 4px tall, 48px long, staggered joints, grain, knots and iron nails at the ends. */
 function paintWood(b: PixelBuf, x0: number, y0: number, seed: number): void {
   for (let py = 0; py < CHUNK_PX; py++) {
     const wy = y0 + py;
@@ -219,6 +221,7 @@ function paintWood(b: PixelBuf, x0: number, y0: number, seed: number): void {
       let k = 0;
       if (ix === 0) k = 4;
       else if (iy === 3) k = 2;
+      else if (iy === 1 && (ix === 2 || ix === 45)) k = 7;
       else if (iy === 0) k = ix === 1 ? 5 : 1;
       else if (iy === 2 && ix === 10 + ((ph >>> 12) % 20) && (ph >>> 20) % 5 === 0) k = 6;
       else if (iy === 1 + ((ph >>> 5) % 2) && (ix + (ph >>> 8)) % 23 < 7) k = 3;
@@ -228,80 +231,194 @@ function paintWood(b: PixelBuf, x0: number, y0: number, seed: number): void {
   }
 }
 
-const LEVELS = 16;
-const CONCRETE: readonly RGBA[] = Array.from({ length: LEVELS }, (_, i) => rgba(mix('#7a6650', '#8e7a60', i / (LEVELS - 1))));
-const CONCRETE_EDGE: readonly RGBA[] = CONCRETE.map((c) => rgba(shade(`rgb(${c[0]},${c[1]},${c[2]})`, 0.02)));
-const CONCRETE_SEAM = rgba('#6e5a46');
-const CONCRETE_SPECK = [rgba('#5e4c3a'), rgba('#a09076')] as const;
+// ------------------------------------------------------------------ irregular stones (Voronoi)
 
-/** Chão de terra batida em placas de 2x2 tiles (marcas de varrição), com manchas suaves contínuas. */
+/** Voronoi lookup result (jittered grid points): stone id, F1/F2 distances and offset from the stone centre. */
+interface Cell {
+  id: number;
+  f1: number;
+  f2: number;
+  dx: number;
+  dy: number;
+}
+
+const cellOut: Cell = { id: 0, f1: 0, f2: 0, dx: 0, dy: 0 };
+
+/** Nearest stone to (wx, wy) on a `size` px grid with jittered centres (jitter 0..1). */
+function stoneAt(wx: number, wy: number, size: number, jitter: number, seed: number): Cell {
+  const gx = Math.floor(wx / size);
+  const gy = Math.floor(wy / size);
+  let f1 = 1e9;
+  let f2 = 1e9;
+  let id = 0;
+  let bdx = 0;
+  let bdy = 0;
+  for (let j = -1; j <= 1; j++) {
+    for (let i = -1; i <= 1; i++) {
+      const cx = gx + i;
+      const cy = gy + j;
+      const hh = h3(cx, cy, 11, seed);
+      const px = (cx + 0.5 + (((hh & 255) / 255) - 0.5) * jitter) * size;
+      const py = (cy + 0.5 + ((((hh >>> 8) & 255) / 255) - 0.5) * jitter) * size;
+      const dx = wx - px;
+      const dy = wy - py;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < f1) {
+        f2 = f1;
+        f1 = d;
+        id = hh;
+        bdx = dx;
+        bdy = dy;
+      } else if (d < f2) f2 = d;
+    }
+  }
+  cellOut.id = id;
+  cellOut.f1 = f1;
+  cellOut.f2 = f2;
+  cellOut.dx = bdx;
+  cellOut.dy = bdy;
+  return cellOut;
+}
+
+/** Palette [base, light, shadow, blemish] for each stone tone. */
+function stonePal(tones: readonly string[]): readonly (readonly RGBA[])[] {
+  return tones.map((t) => [t, shade(t, 0.09), shade(t, -0.12), shade(t, -0.05)].map(rgba));
+}
+
+const DIRT_LEVELS = 12;
+/** Packed earth: graded tones for the noise, plus pebbles and straw wisps. */
+const DIRT: readonly RGBA[] = Array.from({ length: DIRT_LEVELS }, (_, i) => rgba(mix('#6a5038', '#86694a', i / (DIRT_LEVELS - 1))));
+const DIRT_DARK = rgba('#54402c');
+const DIRT_PEBBLE = [rgba('#a39a8a'), rgba('#7c7468')] as const;
+const STRAW = [rgba('#d2b064'), rgba('#b08e48')] as const;
+
+function dirtAt(wx: number, wy: number, seed: number): RGBA {
+  const n = noise(wx, wy, 22, seed) * 0.65 + noise(wx, wy, 6, seed + 3) * 0.35;
+  return DIRT[Math.min(DIRT_LEVELS - 1, Math.floor(n * DIRT_LEVELS))];
+}
+
+/** Scattered straw wisps: short horizontal/diagonal strokes, at most one per 8px cell. */
+function strawAt(wx: number, wy: number, seed: number, rarity: number): RGBA | null {
+  const cx = wx >> 3;
+  const cy = wy >> 3;
+  const hh = h3(cx, cy, 21, seed);
+  if (hh % rarity !== 0) return null;
+  const sx = (cx << 3) + ((hh >>> 4) & 7);
+  const sy = (cy << 3) + ((hh >>> 8) & 7);
+  const dir = (hh >>> 12) % 3; // 0 horizontal, 1 diagonal \, 2 diagonal /
+  for (let k = 0; k < 4; k++) {
+    const px = sx + k;
+    const py = dir === 0 ? sy : dir === 1 ? sy + (k >> 1) : sy - (k >> 1);
+    if (px === wx && py === wy) return STRAW[k & 1];
+  }
+  return null;
+}
+
+/** Corridor floor: trodden packed earth, no seams, with pebbles, dark marks and straw. */
 function paintConcrete(b: PixelBuf, x0: number, y0: number, seed: number): void {
   for (let py = 0; py < CHUNK_PX; py++) {
     for (let px = 0; px < CHUNK_PX; px++) {
       const wx = x0 + px;
       const wy = y0 + py;
-      const sx = wx & 31;
-      const sy = wy & 31;
-      if (sx === 31 || sy === 31) {
-        b.put(px, py, CONCRETE_SEAM);
+      const st = strawAt(wx, wy, seed, 14);
+      if (st) {
+        b.put(px, py, st);
         continue;
       }
-      const sp = h3(wx, wy, 3, seed) % 61;
+      const sp = h3(wx, wy, 3, seed) % 131;
       if (sp < 2) {
-        b.put(px, py, CONCRETE_SPECK[sp]);
+        b.put(px, py, DIRT_PEBBLE[sp]);
         continue;
       }
-      const n = noise(wx, wy, 26, seed) * 0.6 + noise(wx, wy, 7, seed + 3) * 0.4;
-      const lv = Math.min(LEVELS - 1, Math.floor(n * LEVELS));
-      b.put(px, py, sx === 0 || sy === 0 ? CONCRETE_EDGE[lv] : CONCRETE[lv]);
+      if (sp < 4 || h3(wx, wy - 1, 3, seed) % 131 < 2) {
+        b.put(px, py, DIRT_DARK);
+        continue;
+      }
+      b.put(px, py, dirtAt(wx, wy, seed));
     }
   }
 }
 
-const COBBLE_TONES = ['#8f897d', '#9c968a', '#857f74', '#a39d90'] as const;
-const COBBLE: readonly (readonly RGBA[])[] = COBBLE_TONES.map((t) => [t, shade(t, 0.07), shade(t, -0.1)].map(rgba));
-const COBBLE_GAP = rgba('#4f463a');
+const HORDE_STONE = stonePal(['#6e665c', '#7a7064', '#625a52', '#746454']);
+const ALLY_STONE = stonePal(['#a8a294', '#9c968a', '#b2ac9e', '#949aa0']);
+const ALLY_GAP = rgba('#5e5850');
 
-/** Calçamento de pedras redondas (paralelepípedos 8x6 desencontrados, cantos arredondados). */
+/**
+ * Floor of project rooms and the Great Hall ('marble'). The room theme (via the seed) picks the faction:
+ * Horde = rough flagstones sunk in dirt and straw; Alliance = neat cut-stone slabs.
+ */
 function paintMarble(b: PixelBuf, x0: number, y0: number, seed: number): void {
+  if (themeFaction(seed) === 'horde') paintRoughFlags(b, x0, y0, seed);
+  else paintAshlar(b, x0, y0, seed);
+}
+
+/** Horde: irregular flagstones (Voronoi ~14px) with wide dirt gaps, some missing (bare dirt + straw). */
+function paintRoughFlags(b: PixelBuf, x0: number, y0: number, seed: number): void {
   for (let py = 0; py < CHUNK_PX; py++) {
     for (let px = 0; px < CHUNK_PX; px++) {
       const wx = x0 + px;
       const wy = y0 + py;
-      const row = Math.floor(wy / 6);
-      const off = row & 1 ? 4 : 0;
-      const ix = (wx + off) & 7;
-      const iy = wy - row * 6;
-      const corner = (ix === 0 || ix === 6) && (iy === 0 || iy === 4);
-      if (ix === 7 || iy === 5 || corner) {
-        b.put(px, py, COBBLE_GAP);
+      const c = stoneAt(wx, wy, 14, 0.8, seed);
+      const gap = c.f2 - c.f1;
+      const missing = c.id % 7 === 0;
+      if (gap < 2.2 || missing) {
+        const st = strawAt(wx, wy, seed, missing ? 3 : 7);
+        b.put(px, py, st ?? (gap < 1 && !missing ? DIRT_DARK : dirtAt(wx, wy, seed)));
         continue;
       }
-      const t = COBBLE[h3((wx + off) >> 3, row, 4, seed) % COBBLE.length];
-      b.put(px, py, iy === 0 || ix === 0 ? t[1] : iy === 4 || ix === 6 ? t[2] : t[0]);
+      const t = HORDE_STONE[(c.id >>> 16) % HORDE_STONE.length];
+      let k = 0;
+      if (gap < 3.4) k = c.dx + c.dy < 0 ? 1 : 2;
+      else if (h3(wx, wy, 7, seed) % 23 === 0) k = 3;
+      b.put(px, py, t[k]);
     }
   }
 }
 
-const WALK_TONES = ['#a8987c', '#9e8e72', '#b2a286'] as const;
-/** [tom][0 normal, 1 junta, 2 borda clara, 3 mancha]. */
-const WALK: readonly (readonly RGBA[])[] = WALK_TONES.map((t) => [t, '#6e5e48', shade(t, 0.04), shade(t, -0.07)].map(rgba));
+/** Alliance: 16x16 ashlar slabs staggered by half a slab per row, light/dark bevel and thin cracks. */
+function paintAshlar(b: PixelBuf, x0: number, y0: number, seed: number): void {
+  for (let py = 0; py < CHUNK_PX; py++) {
+    for (let px = 0; px < CHUNK_PX; px++) {
+      const wx = x0 + px;
+      const wy = y0 + py;
+      const row = wy >> 4;
+      const off = row & 1 ? 8 : 0;
+      const ix = (wx + off) & 15;
+      const iy = wy & 15;
+      if (ix === 15 || iy === 15) {
+        b.put(px, py, ALLY_GAP);
+        continue;
+      }
+      const ph = h3((wx + off) >> 4, row, 4, seed);
+      const t = ALLY_STONE[ph % ALLY_STONE.length];
+      let k = 0;
+      if (iy === 0 || ix === 0) k = 1;
+      else if (iy === 14 || ix === 14) k = 2;
+      else if ((ph >>> 8) % 4 === 0 && ix === iy + ((ph >>> 12) % 5) - 2 && iy > 3 && iy < 11) k = 3;
+      else if (h3(wx, wy, 6, seed) % 53 === 0) k = 3;
+      b.put(px, py, t[k]);
+    }
+  }
+}
 
-/** Caminho de lajes de arenito 16x8 em fileiras desencontradas. */
+const COBBLE = stonePal(['#8a8478', '#958f82', '#827c70', '#9a9486', '#8a8070']);
+
+/** Round cobbles set in dirt (outdoor verge, garden paths and deck borders). */
 function paintSidewalk(b: PixelBuf, x0: number, y0: number, seed: number): void {
   for (let py = 0; py < CHUNK_PX; py++) {
     for (let px = 0; px < CHUNK_PX; px++) {
       const wx = x0 + px;
       const wy = y0 + py;
-      const row = wy >> 3;
-      const off = row & 1 ? 8 : 0;
-      const ix = (wx + off) & 15;
-      const iy = wy & 7;
-      const t = WALK[h3((wx + off) >> 4, row, 5, seed) % WALK.length];
+      const c = stoneAt(wx, wy, 8, 0.6, seed);
+      const gap = c.f2 - c.f1;
+      if (gap < 1.3 || c.f1 > 5.2) {
+        b.put(px, py, gap < 0.6 ? DIRT_DARK : dirtAt(wx, wy, seed));
+        continue;
+      }
+      const t = COBBLE[(c.id >>> 16) % COBBLE.length];
       let k = 0;
-      if (iy === 7 || ix === 15) k = 1;
-      else if (iy === 0 || ix === 0) k = 2;
-      else if (h3(wx, wy, 6, seed) % 41 === 0) k = 3;
+      if (gap < 2.3 || c.f1 > 4.2) k = c.dx + c.dy < 0 ? 1 : 2;
+      else if (c.dx < -1 && c.dy < -1 && c.f1 < 2) k = 1;
       b.put(px, py, t[k]);
     }
   }

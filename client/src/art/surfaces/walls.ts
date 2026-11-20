@@ -38,48 +38,98 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
   for (let y = 0; y < fh; y++) b.hline(0, TILE - 1, fy + y, shade(base, 0.02 - (y / fh) * 0.035));
   switch (pattern) {
     case 'stripes': {
-      // Pau-a-pique: reboco de barro com vigas verticais de madeira a cada 8px.
-      const daub = shade(base, 0.06);
-      b.rect(0, fy, TILE, fh, daub);
-      for (let i = 0; i < 6; i++) b.set(Math.floor(r() * TILE), fy + Math.floor(r() * fh), shade(daub, r() < 0.5 ? -0.05 : 0.04));
-      const beam = ramp('#5e3f27', 0.06);
-      for (const x of [(col * 8) % 16 === 0 ? 0 : 8]) {
-        b.rect(x, fy, 3, fh, beam.base);
-        b.vline(x, fy, fy + fh - 1, beam.lt);
-        b.vline(x + 2, fy, fy + fh - 1, beam.dk);
+      // Alliance half-timber: whitewashed plaster between oak posts, a mid rail, diagonal braces in
+      // alternating columns and a painted blue/gold band under the cap.
+      const plaster = ramp(mix('#e6dcc4', base, 0.3), 0.04);
+      b.rect(0, fy, TILE, fh, plaster.base);
+      for (let i = 0; i < 7; i++) b.set(Math.floor(r() * TILE), fy + Math.floor(r() * fh), r() < 0.5 ? plaster.dk : plaster.lt);
+      const oak = ramp('#8a6239', 0.06);
+      const mid = fy + Math.floor(fh / 2);
+      // diagonal brace (alternates direction per column so pairs form a chevron)
+      for (let k = 0; k < fh / 2 - 1; k++) {
+        const x = col % 2 ? 2 + k : TILE - 3 - k;
+        const y = mid + 1 + k;
+        if (x < 0 || x >= TILE) continue;
+        b.set(x, y, oak.base);
+        b.set(x + (col % 2 ? 1 : -1), y, oak.dk);
       }
-      b.hline(0, TILE - 1, fy + Math.floor(fh / 2), beam.base);
+      // corner post on the column edge
+      b.rect(0, fy, 3, fh, oak.base);
+      b.vline(0, fy, fy + fh - 1, oak.lt);
+      b.vline(2, fy, fy + fh - 1, oak.dk);
+      // mid rail
+      b.rect(0, mid, TILE, 2, oak.base);
+      b.hline(0, TILE - 1, mid, oak.lt);
+      b.hline(0, TILE - 1, mid + 1, oak.dk);
+      // oak pegs
+      b.set(1, mid - 3, oak.dd);
+      b.set(1, mid + 4, oak.dd);
+      // painted frieze: gold line over a royal blue band
+      b.hline(0, TILE - 1, fy + 1, '#e0b23c');
+      b.rect(0, fy + 2, TILE, 2, '#2f4f9c');
+      if (col % 2 === 0) b.set(8, fy + 2, '#e0b23c');
       break;
     }
     case 'tiles': {
-      const grout = shade(base, -0.09);
-      for (let y = fy; y < fy + fh; y++) {
-        const ry = y - fy;
-        if (ry % 6 === 5) b.hline(0, TILE - 1, y, grout);
+      // Alliance dressed stone: neat ashlar courses (5px tall, 8px blocks, staggered) with a bevel and
+      // a painted royal-blue frieze with gold studs a third of the way down.
+      const stone = ramp(base, 0.05);
+      const mortar = shade(base, -0.22);
+      b.rect(0, fy, TILE, fh, mortar);
+      for (let ry = 0, row = 0; ry < fh; ry += 5, row++) {
+        const off = row % 2 ? 4 : 0;
+        for (let x = -off; x < TILE; x += 8) {
+          const tone = [stone.base, stone.lt, stone.base, shade(stone.base, -0.03)][(row * 3 + col * 2 + ((x + off) >> 3)) % 4];
+          for (let xx = Math.max(0, x); xx < Math.min(TILE, x + 7); xx++) {
+            for (let yy = ry; yy < Math.min(fh, ry + 4); yy++) {
+              const c = yy === ry ? shade(tone, 0.06) : yy === ry + 3 ? shade(tone, -0.07) : xx === x + 6 ? shade(tone, -0.04) : tone;
+              b.set(xx, fy + yy, c);
+            }
+          }
+        }
       }
-      for (let ry = 0; ry < fh; ry += 6) {
-        const off = (Math.floor(ry / 6) % 2) * 4;
-        for (let x = off; x < TILE + 8; x += 8) b.vline((x + 7) % 16, fy + ry, Math.min(fy + fh - 1, fy + ry + 4), grout);
-        b.hline(0, TILE - 1, fy + ry, shade(base, 0.035));
-      }
+      const fz = fy + 5;
+      b.rect(0, fz, TILE, 4, '#2f4f9c');
+      b.hline(0, TILE - 1, fz, '#4a6cc0');
+      b.hline(0, TILE - 1, fz + 3, '#22397a');
+      b.set(4, fz + 1, '#e0b23c');
+      b.set(12, fz + 1, '#e0b23c');
+      b.set(4, fz + 2, '#a8801c');
+      b.set(12, fz + 2, '#a8801c');
       break;
     }
     case 'wood_panel': {
-      // Paliçada de troncos verticais (4px cada, arredondados: luz à esquerda, sombra à direita),
-      // com amarração de corda na altura do meio.
-      const w = ramp(mix('#8a6239', base, 0.35), 0.06);
+      // Horde palisade: sharpened vertical logs (4px, lit left / shaded right) whose points show under the
+      // cap, a blood-red hide band lashed with black rope and a blackened iron band with rivets near the floor.
+      const w = ramp(mix('#4e3420', base, 0.45), 0.06);
+      const behind = shade(w.dd, -0.1);
+      b.rect(0, fy, TILE, fh, behind);
       for (let x = 0; x < TILE; x += 4) {
         const tone = [w.base, w.lt, w.base, w.dk][((col * 4 + x / 4) * 7) % 4];
-        b.rect(x, fy, 4, fh, tone);
-        b.vline(x, fy, fy + fh - 1, shade(tone, 0.07));
-        b.vline(x + 3, fy, fy + fh - 1, shade(tone, -0.12));
-        // Nós e veios.
-        if (r() < 0.6) b.set(x + 1 + Math.floor(r() * 2), fy + Math.floor(r() * fh), shade(tone, -0.1));
-        b.vline(x + 2, fy + 2 + Math.floor(r() * 4), fy + 6 + Math.floor(r() * 6), shade(tone, -0.05));
+        const tip = fy + 1 + (((col * 4 + x / 4) * 5) % 3);
+        b.rect(x, tip + 2, 4, fy + fh - tip - 2, tone);
+        b.rect(x + 1, tip, 2, 2, tone);
+        b.set(x + 1, tip, shade(tone, 0.08));
+        b.vline(x, tip + 2, fy + fh - 1, shade(tone, 0.07));
+        b.vline(x + 3, tip + 2, fy + fh - 1, shade(tone, -0.12));
+        if (r() < 0.6) b.set(x + 1 + Math.floor(r() * 2), fy + 6 + Math.floor(r() * (fh - 8)), shade(tone, -0.1));
+        b.vline(x + 2, fy + 6 + Math.floor(r() * 4), fy + 10 + Math.floor(r() * 6), shade(tone, -0.05));
       }
-      const rope = fy + Math.floor(fh * 0.55);
-      b.hline(0, TILE - 1, rope, '#c9b483');
-      for (let x = 1; x < TILE; x += 2) b.set(x, rope, '#a89060');
+      // red hide band with black lashing
+      const band = fy + Math.floor(fh * 0.38);
+      b.rect(0, band, TILE, 3, '#9c2f25');
+      b.hline(0, TILE - 1, band, '#b8402e');
+      b.hline(0, TILE - 1, band + 2, '#6e1f18');
+      for (let x = 1; x < TILE; x += 4) {
+        b.set(x, band, '#1e1a18');
+        b.set(x + 1, band + 1, '#1e1a18');
+        b.set(x + 2, band + 2, '#1e1a18');
+      }
+      // blackened iron band with rivets
+      const iron = fy + fh - 5;
+      b.rect(0, iron, TILE, 2, '#3a3a40');
+      b.hline(0, TILE - 1, iron, '#5a5a62');
+      for (let x = 2; x < TILE; x += 8) b.set(x, iron + 1, '#8a8a92');
       break;
     }
     case 'brick': {
@@ -139,7 +189,14 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
       break;
     }
     case 'plain':
-      if (style.exterior) speckle(b, variant * 13 + col, 5, [shade(base, -0.03), shade(base, 0.03)]);
+      // Rough plaster (lime-washed daub): a few blemishes; interior plaster gets an oak picture rail.
+      speckle(b, variant * 13 + col, style.exterior ? 5 : 8, [shade(base, -0.04), shade(base, 0.03)]);
+      if (!style.exterior) {
+        const rail = fy + 4;
+        b.rect(0, rail, TILE, 2, style.trim ?? '#8a6239');
+        b.hline(0, TILE - 1, rail, shade(style.trim ?? '#8a6239', 0.1));
+        b.set(col % 2 ? 3 : 11, rail + 1, '#e0b23c');
+      }
       break;
   }
   // Sombra projetada pela tampa.

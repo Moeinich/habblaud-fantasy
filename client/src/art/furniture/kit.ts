@@ -185,8 +185,152 @@ export function mouse(b: PixelBuf, x: number, y: number, tone: DeskItemTone = 'l
   b.set(x, y, '#7fe0a0');
 }
 
+// ------------------------------------------------------------------ facções (Horda / Aliança)
+
+/** Facção de um móvel: Horda (madeira escura, couro, ferro, osso) ou Aliança (carvalho, azul, ouro, pedra). */
+export type Faction = 'horde' | 'alliance';
+
+/** Paletas das facções (rampas prontas para os móveis). */
+export const FACTION = {
+  horde: {
+    red: ramp('#9c2f25', 0.08),
+    redLt: ramp('#b8402e', 0.08),
+    hide: ramp('#b08a5a', 0.07),
+    timber: ramp('#4e3420', 0.07),
+    iron: ramp('#3a3a40', 0.07),
+    bone: ramp('#e8dcc0', 0.05),
+  },
+  alliance: {
+    blue: ramp('#2f4f9c', 0.08),
+    blueLt: ramp('#3d63b8', 0.08),
+    gold: ramp('#e0b23c', 0.08),
+    stone: ramp('#9c968a', 0.06),
+    plaster: ramp('#e6dcc4', 0.05),
+    oak: ramp('#8a6239', 0.07),
+  },
+} as const;
+
+/** Rebite de ferro (2 px: brilho em cima à esquerda, sombra embaixo). */
+export function rivet(b: PixelBuf, x: number, y: number, light = '#9a9aa2', dark = '#2a2a2e'): void {
+  b.set(x, y, light);
+  b.set(x + 1, y + 1, dark);
+}
+
+/** Cinta de ferro horizontal com rebites nas pontas (sobre madeira). */
+export function ironBand(b: PixelBuf, x0: number, x1: number, y: number, rivets = true): void {
+  b.hline(x0, x1, y, '#3a3a40');
+  if (rivets) {
+    b.set(x0 + 1, y, '#8a8a94');
+    b.set(x1 - 1, y, '#8a8a94');
+  }
+}
+
+/**
+ * Presa/chifre de osso curvo: nasce em (x, y) e sobe `len` px, entortando para `dir` (-1 esquerda,
+ * 1 direita). Aresta clara à esquerda, sombra à direita e ponta mais clara.
+ */
+export function tusk(b: PixelBuf, x: number, y: number, len: number, dir: -1 | 1): void {
+  const bone = FACTION.horde.bone;
+  for (let i = 0; i < len; i++) {
+    const t = i / Math.max(1, len - 1);
+    const xx = x + Math.round(dir * t * t * Math.max(1, len * 0.45));
+    const yy = y - i;
+    const thick = i < len - 2;
+    b.set(xx, yy, i === len - 1 ? bone.hi : bone.lt);
+    if (thick) b.set(xx + 1, yy, bone.dk);
+  }
+}
+
+/** Vela de sebo (2 px de largura) com chama; `h` = altura da cera. */
+export function candle(b: PixelBuf, x: number, y: number, h = 3): void {
+  b.rect(x, y - h + 1, 2, h, '#efe6cc');
+  b.vline(x + 1, y - h + 1, y, '#cfc2a0');
+  b.set(x, y - h + 1, '#fff6dc');
+  b.set(x, y - h, '#f6a63a');
+  b.set(x, y - h - 1, '#ffe08a');
+  b.set(x + 1, y - h, '#e07a2a');
+}
+
+/** Caveira cartunesca (5x4) com vela derretida em cima. (x, y) = canto superior esquerdo do crânio. */
+export function skullCandle(b: PixelBuf, x: number, y: number): void {
+  const bone = FACTION.horde.bone;
+  b.rect(x, y, 5, 3, bone.lt);
+  b.hline(x + 1, x + 3, y + 3, bone.base);
+  b.hline(x, x + 4, y, bone.hi);
+  b.vline(x + 4, y + 1, y + 2, bone.dk);
+  b.set(x + 1, y + 1, '#2a1d14');
+  b.set(x + 3, y + 1, '#2a1d14');
+  b.set(x + 2, y + 2, bone.dk);
+  b.set(x + 1, y + 3, '#2a1d14');
+  b.set(x + 3, y + 3, '#2a1d14');
+  // Vela.
+  b.rect(x + 1, y - 2, 2, 2, '#efe6cc');
+  b.set(x + 3, y - 1, '#efe6cc');
+  b.set(x + 1, y - 3, '#f6a63a');
+  b.set(x + 1, y - 4, '#ffe08a');
+}
+
+/** Machado de mão deitado (lâmina de ferro à direita). (x, y) = ponta do cabo. */
+export function handAxe(b: PixelBuf, x: number, y: number): void {
+  b.hline(x, x + 6, y, '#8a6239');
+  b.hline(x, x + 6, y + 1, '#5a3c22');
+  b.set(x + 2, y, '#c9b483');
+  b.rect(x + 6, y - 2, 3, 5, '#5a5a62');
+  b.vline(x + 9, y - 2, y + 2, '#c4c8d0');
+  b.set(x + 6, y - 2, '#8a8a94');
+}
+
+/** Tinteiro de ouro com pena branca (Aliança). (x, y) = base. */
+export function quillInk(b: PixelBuf, x: number, y: number): void {
+  b.rect(x, y - 1, 3, 2, '#2a2a3a');
+  b.hline(x, x + 2, y - 2, '#e0b23c');
+  b.set(x + 2, y, '#1a1a24');
+  b.line(x + 1, y - 2, x + 4, y - 6, '#f4efe2');
+  b.set(x + 4, y - 5, '#d8d0bc');
+  b.set(x + 3, y - 5, '#ffffff');
+}
+
+/**
+ * Pano/estandarte pendurado (desenha por cima, sem apagar o fundo): barra inferior recortada em "V"
+ * (`notch`, padrão) e franja opcional na barra.
+ */
+export function drape(
+  b: PixelBuf,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cloth: Ramp,
+  opts: { fringe?: string; notch?: boolean } = {},
+): void {
+  const notch = opts.notch !== false;
+  const mid = (w - 1) / 2;
+  for (let i = 0; i < w; i++) {
+    const xx = x + i;
+    // Comprimento da coluna: no "V", o meio é 2 px mais curto que as pontas.
+    const cut = notch ? Math.max(0, 2 - Math.round(Math.abs(i - mid) * (4 / Math.max(2, w)))) : 0;
+    const bottom = y + h - 1 - cut;
+    const c = i === 0 ? cloth.lt : i === w - 1 ? cloth.dk : cloth.base;
+    b.vline(xx, y, bottom, c);
+    b.set(xx, y, cloth.dk);
+    if (opts.fringe && i % 2 === 0) b.set(xx, bottom, opts.fringe);
+  }
+}
+
+/** Estilo da laje/espelho de "tela": pedra neutra (padrão), Horda (laje com presas) ou Aliança (espelho dourado). */
+export type ScreenStyle = 'stone' | Faction;
+
 /** Laje rúnica de pedra num cavalete de madeira, vista de frente: moldura de pedra, "tela" (retângulo retornado), pés. */
-export function monitorFront(b: PixelBuf, x: number, y: number, w = 16, h = 11): { x: number; y: number; w: number; h: number } {
+export function monitorFront(
+  b: PixelBuf,
+  x: number,
+  y: number,
+  w = 16,
+  h = 11,
+  style: ScreenStyle = 'stone',
+): { x: number; y: number; w: number; h: number } {
+  if (style === 'horde') return hordeTablet(b, x, y, w, h);
+  if (style === 'alliance') return allianceMirror(b, x, y, w, h);
   const body = '#6a645a';
   b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
   b.rect(x, y, w, h, body);
@@ -212,6 +356,92 @@ export function monitorFront(b: PixelBuf, x: number, y: number, w = 16, h = 11):
   b.vline(cx - 2, y + h, y + h + 2, '#6b4a2b');
   b.vline(cx + 3, y + h, y + h + 2, '#6b4a2b');
   b.hline(cx - 2, cx + 3, y + h + 1, '#8a6239');
+  return { x: sx, y: sy, w: sw, h: sh };
+}
+
+/** Fundo apagado da "tela" (runas mortas), comum aos estilos. */
+function screenBg(b: PixelBuf, sx: number, sy: number, sw: number, sh: number): void {
+  b.rect(sx, sy, sw, sh, SCREEN_BG);
+  b.rect(sx, sy, sw, 1, '#344636');
+  for (let i = 0; i < sh; i++) b.set(sx + sw - 3 - i, sy + i, '#36493a');
+}
+
+/**
+ * Horda: laje rúnica numa moldura grossa de madeira escura, amarrada com couro, presas de osso nos
+ * cantos de cima, rebites e um cristal-brasa embaixo; cavalete em "X" de troncos.
+ */
+function hordeTablet(b: PixelBuf, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
+  const t = FACTION.horde.timber;
+  b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
+  // Cavalete em X com amarração.
+  const cx = x + Math.floor(w / 2) - 1;
+  b.line(cx - 3, y + h + 2, cx + 2, y + h - 1, t.base);
+  b.line(cx + 4, y + h + 2, cx - 1, y + h - 1, t.lt);
+  b.set(cx, y + h, '#c9a46a');
+  b.set(cx + 1, y + h, '#c9a46a');
+  // Moldura.
+  b.rect(x, y, w, h, t.base);
+  b.hline(x, x + w - 1, y, t.lt);
+  b.vline(x, y, y + h - 1, t.lt);
+  b.hline(x, x + w - 1, y + h - 1, t.dd);
+  b.vline(x + w - 1, y, y + h - 1, t.dk);
+  const sx = x + 1;
+  const sy = y + 1;
+  const sw = w - 2;
+  const sh = h - 2;
+  screenBg(b, sx, sy, sw, sh);
+  // Amarras de couro nas laterais (sobre a moldura).
+  for (const yy of [y + 2, y + h - 3]) {
+    b.set(x, yy, '#c9a46a');
+    b.set(x + w - 1, yy, '#a8844e');
+  }
+  // Presas de osso curvando para fora nos cantos de cima.
+  tusk(b, x, y - 1, 4, -1);
+  tusk(b, x + w - 2, y - 1, 4, 1);
+  // Brasa (equivalente ao LED) no meio da barra de baixo.
+  b.set(x + Math.floor(w / 2), y + h - 1, '#ff6a2a');
+  b.set(x + Math.floor(w / 2) - 1, y + h - 1, '#b8402e');
+  return { x: sx, y: sy, w: sw, h: sh };
+}
+
+/**
+ * Aliança: espelho de vidência numa moldura de ouro com crista em arco e gema azul no topo, pinhas
+ * douradas nos cantos e pedestal de carvalho com pé dourado.
+ */
+function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
+  const g = FACTION.alliance.gold;
+  const oak = FACTION.alliance.oak;
+  b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
+  // Pedestal.
+  const cx = x + Math.floor(w / 2) - 1;
+  b.rect(cx, y + h, 2, 2, oak.base);
+  b.set(cx, y + h, oak.lt);
+  b.hline(cx - 2, cx + 3, y + h + 2, g.base);
+  b.set(cx - 2, y + h + 2, g.lt);
+  // Moldura de ouro.
+  b.rect(x, y, w, h, g.base);
+  b.hline(x, x + w - 1, y, g.hi);
+  b.vline(x, y, y + h - 1, g.lt);
+  b.hline(x, x + w - 1, y + h - 1, g.dk);
+  b.vline(x + w - 1, y, y + h - 1, g.dk);
+  // Crista em arco com gema azul.
+  const mx = x + Math.floor(w / 2);
+  b.hline(mx - 3, mx + 2, y - 1, g.lt);
+  b.hline(mx - 2, mx + 1, y - 2, g.base);
+  b.set(mx - 1, y - 2, '#5a8ae0');
+  b.set(mx, y - 2, '#2f4f9c');
+  b.set(mx - 1, y - 3, g.hi);
+  b.set(mx, y - 3, g.lt);
+  // Pinhas nos cantos.
+  b.set(x, y - 1, g.lt);
+  b.set(x + w - 1, y - 1, g.dk);
+  const sx = x + 1;
+  const sy = y + 1;
+  const sw = w - 2;
+  const sh = h - 2;
+  screenBg(b, sx, sy, sw, sh);
+  // Gema de status no meio da barra de baixo.
+  b.set(mx, y + h - 1, '#7fc0ff');
   return { x: sx, y: sy, w: sw, h: sh };
 }
 
@@ -272,7 +502,17 @@ export function staticScreen(b: PixelBuf, r: { x: number; y: number; w: number; 
  * Verso da laje rúnica (para desk_back): pedra lisa com cinta de couro, entalhe central e cavalete.
  * Nunca escura como a face — o verso tem que ler como verso.
  */
-export function monitorBack(b: PixelBuf, x: number, y: number, w = 16, h = 10, tone: 'light' | 'mid' = 'light'): void {
+export function monitorBack(
+  b: PixelBuf,
+  x: number,
+  y: number,
+  w = 16,
+  h = 10,
+  tone: 'light' | 'mid' = 'light',
+  style: ScreenStyle = 'stone',
+): void {
+  if (style === 'horde') return hordeTabletBack(b, x, y, w, h);
+  if (style === 'alliance') return allianceMirrorBack(b, x, y, w, h);
   const p =
     tone === 'mid'
       ? { hi: '#a8a296', lt: '#958f84', base: '#827c71', dk: '#6a645a', line: '#3f3a33' }
@@ -299,6 +539,61 @@ export function monitorBack(b: PixelBuf, x: number, y: number, w = 16, h = 10, t
   b.set(cx - 1, y + 2, p.line);
   b.set(cx, y + 3, p.line);
   b.set(cx + 1, y + 2, p.line);
+}
+
+/** Verso da laje da Horda: couro cru esticado na moldura escura, costura em X, presas e marca de garra vermelha. */
+function hordeTabletBack(b: PixelBuf, x: number, y: number, w: number, h: number): void {
+  const t = FACTION.horde.timber;
+  const hide = FACTION.horde.hide;
+  const cx = x + Math.floor(w / 2);
+  b.hline(x + 2, x + w - 1, y + h + 3, SURFACE_SHADOW_LIGHT);
+  b.line(cx - 4, y + h + 2, cx + 1, y + h - 1, t.base);
+  b.line(cx + 3, y + h + 2, cx - 2, y + h - 1, t.lt);
+  b.rect(x, y, w, h, t.base);
+  b.hline(x, x + w - 1, y, t.lt);
+  b.hline(x, x + w - 1, y + h - 1, t.dd);
+  b.vline(x + w - 1, y, y + h - 1, t.dk);
+  // Couro esticado (claro: o verso tem que ler como verso).
+  b.rect(x + 1, y + 1, w - 2, h - 2, hide.lt);
+  b.hline(x + 1, x + w - 2, y + 1, hide.hi);
+  b.vline(x + w - 2, y + 1, y + h - 2, hide.base);
+  b.hline(x + 1, x + w - 2, y + h - 2, hide.base);
+  // Costura em X nas bordas.
+  for (let yy = y + 2; yy < y + h - 2; yy += 2) {
+    b.set(x + 1, yy, hide.dk);
+    b.set(x + w - 2, yy + 1, hide.dk);
+  }
+  // Marca de garra (três riscos vermelhos) à direita do centro.
+  for (let k = 0; k < 3; k++) b.line(cx - 1 + k * 2, y + 2, cx + k * 2, y + h - 4, '#9c2f25');
+  // Pontas de osso nos cantos, rentes à moldura (nada acima dela: não cobre o colo de quem senta atrás).
+  b.set(x, y, FACTION.horde.bone.lt);
+  b.set(x + w - 1, y, FACTION.horde.bone.dk);
+}
+
+/** Verso do espelho da Aliança: painel de carvalho claro com aro dourado e escudo azul no meio. */
+function allianceMirrorBack(b: PixelBuf, x: number, y: number, w: number, h: number): void {
+  const g = FACTION.alliance.gold;
+  const panel = ramp('#c9a06a', 0.06);
+  const cx = x + Math.floor(w / 2);
+  b.hline(x + 2, x + w - 1, y + h + 3, SURFACE_SHADOW_LIGHT);
+  b.rect(cx - 1, y + h, 2, 2, FACTION.alliance.oak.base);
+  b.hline(cx - 3, cx + 2, y + h + 2, g.base);
+  b.rect(x, y, w, h, g.base);
+  b.hline(x, x + w - 1, y, g.hi);
+  b.hline(x, x + w - 1, y + h - 1, g.dk);
+  b.vline(x + w - 1, y, y + h - 1, g.dk);
+  b.rect(x + 1, y + 1, w - 2, h - 2, panel.lt);
+  b.hline(x + 1, x + w - 2, y + 1, panel.hi);
+  b.vline(x + w - 2, y + 1, y + h - 2, panel.base);
+  b.hline(x + 1, x + w - 2, y + h - 2, panel.base);
+  // Escudo azul com aro de ouro.
+  b.rect(cx, y + 2, 3, 3, '#2f4f9c');
+  b.set(cx, y + 2, '#3d63b8');
+  b.set(cx + 1, y + 5, '#2f4f9c');
+  b.set(cx + 1, y + 3, g.hi);
+  // Pinhas nos cantos (sem crista no meio: não pode cobrir o colo de quem senta atrás).
+  b.set(x, y - 1, g.lt);
+  b.set(x + w - 1, y - 1, g.dk);
 }
 
 /** Tinteiro com penas. */

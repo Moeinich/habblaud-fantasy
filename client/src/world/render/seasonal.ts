@@ -20,7 +20,8 @@ function prop(kind: SeasonalProp): Sprite {
 }
 
 export function seasonalCostume(theme: SeasonalTheme, seed: number): CharacterFrameRequest['costume'] {
-  if (theme === 'christmas') return 'santa';
+  // Winter feast: no Santa hat in a fantasy camp (the character module has no fitting winter costume).
+  if (theme === 'christmas') return undefined;
   if (theme === 'halloween') return (['witch', 'pumpkin', 'vampire'] as const)[(seed >>> 0) % 3];
   return undefined;
 }
@@ -38,7 +39,8 @@ export function seasonalFurniture(theme: SeasonalTheme, kind: FurnitureKind, are
 }
 
 export function seasonalRugColor(theme: SeasonalTheme, original: string): string {
-  return theme === 'christmas' ? '#a93649' : theme === 'halloween' ? '#60416f' : original;
+  // Winter feast keeps the faction rugs (hide vs. heraldic) and only adds the rune motif on top.
+  return theme === 'halloween' ? '#60416f' : original;
 }
 
 export function seasonalWallStyle(theme: SeasonalTheme, original: WallStyle): WallStyle {
@@ -50,11 +52,15 @@ export function seasonalWallStyle(theme: SeasonalTheme, original: WallStyle): Wa
 export function decorateSeasonalRug(ctx: CanvasRenderingContext2D, theme: SeasonalTheme, rug: { x: number; y: number; w: number; h: number }): void {
   if (theme === 'none') return;
   const x = Math.round(rug.x), y = Math.round(rug.y), w = Math.floor(rug.w), h = Math.floor(rug.h);
-  if (w < 25 || h < 16) return;
+  // Corridor paths (long thin strips) are not rugs: no motifs on them.
+  if (w < 25 || h < 16 || w >= h * 6) return;
   ctx.save();
   ctx.fillStyle = theme === 'christmas' ? '#ddb66e' : '#e5a457';
-  ctx.fillRect(x + 4, y + 4, w - 8, 1);
-  ctx.fillRect(x + 4, y + h - 5, w - 8, 1);
+  // Winter feast only adds snow-rune motifs (the faction rugs keep their own borders).
+  if (theme !== 'christmas') {
+    ctx.fillRect(x + 4, y + 4, w - 8, 1);
+    ctx.fillRect(x + 4, y + h - 5, w - 8, 1);
+  }
   for (let cx = x + 14; cx < x + w - 10; cx += 28) {
     const cy = Math.round(y + h / 2);
     if (theme === 'christmas') {

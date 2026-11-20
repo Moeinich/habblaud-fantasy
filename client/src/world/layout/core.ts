@@ -26,7 +26,7 @@ export function layoutReception(): AreaLayout {
   const b = new AreaBuilder(RECEPTION_ID, 'reception', { x: 0, y: NORTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.reception;
   b.floor('marble', 0, 0, 16, 12, 101);
-  b.rug(1.5, 2.2, 6.5, 2.6, '#3d5a80', 102);
+  b.rug(1.5, 2.2, 6.5, 2.6, '#8c2f25', 102);
   b.rug(8.6, 6.4, 5.2, 3.2, '#b65f3a', 103);
   b.face(0.5, 15, wall);
   b.cap(0, 0, 0.5, 12, wall);

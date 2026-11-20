@@ -1,18 +1,23 @@
 // Móveis das salas de projeto: mesas (frente e traseira), cadeiras, estantes, arquivo, impressora,
 // lixeira, plantas, divisórias de vidro, mesa de reunião, banqueta, luminária e bebedouro.
 // Coordenadas de desenho = footprint (0,0 no canto superior esquerdo; base em y = h*TILE).
-import { mix, ramp, shade, type Ramp } from '../core/color';
+import { ramp, shade, type Ramp } from '../core/color';
 import { floorSheet, rectAt, type BufFurniture, type BufSprite } from '../core/sprite';
 import type { PixelBuf } from '../core/pixbuf';
 import {
-  ACCENTS, M, bigLeaf, book, contact, foliage, frontFace, keyboard, leafBlade, monitorBack, monitorFront, mouse, mug,
-  papers, pencilCup, photoFrame, pick, pot, rngOf, smallSucculent, staticScreen, topFace, underRect, woodGrain,
-  type DeskItemTone,
+  FACTION, M, book, candle, contact, drape, foliage, frontFace, handAxe, ironBand, keyboard, leafBlade,
+  monitorBack, monitorFront, mouse, mug, papers, pencilCup, photoFrame, pick, pot, quillInk, rivet, rngOf, skullCandle,
+  smallSucculent, staticScreen, topFace, tusk, underRect, woodGrain, type DeskItemTone, type Faction,
 } from './kit';
 
 type Box = { x: number; y: number; w: number; h: number };
 
 // ------------------------------------------------------------------ mesas
+
+/** Facção da mesa: `dark` = Horda; `wood` e `white` = Aliança. */
+function deskFaction(variant: string | undefined): Faction {
+  return variant === 'dark' ? 'horde' : 'alliance';
+}
 
 interface DeskMats {
   top: Ramp;
@@ -22,14 +27,16 @@ interface DeskMats {
 }
 
 function deskMats(variant: string | undefined): DeskMats {
-  // Bancadas de trabalho: tampo de tábuas grossas, pernas de tronco e um caixote embaixo.
   switch (variant) {
     case 'white':
-      return { top: M.white, edge: ramp('#b8a67e', 0.06), legs: M.oakDark, ped: M.cardboard };
+      // Aliança: tampo de mármore claro, borda de pedra talhada, pés de carvalho.
+      return { top: ramp('#ddd4c0', 0.05), edge: FACTION.alliance.stone, legs: FACTION.alliance.oak, ped: FACTION.alliance.oak };
     case 'dark':
-      return { top: M.walnut, edge: ramp('#47301e', 0.06), legs: M.graphite, ped: M.oakDark };
+      // Horda: tábuas grossas de madeira escura, pés de tronco, baú com cintas de ferro.
+      return { top: ramp('#5e3d24', 0.07), edge: FACTION.horde.timber, legs: FACTION.horde.timber, ped: ramp('#553822', 0.07) };
     default:
-      return { top: M.oak, edge: M.oakDark, legs: M.walnut, ped: M.cardboard };
+      // Aliança: carvalho mel com friso de ouro.
+      return { top: ramp('#b07d45', 0.07), edge: FACTION.alliance.oak, legs: FACTION.alliance.oak, ped: FACTION.alliance.oak };
   }
 }
 
@@ -41,51 +48,156 @@ function deskShadow(b: PixelBuf): void {
   contact(b, -1, 13, 34, 4, 0.2);
 }
 
-/** Tampo + bordas + pernas + gaveteiro (comum a desk e desk_back). */
-function deskBody(s: BufSprite, m: DeskMats, seed: number, back: boolean): void {
+/** Marca de garra (Horda): três riscos diagonais. */
+function clawMark(b: PixelBuf, x: number, y: number, h: number, c: string): void {
+  for (let k = 0; k < 3; k++) b.line(x + k * 2, y, x + k * 2 + 1, y + h - 1, c);
+}
+
+/** Emblema dourado da Aliança (coroa simples de 5x4). */
+function crestMark(b: PixelBuf, x: number, y: number): void {
+  const g = FACTION.alliance.gold;
+  b.set(x, y, g.hi);
+  b.set(x + 2, y, g.hi);
+  b.set(x + 4, y, g.hi);
+  b.hline(x, x + 4, y + 1, g.base);
+  b.hline(x, x + 4, y + 2, g.lt);
+  b.hline(x + 1, x + 3, y + 3, g.dk);
+}
+
+/** Pé da mesa: tronco com cintas de ferro (Horda) ou perna torneada com anéis de ouro (Aliança). */
+function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
+  b.rect(x, 8, 3, 8, m.legs.base);
+  b.vline(x, 8, 15, m.legs.lt);
+  b.vline(x + 2, 8, 15, m.legs.dk);
+  b.hline(x, x + 2, 15, m.legs.dd);
+  if (faction === 'horde') {
+    ironBand(b, x, x + 2, 9, false);
+    ironBand(b, x, x + 2, 13, false);
+    b.set(x + 1, 9, '#8a8a94');
+    b.set(x + 1, 13, '#8a8a94');
+  } else {
+    const g = FACTION.alliance.gold;
+    b.hline(x, x + 2, 8, g.base);
+    b.set(x, 8, g.hi);
+    // Cintura torneada.
+    b.set(x, 11, m.legs.dk);
+    b.set(x + 2, 11, m.legs.dd);
+    b.hline(x, x + 2, 14, g.dk);
+    b.set(x, 14, g.lt);
+  }
+}
+
+/** Tampo + bordas + pernas + baú/gaveteiro (comum a desk e desk_back). */
+function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, back: boolean): void {
   const b = s.buf;
+  const horde = faction === 'horde';
   if (back) {
-    // Painel frontal (lado de quem olha) cobrindo o vão.
+    // Painel do lado de quem olha cobrindo o vão, com estandarte da facção pendurado no meio.
     frontFace(b, 1, 8, 30, 6, m.ped);
     b.hline(1, 30, 8, m.ped.dk);
-    b.hline(2, 29, 11, m.ped.lt);
+    if (horde) {
+      for (const x of [8, 16, 24]) b.vline(x, 9, 13, m.ped.dk);
+      ironBand(b, 1, 30, 12);
+      drape(b, 12, 8, 8, 8, FACTION.horde.red);
+      clawMark(b, 13, 10, 4, '#2a1a14');
+      b.hline(11, 20, 8, '#3a3a40');
+    } else {
+      b.hline(2, 29, 11, m.ped.lt);
+      b.hline(1, 30, 9, FACTION.alliance.gold.dk);
+      drape(b, 12, 8, 8, 8, FACTION.alliance.blue, { fringe: FACTION.alliance.gold.base });
+      crestMark(b, 13, 10);
+      b.hline(11, 20, 8, FACTION.alliance.gold.base);
+    }
   }
-  // Pernas (laterais) com brilho.
-  for (const x of [0, 29]) {
-    b.rect(x, 8, 3, 8, m.legs.base);
-    b.vline(x, 8, 15, m.legs.lt);
-    b.vline(x + 2, 8, 15, m.legs.dk);
-    b.hline(x, x + 2, 15, m.legs.dd);
-  }
+  for (const x of [0, 29]) deskLeg(b, x, m, faction);
   if (!back) {
-    // Caixote de ferramentas sob o lado direito (tábuas com cinta de ferro).
-    frontFace(b, 19, 8, 10, 8, m.ped);
-    b.vline(22, 8, 15, m.ped.dk);
-    b.vline(25, 8, 15, m.ped.dk);
-    b.hline(19, 28, 11, '#5a5550');
-    b.set(20, 11, '#8f949a');
-    b.set(27, 11, '#8f949a');
+    if (horde) {
+      // Baú de tábuas com cintas e cadeado de ferro, sob o lado direito.
+      frontFace(b, 19, 8, 10, 8, m.ped);
+      b.vline(22, 8, 15, m.ped.dk);
+      b.vline(25, 8, 15, m.ped.dk);
+      ironBand(b, 19, 28, 9);
+      ironBand(b, 19, 28, 14);
+      b.rect(23, 11, 2, 2, '#3a3a40');
+      b.set(23, 11, '#c4a040');
+    } else {
+      // Gaveteiro de carvalho com puxadores de ouro.
+      frontFace(b, 19, 8, 10, 8, m.ped);
+      b.hline(19, 28, 11, m.ped.dk);
+      b.hline(20, 27, 12, m.ped.lt);
+      b.hline(23, 24, 10, FACTION.alliance.gold.base);
+      b.hline(23, 24, 14, FACTION.alliance.gold.base);
+    }
   }
   // Tampo (12 linhas) + espessura da borda (2 linhas).
   topFace(b, 0, -6, 32, 12, m.top);
-  woodGrain(b, 1, -5, 30, 10, m.top, seed);
+  if (horde) {
+    // Tábuas grossas com juntas e pregos.
+    woodGrain(b, 1, -5, 30, 10, m.top, seed);
+    for (const y of [-2, 2]) {
+      b.hline(0, 31, y, m.top.dk);
+      b.set(1, y + 1, '#2a2a2e');
+      b.set(30, y + 1, '#2a2a2e');
+    }
+  } else if (m.top.lt === deskMats('white').top.lt) {
+    // Mármore: veios cinza diagonais e esparsos (longe do canto de leitura do teclado).
+    const r = rngOf(seed, 9);
+    for (let k = 0; k < 3; k++) {
+      const x0 = 8 + Math.floor(r() * 18);
+      b.line(x0, -5, x0 + 4, -2, '#c4bcaa');
+    }
+  } else {
+    woodGrain(b, 1, -5, 30, 10, m.top, seed);
+  }
   b.hline(0, 31, 6, m.edge.base);
   b.hline(0, 31, 7, m.edge.dk);
   b.set(0, 6, m.edge.lt);
+  if (horde) {
+    // Cantoneiras de ferro rebitadas na borda da frente.
+    for (const x of [0, 28]) {
+      b.rect(x, 4, 4, 4, '#3a3a40');
+      b.hline(x, x + 3, 4, '#55555e');
+      rivet(b, x + 1, 5);
+    }
+  } else {
+    // Friso de ouro ao longo da borda.
+    b.hline(0, 31, 6, FACTION.alliance.gold.base);
+    b.set(0, 6, FACTION.alliance.gold.hi);
+    b.set(31, 6, FACTION.alliance.gold.dk);
+  }
+  if (!back) {
+    // Pano da facção caindo sobre a borda, à esquerda (fora do vulto de quem senta no meio).
+    if (horde) {
+      drape(b, 4, 5, 6, 8, FACTION.horde.red);
+      clawMark(b, 5, 7, 3, '#2a1a14');
+    } else {
+      drape(b, 4, 5, 6, 8, FACTION.alliance.blue, { fringe: FACTION.alliance.gold.base });
+      b.set(6, 8, FACTION.alliance.gold.hi);
+      b.set(7, 8, FACTION.alliance.gold.base);
+      b.set(6, 9, FACTION.alliance.gold.dk);
+    }
+  }
+}
+
+/** Vela ou caveira-vela, conforme a facção. */
+function deskLight(b: PixelBuf, x: number, y: number, faction: Faction): void {
+  if (faction === 'horde') skullCandle(b, x, y);
+  else photoFrame(b, x, y);
 }
 
 /** Objetos sobre a mesa (variações por semente). Retorna o retângulo da tela principal e o da secundária. */
-function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box; screen2?: Box } {
+function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Faction): { screen: Box; screen2?: Box } {
   const b = s.buf;
   const r = rngOf(seed, 11);
   const v = seed % 6;
   const mugC = pick(r, MUG_COLORS);
+  const horde = faction === 'horde';
   let screen: Box;
   let screen2: Box | undefined;
   switch (v) {
     case 1: {
-      screen = monitorFront(b, 2, -17, 16, 11);
-      screen2 = monitorFront(b, 18, -16, 13, 10);
+      screen = monitorFront(b, 2, -17, 16, 11, faction);
+      screen2 = monitorFront(b, 18, -16, 13, 10, faction);
       staticScreen(b, screen2, 'sheet', seed);
       keyboard(b, 6, -1, 11, tone);
       mouse(b, 20, 0, tone);
@@ -93,10 +205,13 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
       break;
     }
     case 2: {
-      screen = monitorFront(b, 5, -17, 16, 11);
-      // Tomo aberto de pé à direita (página com runas).
-      b.rect(22, -9, 9, 6, '#5a2a1c');
-      b.hline(22, 30, -9, '#7a3a26');
+      screen = monitorFront(b, 5, -17, 16, 11, faction);
+      // Tomo aberto de pé à direita (página com runas), capa de couro (Horda) ou azul com cantos de ouro.
+      const cover = horde ? '#5a2a1c' : '#2f4f9c';
+      b.rect(22, -9, 9, 6, cover);
+      b.hline(22, 30, -9, horde ? '#7a3a26' : '#3d63b8');
+      b.set(22, -9, horde ? '#e8dcc0' : '#e0b23c');
+      b.set(30, -9, horde ? '#e8dcc0' : '#e0b23c');
       screen2 = { x: 23, y: -8, w: 7, h: 4 };
       staticScreen(b, screen2, 'ide', seed);
       b.rect(21, -3, 11, 2, '#e2d2a4');
@@ -104,24 +219,25 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
       b.set(26, -3, '#7a3a26');
       b.hline(22, 31, -1, tone === 'onLight' ? 'rgba(40,46,70,0.3)' : 'rgba(60,40,40,0.2)');
       keyboard(b, 8, -1, 10, tone);
-      smallSucculent(b, 1, -3);
+      if (horde) skullCandle(b, 1, -4);
+      else smallSucculent(b, 1, -3);
       break;
     }
     case 3: {
-      screen = monitorFront(b, 8, -17, 16, 11);
-      // Selos de cera pregados na laje.
-      b.rect(22, -15, 2, 2, '#9c2f25');
+      screen = monitorFront(b, 8, -17, 16, 11, faction);
+      // Selos de cera pregados na moldura.
+      b.rect(22, -15, 2, 2, horde ? '#9c2f25' : '#2f4f9c');
       b.rect(9, -15, 2, 2, '#d48a2c');
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
-      photoFrame(b, 2, -5);
+      deskLight(b, 2, -5, faction);
       papers(b, 24, -4, 6, 4, tone);
       mug(b, 3, 0, mugC);
       break;
     }
     case 4: {
-      screen = monitorFront(b, 4, -17, 15, 11);
-      screen2 = monitorFront(b, 19, -17, 12, 10);
+      screen = monitorFront(b, 4, -17, 15, 11, faction);
+      screen2 = monitorFront(b, 19, -17, 12, 10, faction);
       staticScreen(b, screen2, 'chart', seed);
       keyboard(b, 7, -1, 11, tone);
       mouse(b, 21, 0, tone);
@@ -129,25 +245,32 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
       break;
     }
     case 5: {
-      screen = monitorFront(b, 8, -17, 16, 11);
+      screen = monitorFront(b, 8, -17, 16, 11, faction);
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
-      // Martelo deitado sobre a bancada.
-      b.hline(1, 6, -2, '#8a6239');
-      b.hline(1, 6, -1, '#6b4a2b');
-      b.rect(6, -4, 3, 4, '#6a645a');
-      b.hline(6, 8, -4, '#8f887c');
+      if (horde) {
+        // Machado de mão deitado sobre a bancada.
+        handAxe(b, 0, -2);
+      } else {
+        // Pergaminho enrolado com fita azul.
+        b.rect(1, -3, 7, 2, '#eadcb4');
+        b.hline(1, 7, -2, '#c2a874');
+        b.vline(4, -3, -2, '#2f4f9c');
+        b.set(0, -3, '#d4bf8c');
+      }
       mug(b, 26, -3, mugC);
-      pencilCup(b, 28, 2);
+      if (horde) pencilCup(b, 28, 2);
+      else quillInk(b, 27, 2);
       break;
     }
     default: {
-      screen = monitorFront(b, 8, -17, 16, 11);
+      screen = monitorFront(b, 8, -17, 16, 11, faction);
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
       mug(b, 3, -2, mugC);
       papers(b, 25, -4, 6, 4, tone);
-      smallSucculent(b, 26, 2);
+      if (horde) skullCandle(b, 25, 0);
+      else smallSucculent(b, 26, 2);
       break;
     }
   }
@@ -162,8 +285,9 @@ function itemTone(variant: string | undefined): DeskItemTone {
 export function desk(variant: string | undefined, seed: number): BufFurniture {
   const s = floorSheet(2, 1, 20);
   const m = deskMats(variant);
-  deskBody(s, m, seed, false);
-  const scr = deskTop(s, seed, itemTone(variant));
+  const faction = deskFaction(variant);
+  deskBody(s, m, faction, seed, false);
+  const scr = deskTop(s, seed, itemTone(variant), faction);
   s.buf.outline();
   deskShadow(s.buf);
   s.rects = { screen: rectAt(s, scr.screen.x, scr.screen.y, scr.screen.w, scr.screen.h) };
@@ -174,22 +298,23 @@ export function desk(variant: string | undefined, seed: number): BufFurniture {
 export function deskBack(variant: string | undefined, seed: number): BufFurniture {
   const s = floorSheet(2, 1, 12);
   const m = deskMats(variant);
+  const faction = deskFaction(variant);
   const b = s.buf;
-  deskBody(s, m, seed, true);
+  deskBody(s, m, faction, seed, true);
   const r = rngOf(seed, 12);
   const v = seed % 4;
   const mugC = pick(r, MUG_COLORS);
   const tone = itemTone(variant);
-  // Verso em plástico claro; na mesa escura (nogueira), cinza médio para não brilhar demais.
+  // Verso claro (couro cru na Horda, painel de carvalho na Aliança) — nunca escuro como a face.
   const plastic = variant === 'dark' ? 'mid' : 'light';
   if (v === 1) {
-    monitorBack(b, 2, -7, 15, 10, plastic);
-    monitorBack(b, 17, -6, 13, 9, plastic);
+    monitorBack(b, 2, -7, 15, 10, plastic, faction);
+    monitorBack(b, 17, -6, 13, 9, plastic, faction);
   } else {
-    monitorBack(b, 8, -7, 16, 10, plastic);
+    monitorBack(b, 8, -7, 16, 10, plastic, faction);
     if (v === 2) smallSucculent(b, 26, 0);
     else papers(b, 25, -1, 6, 4, tone);
-    if (v === 3) photoFrame(b, 2, -3);
+    if (v === 3) deskLight(b, 2, -3, faction);
     else mug(b, 2, 0, mugC);
   }
   b.outline();
@@ -199,85 +324,189 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
 
 // ------------------------------------------------------------------ cadeiras
 
-// Assentos de pele/couro estendidos numa armação de madeira.
+/** Facção da cadeira: `red`, `black`, `green` = Horda; `blue`, `gray` = Aliança. */
+function chairFaction(variant: string | undefined): Faction {
+  return variant === 'blue' || variant === 'gray' ? 'alliance' : 'horde';
+}
+
+// Horda: couro tingido / pele escura / couro de musgo. Aliança: veludo azul real / veludo cinza-ardósia.
 const CHAIR_COLORS: Readonly<Record<string, string>> = {
-  black: '#4a3a2c', // couro escuro
-  blue: '#7a6a58', // pele de lobo
-  red: '#8a3a2a', // couro tingido
-  green: '#5a6a3a', // lona de musgo
-  gray: '#a08a6a', // pele clara
+  black: '#3e3430',
+  blue: '#3d63b8',
+  red: '#a83a2a',
+  green: '#5f7a34',
+  gray: '#7a8296',
 };
 
 function chairRamp(variant: string | undefined): Ramp {
   return ramp(CHAIR_COLORS[variant ?? 'black'] ?? CHAIR_COLORS.black, 0.07);
 }
 
-/** Pernas de galho amarradas com corda (três pés + travessa). */
-function starBase(b: BufSprite['buf']): void {
-  const wood = '#6b4a2b';
-  const lite = '#8a6239';
-  for (const x of [3, 7, 12]) {
-    b.vline(x, 9, 15, wood);
-    b.set(x, 9, lite);
+/** Toco de árvore (Horda) com raízes, sob o assento. */
+function stumpBase(b: PixelBuf): void {
+  const t = FACTION.horde.timber;
+  b.rect(4, 9, 8, 6, t.base);
+  b.vline(4, 9, 14, t.lt);
+  b.vline(5, 10, 13, t.lt);
+  b.vline(11, 9, 14, t.dk);
+  b.vline(8, 10, 14, t.dk);
+  // Raízes.
+  b.hline(3, 4, 15, t.base);
+  b.hline(11, 12, 15, t.dk);
+  b.set(2, 15, t.dk);
+  b.set(13, 15, t.dd);
+}
+
+/** Assento de pele (Horda) com franja de pelo irregular. */
+function hideSeat(b: PixelBuf, c: Ramp, y: number): void {
+  b.rect(2, y, 12, 5, c.lt);
+  b.hline(3, 12, y, c.hi);
+  b.hline(2, 13, y + 3, c.base);
+  b.hline(2, 13, y + 4, c.dk);
+  b.set(2, y, c.base);
+  b.set(13, y, c.base);
+  // Tufos de pelo caindo da borda.
+  for (const x of [3, 6, 9, 12]) b.set(x, y + 5, c.dk);
+  b.set(5, y + 1, c.hi);
+}
+
+/** Pernas torneadas de carvalho (Aliança) com sapatas douradas. */
+function carvedLegs(b: PixelBuf): void {
+  const oak = FACTION.alliance.oak;
+  const g = FACTION.alliance.gold;
+  for (const x of [2, 12]) {
+    b.rect(x, 9, 2, 7, oak.base);
+    b.vline(x, 9, 15, oak.lt);
+    b.set(x, 12, oak.dk);
+    b.set(x + 1, 12, oak.dd);
+    b.hline(x, x + 1, 15, g.dk);
   }
-  b.hline(3, 12, 12, lite);
-  b.set(7, 12, '#c9b483');
-  b.set(8, 12, '#c9b483');
+  b.hline(4, 11, 13, oak.dk);
+  b.hline(4, 11, 12, oak.base);
+}
+
+/** Assento estofado (Aliança) com debrum dourado e rebites. */
+function cushionSeat(b: PixelBuf, c: Ramp, y: number): void {
+  const oak = FACTION.alliance.oak;
+  const g = FACTION.alliance.gold;
+  b.rect(2, y, 12, 4, c.lt);
+  b.hline(3, 12, y, c.hi);
+  b.hline(2, 13, y + 3, c.base);
+  b.set(5, y + 1, c.hi);
+  // Moldura do assento.
+  b.hline(1, 14, y + 4, g.base);
+  b.set(1, y + 4, g.hi);
+  b.hline(1, 14, y + 5, oak.dk);
+  for (const x of [4, 8, 11]) b.set(x, y + 3, g.lt);
 }
 
 export function officeChair(variant: string | undefined): BufFurniture {
   const c = chairRamp(variant);
-  // Base: assento visto por trás + base estrela (o encosto fica no `front`).
+  const horde = chairFaction(variant) === 'horde';
+  // Base: assento visto por trás (o encosto fica no `front`, por cima de quem senta).
   const base = floorSheet(1, 1, 6);
   const b = base.buf;
-  starBase(b);
-  b.rect(2, 4, 12, 6, c.lt);
-  b.hline(3, 12, 4, c.hi);
-  b.hline(2, 13, 8, c.base);
-  b.hline(2, 13, 9, c.dk);
-  b.set(2, 4, c.base);
-  b.set(13, 4, c.base);
+  if (horde) {
+    stumpBase(b);
+    hideSeat(b, c, 4);
+  } else {
+    carvedLegs(b);
+    cushionSeat(b, c, 4);
+  }
   b.outline();
   contact(b, 1, 13, 14, 3, 0.22);
-  // Frente: encosto baixo e estreito — cobre a lombar de quem senta e deixa ombros e braços à mostra.
+  // Frente: encosto baixo — cobre a lombar de quem senta e deixa ombros e braços à mostra.
   const front = floorSheet(1, 1, 6);
   const f = front.buf;
-  f.rect(4, 7, 8, 6, c.base);
-  f.hline(5, 10, 6, c.lt);
-  f.hline(4, 11, 7, c.lt);
-  f.set(5, 7, c.hi);
-  f.set(6, 7, c.hi);
-  f.vline(4, 8, 11, c.lt);
-  f.vline(11, 7, 12, c.dk);
-  f.hline(5, 10, 9, c.dk);
-  f.hline(5, 10, 10, c.dk);
-  f.hline(4, 11, 12, c.dd);
-  f.rect(7, 13, 2, 1, '#6b4a2b');
+  if (horde) {
+    // Verso do encosto: couro esticado num aro de galho, amarrado; presas de osso subindo dos lados.
+    const t = FACTION.horde.timber;
+    f.rect(4, 7, 8, 6, c.base);
+    f.hline(4, 11, 7, c.lt);
+    f.vline(4, 8, 11, c.lt);
+    f.vline(11, 7, 12, c.dk);
+    f.hline(4, 11, 12, c.dd);
+    f.hline(5, 10, 9, '#c9a46a');
+    f.set(6, 10, '#c9a46a');
+    f.set(9, 10, '#c9a46a');
+    f.rect(7, 13, 2, 1, t.base);
+    tusk(f, 3, 12, 7, -1);
+    tusk(f, 12, 12, 7, 1);
+  } else {
+    // Verso do espaldar: tecido da cor do assento esticado num aro de carvalho, montantes com pinhas de ouro.
+    const oak = FACTION.alliance.oak;
+    const g = FACTION.alliance.gold;
+    f.rect(4, 6, 8, 7, oak.base);
+    f.hline(4, 11, 6, oak.lt);
+    f.rect(5, 7, 6, 5, c.base);
+    f.hline(5, 10, 7, c.lt);
+    f.vline(10, 7, 11, c.dk);
+    f.set(7, 9, g.lt);
+    f.set(8, 9, g.base);
+    f.hline(4, 11, 12, oak.dd);
+    for (const x of [3, 12]) {
+      f.vline(x, 5, 13, x === 3 ? oak.lt : oak.dk);
+      f.set(x, 4, g.base);
+      f.set(x, 3, g.hi);
+    }
+  }
   f.outline();
   return { base, front };
 }
 
 export function officeChairFront(variant: string | undefined): BufFurniture {
   const c = chairRamp(variant);
-  const s = floorSheet(1, 1, 10);
+  const horde = chairFaction(variant) === 'horde';
+  const s = floorSheet(1, 1, 12);
   const b = s.buf;
-  starBase(b);
-  // Encosto ao norte (de frente para a câmera).
-  b.rect(3, -6, 10, 10, c.base);
-  b.hline(4, 11, -7, c.lt);
-  b.rect(4, -5, 8, 7, c.lt);
-  b.hline(5, 10, -5, c.hi);
-  b.vline(12, -6, 3, c.dk);
-  b.hline(3, 12, 3, c.dd);
-  b.rect(7, 4, 2, 2, '#6b4a2b');
-  // Assento.
-  b.rect(2, 5, 12, 5, c.lt);
-  b.hline(3, 12, 5, c.hi);
-  b.hline(2, 13, 9, c.dk);
-  b.hline(2, 13, 10, c.dd);
-  for (const x of [1, 13]) {
-    b.rect(x, 3, 2, 5, '#6b4a2b');
-    b.set(x, 3, '#8a6239');
+  if (horde) {
+    stumpBase(b);
+    // Encosto ao norte: couro esticado entre duas presas grandes, amarrado com tiras.
+    b.rect(4, -5, 8, 10, c.base);
+    b.hline(4, 11, -5, c.lt);
+    b.rect(5, -4, 6, 7, c.lt);
+    b.hline(5, 10, -4, c.hi);
+    b.vline(11, -5, 4, c.dk);
+    b.hline(4, 11, 4, c.dd);
+    // Costura em X no couro.
+    for (const y of [-2, 1]) {
+      b.set(6, y, c.dk);
+      b.set(9, y, c.dk);
+    }
+    // Presas (de trás para a frente) e amarras.
+    tusk(b, 2, 6, 13, -1);
+    tusk(b, 12, 6, 13, 1);
+    for (const y of [-3, 2]) {
+      b.set(3, y, '#c9a46a');
+      b.set(12, y, '#a8844e');
+    }
+    hideSeat(b, c, 5);
+  } else {
+    carvedLegs(b);
+    // Espaldar alto entalhado: montantes de carvalho com pinhas de ouro, arco no topo e painel estofado.
+    const oak = FACTION.alliance.oak;
+    const g = FACTION.alliance.gold;
+    for (const x of [2, 12]) {
+      b.rect(x, -8, 2, 14, oak.base);
+      b.vline(x, -8, 5, oak.lt);
+      b.vline(x + 1, -8, 5, oak.dk);
+      b.rect(x, -10, 2, 2, g.base);
+      b.set(x, -10, g.hi);
+      b.set(x + 1, -9, g.dk);
+    }
+    // Arco do topo com medalhão.
+    b.hline(4, 11, -7, oak.lt);
+    b.hline(4, 11, -6, oak.base);
+    b.hline(6, 9, -8, oak.lt);
+    b.rect(7, -9, 2, 2, g.base);
+    b.set(7, -9, g.hi);
+    // Painel estofado com botões dourados.
+    b.rect(4, -5, 8, 10, c.base);
+    b.rect(5, -4, 6, 8, c.lt);
+    b.hline(5, 10, -4, c.hi);
+    b.vline(11, -5, 4, c.dk);
+    for (const [x, y] of [[6, -2], [9, -2], [6, 2], [9, 2]] as const) b.set(x, y, g.lt);
+    cushionSeat(b, c, 5);
   }
   b.outline();
   contact(b, 1, 13, 14, 3, 0.22);
@@ -286,15 +515,31 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
 
 // ------------------------------------------------------------------ estantes e arquivos
 
+/** Frasco de poção (3x4) com rolha e brilho. */
+function potion(b: PixelBuf, x: number, y: number, color: string): void {
+  b.set(x + 1, y, '#8a6239');
+  b.set(x + 1, y + 1, shade(color, 0.2));
+  b.rect(x, y + 2, 3, 2, color);
+  b.set(x, y + 2, shade(color, 0.35));
+  b.set(x + 2, y + 3, shade(color, -0.25));
+}
+
+/** Cantoneira de ferro rebitada (3x3) num canto do móvel. */
+function cornerIron(b: PixelBuf, x: number, y: number): void {
+  b.rect(x, y, 3, 3, '#3a3a40');
+  b.set(x, y, '#55555e');
+  b.set(x + 1, y + 1, '#8a8a94');
+}
+
 export function bookshelf(seed: number): BufFurniture {
-  const s = floorSheet(2, 1, 22);
+  const s = floorSheet(2, 1, 26);
   const b = s.buf;
-  const w = M.oak;
+  const w = ramp('#7a5232', 0.07);
   const r = rngOf(seed, 21);
-  // Corpo: laterais, topo e fundo.
+  // Corpo: laterais grossas, cornija e fundo escuro.
   topFace(b, 0, -21, 32, 3, w);
   b.rect(0, -18, 32, 34, w.dk);
-  b.rect(2, -17, 28, 31, shade(w.dd, -0.12));
+  b.rect(2, -17, 28, 31, '#2a1c12');
   b.vline(0, -18, 15, w.lt);
   b.vline(1, -18, 15, w.base);
   b.vline(30, -18, 15, w.base);
@@ -307,61 +552,72 @@ export function bookshelf(seed: number): BufFurniture {
   }
   b.hline(0, 31, 15, w.dd);
   // Conteúdo de cada prateleira (apoiado na prateleira de baixo).
+  const tomes = ['#9c2f25', '#2f4f9c', '#5f8a3a', '#6a4a8a', '#7a4a2a', '#b8572c', '#2f6a6a'];
   shelves.forEach((shelf, i) => {
     const bottom = shelf - 1;
     let x = 3;
     while (x < 29) {
       const kind = r();
-      if (kind < 0.12 && x < 25) {
-        // Vaso pequeno com planta.
-        pot(b, x, bottom - 3, 4, 4, M.ceramic);
-        foliage(b, x + 2, bottom - 5, 2.5, 2, M.leaf, seed + x + i * 7);
-        x += 5;
-      } else if (kind < 0.2 && x < 24) {
-        // Caixa de arquivo.
-        const bc = pick(r, ['#e9e4d6', '#c9a46e', '#9fb6cf']);
-        b.rect(x, bottom - 4, 5, 5, bc);
-        b.hline(x, x + 4, bottom - 4, shade(bc, 0.1));
-        b.rect(x + 1, bottom - 2, 3, 1, shade(bc, -0.2));
-        x += 6;
-      } else if (kind < 0.26 && x < 26) {
-        // Troféu.
-        b.rect(x + 1, bottom - 4, 3, 2, '#f2c14e');
-        b.set(x, bottom - 4, '#d9a42e');
-        b.set(x + 4, bottom - 4, '#d9a42e');
-        b.set(x + 2, bottom - 2, '#d9a42e');
-        b.rect(x + 1, bottom - 1, 3, 2, '#6b4a32');
+      if (kind < 0.12 && x < 24) {
+        // Poções.
+        potion(b, x, bottom - 3, pick(r, ['#5fd06a', '#d0453a', '#4a8ae0', '#b06ad8']));
+        potion(b, x + 3, bottom - 3, pick(r, ['#5fd06a', '#e0b23c', '#4a8ae0']));
+        x += 7;
+      } else if (kind < 0.22 && x < 24) {
+        // Pilha de pergaminhos enrolados (pontas redondas).
+        for (const [dx, dy] of [[0, -1], [2, -1], [1, -3], [4, -1]] as const) {
+          b.rect(x + dx, bottom + dy, 2, 2, '#eadcb4');
+          b.set(x + dx + 1, bottom + dy + 1, '#b8a272');
+        }
+        b.set(x + 2, bottom - 2, '#9c2f25');
+        x += 7;
+      } else if (kind < 0.3 && x < 25 && i > 0) {
+        skullCandle(b, x, bottom - 3);
         x += 6;
       } else {
-        // Grupo de livros com alturas variadas (um às vezes inclinado).
-        const n = 2 + Math.floor(r() * 4);
-        for (let k = 0; k < n && x < 29; k++) {
-          const bw = 1 + Math.floor(r() * 2);
+        // Tomos grossos com faixas douradas na lombada (um às vezes deitado).
+        const n = 2 + Math.floor(r() * 3);
+        for (let k = 0; k < n && x < 28; k++) {
+          const bw = 2;
           const bh = 6 + Math.floor(r() * 4);
-          book(b, x, bottom - bh + 1, bw, bh, pick(r, ACCENTS));
+          const c = pick(r, tomes);
+          book(b, x, bottom - bh + 1, bw, bh, c);
+          b.hline(x, x + 1, bottom - bh + 2, '#e0b23c');
+          b.hline(x, x + 1, bottom - 1, '#c08a2c');
           x += bw;
         }
-        if (r() < 0.3 && x < 26) {
-          b.line(x, bottom, x + 3, bottom - 6, pick(r, ACCENTS), 1);
-          b.line(x + 1, bottom, x + 4, bottom - 6, pick(r, ACCENTS), 1);
-          x += 5;
+        if (r() < 0.35 && x < 25) {
+          const c = pick(r, tomes);
+          b.rect(x, bottom - 1, 5, 2, c);
+          b.hline(x, x + 4, bottom - 1, shade(c, 0.2));
+          b.set(x + 4, bottom, '#e0b23c');
+          x += 6;
         } else x += 1;
       }
     }
   });
+  // Cantoneiras de ferro e coroamento com caveira-vela.
+  cornerIron(b, 0, -18);
+  cornerIron(b, 29, -18);
+  cornerIron(b, 0, 12);
+  cornerIron(b, 29, 12);
+  skullCandle(b, 4, -25);
+  b.rect(20, -23, 7, 2, '#eadcb4');
+  b.hline(20, 26, -22, '#b8a272');
+  b.vline(23, -23, -22, '#9c2f25');
   b.outline();
   contact(b, -1, 13, 34, 4, 0.22);
   return { base: s };
 }
 
 export function binderShelf(seed: number): BufFurniture {
-  const s = floorSheet(1, 1, 22);
+  const s = floorSheet(1, 1, 26);
   const b = s.buf;
-  const w = M.oakDark;
+  const w = ramp('#6b4a2b', 0.07);
   const r = rngOf(seed, 23);
   topFace(b, 0, -21, 16, 3, w);
   b.rect(0, -18, 16, 34, w.dk);
-  b.rect(1, -17, 14, 31, '#3a2a1c');
+  b.rect(1, -17, 14, 31, '#2a1c12');
   b.vline(0, -18, 15, w.lt);
   b.vline(15, -18, 15, w.dd);
   const shelves = [-8, 3, 15];
@@ -370,20 +626,23 @@ export function binderShelf(seed: number): BufFurniture {
     b.hline(1, 14, y + 1, w.dk);
   }
   const tops = [-17, -6, 5];
-  // Rolos de pergaminho amarrados com fitas coloridas.
+  // Rolos de pergaminho de pé, amarrados com fitas coloridas.
   const binders = ['#e2d2a4', '#d8c79c', '#eadcb4', '#cfbf90', '#e2d2a4', '#d8c79c', '#eadcb4'];
-  const ribbons = ['#9c2f25', '#2f7a78', '#e0b23c', '#5f8a3a'];
+  const ribbons = ['#9c2f25', '#2f4f9c', '#e0b23c', '#5f8a3a'];
   tops.forEach((top, i) => {
     const bottom = shelves[i] - 1;
     const h = bottom - top + 1;
     if (i === 2 && r() < 0.6) {
-      // Caixas de papelão na prateleira de baixo.
-      b.rect(2, bottom - 6, 6, 7, M.cardboard.base);
-      b.hline(2, 7, bottom - 6, M.cardboard.lt);
-      b.rect(3, bottom - 4, 4, 1, '#5a5550');
-      b.rect(8, bottom - 5, 6, 6, M.cardboard.dk);
-      b.hline(8, 13, bottom - 5, M.cardboard.base);
-      b.rect(9, bottom - 3, 4, 1, '#5a5550');
+      // Arca pequena com cintas de ferro na prateleira de baixo.
+      const c = ramp('#8a5a32', 0.07);
+      b.rect(2, bottom - 6, 12, 7, c.base);
+      b.hline(2, 13, bottom - 6, c.lt);
+      b.hline(2, 13, bottom - 4, c.dk);
+      ironBand(b, 2, 13, bottom - 3);
+      b.vline(4, bottom - 6, bottom, '#3a3a40');
+      b.vline(11, bottom - 6, bottom, '#3a3a40');
+      b.rect(7, bottom - 3, 2, 2, '#e0b23c');
+      b.set(8, bottom - 2, '#8a6a20');
       return;
     }
     let x = 2;
@@ -392,6 +651,7 @@ export function binderShelf(seed: number): BufFurniture {
       const bh = Math.min(h - 1, 8 + Math.floor(r() * 2));
       b.rect(x, bottom - bh + 1, 2, bh, c);
       b.vline(x, bottom - bh + 1, bottom, shade(c, 0.1));
+      b.hline(x, x + 1, bottom - bh + 1, '#f4ead0');
       const rib = pick(r, ribbons);
       b.set(x, bottom - bh + 3, rib);
       b.set(x + 1, bottom - bh + 3, rib);
@@ -400,84 +660,137 @@ export function binderShelf(seed: number): BufFurniture {
       if (r() < 0.12) x += 1;
     }
   });
+  cornerIron(b, 0, -18);
+  cornerIron(b, 13, -18);
+  candle(b, 11, -22, 3);
   b.outline();
   contact(b, 0, 13, 16, 4, 0.22);
   return { base: s };
 }
 
 export function filingCabinet(): BufFurniture {
-  // Baú de madeira empilhado (três gavetões com cintas e argolas de ferro).
+  // Cômoda de gavetões de carvalho com cintas de ferro rebitadas, espelhos de fechadura dourados.
   const s = floorSheet(1, 1, 8);
   const b = s.buf;
-  const m = M.oak;
+  const m = ramp('#8a5a32', 0.07);
   topFace(b, 1, -7, 14, 4, m);
   frontFace(b, 1, -3, 14, 19, m);
   woodGrain(b, 1, -3, 14, 19, m, 3, true);
   for (const y of [3, 9]) {
-    b.hline(1, 14, y, '#4f5459');
-    b.hline(1, 14, y + 1, m.dk);
+    b.hline(1, 14, y, '#3a3a40');
+    b.hline(1, 14, y + 1, m.dd);
   }
   for (const y of [-1, 5, 11]) {
-    b.set(7, y, '#8f949a');
-    b.set(8, y, '#8f949a');
-    b.set(7, y + 1, '#4f5459');
-    b.set(8, y + 1, '#4f5459');
+    // Argola de ferro + espelho dourado.
+    b.rect(7, y, 2, 2, '#e0b23c');
+    b.set(7, y, '#f6d878');
+    b.set(8, y + 1, '#8a6a20');
+    b.set(6, y + 2, '#3a3a40');
+    b.set(9, y + 2, '#3a3a40');
+    b.hline(7, 8, y + 3, '#3a3a40');
   }
-  b.vline(1, -3, 15, '#4f5459');
-  b.vline(14, -3, 15, '#4f5459');
-  smallSucculent(b, 9, -9);
+  // Montantes de ferro com rebites.
+  for (const x of [1, 14]) {
+    b.vline(x, -3, 15, '#3a3a40');
+    for (const y of [-2, 4, 10]) b.set(x, y, '#8a8a94');
+  }
+  b.hline(1, 14, -7, '#3a3a40');
+  b.set(2, -7, '#8a8a94');
+  b.set(13, -7, '#8a8a94');
+  candle(b, 3, -6, 3);
+  // Tomo deitado em cima.
+  b.rect(8, -7, 6, 2, '#2f4f9c');
+  b.hline(8, 13, -7, '#3d63b8');
+  b.set(13, -6, '#e0b23c');
   b.outline();
   contact(b, 0, 13, 16, 4, 0.22);
   return { base: s };
 }
 
 export function printer(): BufFurniture {
-  // Pequena forja de pedra: base de pedra, boca com brasas e chaminé curta com fole ao lado.
-  const s = floorSheet(1, 1, 14);
+  // Prensa de goblin: cavalete de madeira, fuso de latão com manivela, engrenagens de cobre,
+  // lâmpada verde de "ligado" e uma folha impressa saindo na frente.
+  const s = floorSheet(1, 1, 22);
   const b = s.buf;
-  const st = M.stone;
-  frontFace(b, 0, 2, 16, 14, st);
-  for (const y of [5, 9, 13]) b.hline(1, 14, y, st.dk);
-  for (const [x, y] of [[4, 3], [10, 7], [6, 11], [12, 3]] as const) b.vline(x, y, y + 1, st.dk);
-  topFace(b, 0, -11, 16, 6, st);
-  frontFace(b, 0, -5, 16, 7, st);
-  // Boca da forja com brasas.
-  b.rect(3, -4, 10, 5, '#2a1d14');
-  b.hline(4, 11, 0, '#e08a2c');
-  b.hline(5, 10, -1, '#f0b040');
-  b.set(7, -2, '#ffe08a');
-  b.set(9, -1, '#ffd060');
-  // Chaminé.
-  b.rect(10, -16, 4, 6, st.dk);
-  b.hline(10, 13, -16, st.lt);
-  // Fole de couro.
-  b.rect(1, -10, 5, 3, '#7b4f2c');
-  b.hline(1, 5, -10, '#9a6a40');
-  b.set(6, -9, '#4f5459');
+  const t = ramp('#8a5a32', 0.07);
+  const cu = ramp('#c27a3a', 0.08);
+  // Base (caixa da máquina).
+  topFace(b, 0, 1, 16, 4, t);
+  frontFace(b, 0, 5, 16, 11, t);
+  woodGrain(b, 0, 5, 16, 11, t, 5, true);
+  ironBand(b, 0, 15, 7);
+  ironBand(b, 0, 15, 14);
+  // Engrenagem de cobre na face.
+  b.ellipse(4.5, 10.5, 3, 3, cu.base);
+  for (const [x, y] of [[4, 6], [4, 14], [0, 10], [8, 10], [1, 7], [7, 7], [1, 13], [7, 13]] as const) b.set(x, y, cu.dk);
+  b.set(3, 9, cu.hi);
+  b.rect(4, 10, 2, 2, '#3a2a1c');
+  // Bandeja com folha impressa.
+  b.rect(9, 9, 6, 6, '#eadcb4');
+  b.hline(9, 14, 9, '#f6eed6');
+  for (const y of [11, 13]) b.hline(10, 13, y, '#5a4a3a');
+  b.vline(14, 10, 14, '#c2a874');
+  // Cavalete: dois montantes e travessa.
+  for (const x of [1, 13]) {
+    b.rect(x, -12, 2, 14, t.base);
+    b.vline(x, -12, 1, t.lt);
+    b.vline(x + 1, -12, 1, t.dk);
+  }
+  b.rect(0, -14, 16, 3, t.base);
+  b.hline(0, 15, -14, t.lt);
+  b.hline(0, 15, -12, t.dk);
+  rivet(b, 1, -13);
+  rivet(b, 13, -13);
+  // Fuso de latão e manivela.
+  b.rect(7, -11, 2, 8, cu.lt);
+  for (let y = -10; y < -3; y += 2) b.set(8, y, cu.dk);
+  b.hline(3, 12, -8, cu.base);
+  b.set(3, -8, cu.hi);
+  b.rect(2, -9, 2, 3, '#3a3a40');
+  b.rect(12, -9, 2, 3, '#3a3a40');
+  // Platina de ferro sobre a folha.
+  b.rect(4, -3, 8, 2, '#4a4a52');
+  b.hline(4, 11, -3, '#6a6a74');
+  b.rect(4, -1, 8, 2, '#eadcb4');
+  // Lâmpada verde e cano com fumaça.
+  b.rect(14, -18, 2, 3, '#7fd65a');
+  b.set(14, -18, '#d4ffb0');
+  b.set(15, -16, '#4fa03a');
+  b.vline(15, -15, -14, cu.dk);
+  b.rect(0, -18, 2, 4, cu.base);
+  b.set(0, -18, cu.hi);
+  b.set(1, -20, 'rgba(220,220,220,0.6)');
+  b.set(0, -21, 'rgba(220,220,220,0.4)');
   b.outline();
   contact(b, -1, 13, 18, 4, 0.22);
   return { base: s };
 }
 
 export function trashBin(): BufFurniture {
-  // Balde de madeira com aros de ferro e cavacos.
-  const s = floorSheet(1, 1, 2);
+  // Barrilzinho de aduelas com aros de ferro e pergaminhos amassados.
+  const s = floorSheet(1, 1, 3);
   const b = s.buf;
-  const m = M.oak;
-  for (let y = 7; y <= 15; y++) {
-    const inset = y > 13 ? 1 : 0;
-    b.hline(4 + inset, 11 - inset, y, m.base);
-    b.set(4 + inset, y, m.lt);
-    b.set(11 - inset, y, m.dk);
+  const m = ramp('#9a6a3c', 0.07);
+  for (let y = 6; y <= 15; y++) {
+    const bulge = y > 7 && y < 14 ? 1 : 0;
+    b.hline(4 - bulge, 11 + bulge, y, m.base);
+    b.set(4 - bulge, y, m.lt);
+    b.set(5 - bulge, y, m.lt);
+    b.set(11 + bulge, y, m.dk);
   }
-  for (const x of [6, 9]) b.vline(x, 8, 14, m.dk);
-  b.hline(4, 11, 9, '#4f5459');
-  b.hline(5, 10, 14, '#4f5459');
-  b.ellipse(8, 6.5, 4.5, 2, m.lt);
-  b.ellipse(8, 6.6, 3.5, 1.3, '#3a2a1c');
-  b.rect(6, 5, 3, 2, '#d9b88e');
-  b.set(8, 5, '#b98a55');
-  b.set(9, 6, '#e2d2a4');
+  for (const x of [6, 9]) b.vline(x, 7, 14, m.dk);
+  b.hline(3, 12, 9, '#3a3a40');
+  b.hline(3, 12, 13, '#3a3a40');
+  b.set(4, 9, '#8a8a94');
+  b.set(4, 13, '#8a8a94');
+  b.ellipse(8, 5.5, 4.5, 2, m.lt);
+  b.ellipse(8, 5.6, 3.5, 1.3, '#2a1c12');
+  // Pergaminhos amassados.
+  b.rect(5, 3, 3, 3, '#eadcb4');
+  b.set(7, 4, '#c2a874');
+  b.rect(8, 2, 3, 3, '#e2d2a4');
+  b.set(9, 3, '#b8a272');
+  b.set(10, 4, '#9c2f25');
   b.outline();
   contact(b, 3, 14, 10, 2, 0.22);
   return { base: s };
@@ -485,25 +798,60 @@ export function trashBin(): BufFurniture {
 
 // ------------------------------------------------------------------ plantas
 
+/** Tina de madeira com aro de ferro (vaso rústico). (x, y) = canto superior esquerdo. */
+function tub(b: PixelBuf, x: number, y: number, w: number, h: number): void {
+  const m = ramp('#8a5a32', 0.07);
+  pot(b, x, y, w, h, m);
+  for (let xx = x + 2; xx < x + w - 1; xx += 2) b.vline(xx, y + 2, y + h - 2, m.dk);
+  b.hline(x, x + w - 1, y + 2, '#3a3a40');
+  b.hline(x + 1, x + w - 2, y + h - 2, '#3a3a40');
+  b.set(x + 1, y + 2, '#8a8a94');
+}
+
+/** Urna de pedra talhada (Aliança) com friso dourado. */
+function urn(b: PixelBuf, x: number, y: number, w: number, h: number): void {
+  pot(b, x, y, w, h, FACTION.alliance.stone);
+  b.hline(x + 1, x + w - 2, y + 3, FACTION.alliance.gold.base);
+  b.set(x + 1, y + 3, FACTION.alliance.gold.hi);
+}
+
+/** Cogumelo com chapéu (cx = centro, y = topo do chapéu); `glow` marca as pintas luminosas. */
+function mushroom(b: PixelBuf, cx: number, y: number, rx: number, stem: number, cap: Ramp, glow: string): void {
+  // Haste.
+  b.rect(cx - 1, y + 2, 2, stem, '#e8dcc0');
+  b.vline(cx, y + 2, y + 1 + stem, '#c4b498');
+  // Chapéu em cúpula.
+  for (let i = 0; i < 3; i++) {
+    const half = Math.max(1, Math.round(rx * Math.sqrt(1 - ((2 - i) / 3) ** 2)));
+    b.hline(cx - half, cx + half - 1, y + i, i === 2 ? cap.dk : cap.base);
+    b.set(cx - half, y + i, cap.lt);
+  }
+  b.hline(cx - rx, cx + rx - 1, y + 2, cap.dk);
+  b.set(cx - Math.max(1, rx - 2), y + 1, cap.hi);
+  b.set(cx - 1, y + 1, glow);
+  if (rx > 2) b.set(cx + 1, y, glow);
+}
+
 export function plantSmall(variant: string | undefined, seed: number): BufFurniture {
   const s = floorSheet(1, 1, 10);
   const b = s.buf;
   const v = variant ?? 'fern';
   if (v === 'succulent') {
-    pot(b, 4, 9, 8, 7, M.ceramic);
-    b.rect(5, 9, 6, 1, '#5b4636');
-    // Roseta azulada: pétalas grossas em camadas.
-    const g = ramp('#7fbf9f', 0.08);
-    const petals: [number, number, number, number][] = [[3, 8, 6, 5], [13, 8, 10, 5], [5, 5, 7, 3], [11, 5, 9, 3], [8, 3, 8, 6], [4, 7, 8, 6], [12, 7, 8, 6]];
-    petals.forEach(([x1, y1, x0, y0], i) => leafBlade(b, x0, y0 + 2, x1, y1, 3, i < 2 ? ramp(g.dk, 0.08) : g, true));
-    b.set(8, 5, g.hi);
-    b.set(7, 6, g.lt);
+    // Cogumelos luminosos numa tigela de pedra.
+    pot(b, 3, 10, 10, 6, M.stone);
+    b.rect(4, 10, 8, 1, '#3a2a1c');
+    const teal = ramp('#2f8a8a', 0.09);
+    const violet = ramp('#7a4ab0', 0.09);
+    mushroom(b, 5, 4, 3, 5, violet, '#d0a8ff');
+    mushroom(b, 10, 1, 4, 8, teal, '#9ff5e0');
+    mushroom(b, 7, 7, 2, 3, teal, '#9ff5e0');
   } else if (v === 'flower') {
-    pot(b, 4, 9, 8, 7, M.terracotta);
-    b.rect(5, 9, 6, 1, '#5b4636');
+    // Flores douradas numa urna de pedra (Aliança).
+    urn(b, 4, 9, 8, 7);
+    b.rect(5, 9, 6, 1, '#3a2a1c');
     const g = M.leaf;
     for (const [x1, y1] of [[2, 6], [14, 5], [5, 2], [11, 2], [8, 4]] as const) leafBlade(b, 8, 9, x1, y1, 3, g, x1 < 8);
-    const petals = pick(rngOf(seed, 5), ['#f26d8a', '#f2c14e', '#ffffff', '#b07ae8']);
+    const petals = pick(rngOf(seed, 5), ['#f2c14e', '#ffffff', '#5a8ae0', '#e0583a']);
     for (const [x, y] of [[4, 1], [10, 0], [7, 3], [12, 4], [3, 5]] as const) {
       b.set(x, y, petals);
       b.set(x + 1, y, shade(petals, 0.12));
@@ -511,12 +859,14 @@ export function plantSmall(variant: string | undefined, seed: number): BufFurnit
       b.set(x + 1, y + 1, '#f7d154');
     }
   } else {
-    pot(b, 4, 9, 8, 7, M.terracotta);
-    b.rect(5, 9, 6, 1, '#5b4636');
-    // Samambaia: frondes arqueadas em lâminas finas.
-    const g = M.leaf;
+    // Arbusto espinhoso numa tina com aro de ferro.
+    tub(b, 4, 9, 8, 7);
+    b.rect(5, 9, 6, 1, '#3a2a1c');
+    const g = ramp('#4f7a34', 0.08);
     const fr: [number, number, number][] = [[0, 7, 0], [16, 7, 0], [2, 1, 1], [14, 1, 0], [5, -3, 1], [11, -3, 1], [8, -5, 1], [-1, 11, 0], [17, 11, 0]];
     fr.forEach(([x1, y1, light]) => leafBlade(b, 8, 9, x1, y1, 2.6, light ? g : ramp(g.dk, 0.07), x1 < 8));
+    // Espinhos/bagas vermelhas.
+    for (const [x, y] of [[3, 4], [12, 2], [7, -2], [14, 8]] as const) b.set(x, y, '#c8402e');
     b.set(8, -5, g.hi);
   }
   b.outline();
@@ -525,23 +875,23 @@ export function plantSmall(variant: string | undefined, seed: number): BufFurnit
 }
 
 export function plantTall(variant: string | undefined, seed: number): BufFurniture {
-  const s = floorSheet(1, 1, 24, 6);
+  const s = floorSheet(1, 1, 30, 6);
   const b = s.buf;
   const v = variant ?? 'ficus';
   if (v === 'bonsai') {
-    // Bonsai: suporte baixo de madeira, vaso-bandeja cerâmico e copa em "nuvens".
-    const st = M.walnut;
+    // Bonsai retorcido numa bandeja de pedra sobre plinto talhado, com lanterninha.
+    const st = M.stone;
     topFace(b, 1, 7, 14, 3, st);
-    frontFace(b, 1, 10, 14, 3, st);
-    for (const x of [2, 12]) b.rect(x, 13, 2, 3, st.dd);
-    const tray = ramp('#4f6a8f', 0.07);
+    frontFace(b, 1, 10, 14, 4, st);
+    b.hline(1, 14, 12, st.dk);
+    b.rect(2, 14, 12, 2, st.dk);
+    const tray = ramp('#5a5a62', 0.07);
     b.rect(3, 4, 10, 1, tray.lt);
     b.rect(3, 5, 10, 2, tray.base);
-    b.hline(4, 11, 4, '#5b4636');
+    b.hline(4, 11, 4, '#3a2a1c');
     b.vline(12, 5, 6, tray.dk);
     b.hline(4, 11, 6, tray.dk);
-    // Tronco retorcido com raízes aparentes.
-    const tr = ramp('#7a5a40', 0.08);
+    const tr = ramp('#6a4a32', 0.08);
     b.line(7, 4, 6, 0, tr.base, 2);
     b.line(6, 0, 9, -4, tr.base, 2);
     b.line(9, -4, 8, -8, tr.base, 1);
@@ -553,42 +903,80 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
     foliage(b, 4, -6.5, 3.6, 2.2, M.leafDark, seed + 3);
     foliage(b, 12.5, -7.5, 3.2, 2, M.leafDark, seed + 4);
     foliage(b, 8.5, -10.5, 4, 2.4, M.leaf, seed + 5);
+    // Lanterna de pedra no canto da bandeja.
+    b.rect(12, 1, 3, 3, '#7a7468');
+    b.set(13, 2, '#ffd060');
+    b.hline(11, 15, 0, '#5a554c');
   } else if (v === 'palm') {
-    pot(b, 3, 6, 10, 10, M.ceramic);
-    b.rect(4, 6, 8, 1, '#5b4636');
-    const g = M.leaf;
-    const dark = ramp(M.leaf.dk, 0.07);
-    for (const sx of [6, 8, 10]) b.line(8, 6, sx, -4, '#86a04f', 1);
-    // Frondes pinadas (de trás, escuras; da frente, claras) abrindo em leque.
-    const fronds: [number, number, number, number, Ramp][] = [
-      [7, -3, -2, -20, dark], [9, -3, 17, -19, dark], [7, -2, -5, -8, g], [9, -2, 21, -8, g], [8, -3, 8, -23, g],
-    ];
-    for (const [x0, y0, x1, y1, m] of fronds) bigLeaf(b, x0, y0, x1, y1, 6, m, 'pinnate');
+    // Totem espiritual: poste entalhado com rostos pintados, presas e penas, numa base de pedras.
+    const t = FACTION.horde.timber;
+    b.ellipse(8, 13.5, 6, 2.5, '#7a7468');
+    b.ellipse(7, 12.8, 4, 1.5, '#9c968a');
+    b.rect(5, -18, 6, 31, t.base);
+    b.vline(5, -18, 12, t.lt);
+    b.vline(6, -18, 12, ramp('#6a4a30', 0.07).base);
+    b.vline(10, -18, 12, t.dd);
+    // Rostos entalhados (dois), com olhos pintados de vermelho e boca de presas.
+    for (const fy of [-12, 0]) {
+      b.hline(5, 10, fy - 1, t.dd);
+      b.rect(6, fy + 1, 2, 1, '#c8402e');
+      b.rect(9, fy + 1, 1, 1, '#c8402e');
+      b.set(8, fy + 2, t.dd);
+      b.hline(6, 9, fy + 4, '#1e140c');
+      b.set(6, fy + 3, FACTION.horde.bone.lt);
+      b.set(9, fy + 3, FACTION.horde.bone.lt);
+    }
+    // Faixas pintadas.
+    b.hline(5, 10, -6, '#9c2f25');
+    b.hline(5, 10, 6, '#9c2f25');
+    b.hline(5, 10, 7, '#2a1a14');
+    // Presas grandes saindo dos lados e topo com penas.
+    tusk(b, 4, -8, 6, -1);
+    tusk(b, 11, -8, 6, 1);
+    b.rect(4, -21, 8, 3, '#3a3a40');
+    b.hline(4, 11, -21, '#55555e');
+    for (const [x, c] of [[4, '#c8402e'], [7, '#e8dcc0'], [10, '#2f6a6a']] as const) {
+      b.vline(x, -27, -22, c);
+      b.vline(x + 1, -26, -22, shade(c, -0.25));
+    }
+    b.set(7, -28, '#ffffff');
   } else if (v === 'monstera') {
-    pot(b, 3, 6, 10, 10, M.terracotta);
-    b.rect(4, 6, 8, 1, '#5b4636');
-    const g = ramp('#43995a', 0.08);
-    const dark = ramp('#2f7a45', 0.08);
-    // Folhas grandes recortadas, das de trás para as da frente, com hastes.
-    const leaves: [number, number, number, number, number, Ramp][] = [
-      [7, -7, 1, -17, 9, dark], [9, -7, 16, -16, 9, dark], [8, -6, 9, -21, 9, g],
-      [6, 1, -3, -6, 9, g], [10, 1, 19, -5, 9, g], [8, 3, 6, -5, 7, dark],
-    ];
-    for (const [x0, y0] of leaves) b.line(8, 6, x0, y0, '#2f6b3d');
-    for (const [x0, y0, x1, y1, w, m] of leaves) bigLeaf(b, x0, y0, x1, y1, w, m, 'monstera');
+    // Cogumelos gigantes luminosos numa jardineira de pedra.
+    pot(b, 2, 6, 12, 10, M.stone);
+    b.rect(3, 6, 10, 1, '#3a2a1c');
+    const teal = ramp('#2f8a8a', 0.09);
+    const violet = ramp('#7a4ab0', 0.09);
+    // Cogumelo grande central.
+    b.rect(6, -10, 4, 16, '#e8dcc0');
+    b.vline(9, -10, 5, '#c4b498');
+    b.vline(6, -10, 5, '#f4ead6');
+    b.ellipse(8, -13, 7.5, 4, violet.dk);
+    b.ellipse(8, -14, 7, 3.4, violet.base);
+    b.ellipse(6.5, -15.2, 4.2, 1.8, violet.lt);
+    b.set(4, -16, violet.hi);
+    b.hline(1, 14, -11, violet.dd);
+    for (const [x, y] of [[3, -13], [8, -16], [12, -13], [10, -15], [5, -12]] as const) b.set(x, y, '#e0c8ff');
+    // Cogumelos menores.
+    mushroom(b, 3, -2, 3, 7, teal, '#9ff5e0');
+    mushroom(b, 13, -4, 3, 9, teal, '#9ff5e0');
   } else {
-    // Ficus: copa cheia em camadas sobre tronco fino.
-    pot(b, 3, 6, 10, 10, M.ceramic);
-    b.rect(4, 6, 8, 1, '#5b4636');
-    const tr = '#7a5a3c';
-    b.line(8, 6, 8, -4, tr, 1);
-    b.line(7, 6, 7, 0, '#8e6b48', 1);
-    b.line(8, -1, 5, -5, tr, 1);
-    b.line(8, -3, 11, -6, tr, 1);
-    foliage(b, 8, -10, 7, 5.5, M.leafDark, seed + 7);
-    foliage(b, 6, -13, 4.6, 3.6, M.leaf, seed + 8);
-    foliage(b, 11.5, -9, 3.8, 3.2, M.leaf, seed + 9);
-    foliage(b, 4, -7, 3.2, 2.6, M.leaf, seed + 10);
+    // Árvore retorcida numa tina com cintas de ferro.
+    tub(b, 3, 6, 10, 10);
+    b.rect(4, 6, 8, 1, '#3a2a1c');
+    const tr = ramp('#5e4430', 0.08);
+    b.line(8, 6, 7, 1, tr.base, 2);
+    b.line(7, 1, 9, -3, tr.base, 2);
+    b.line(9, -3, 8, -7, tr.base, 1);
+    b.line(8, -1, 4, -5, tr.base, 1);
+    b.line(9, -3, 12, -6, tr.base, 1);
+    b.set(7, 4, tr.lt);
+    b.set(8, 0, tr.lt);
+    const dark = ramp('#2f5528', 0.07);
+    const leaf = ramp('#4a7a34', 0.08);
+    foliage(b, 8, -10, 7, 5.5, dark, seed + 7);
+    foliage(b, 6, -13, 4.6, 3.6, leaf, seed + 8);
+    foliage(b, 11.5, -9, 3.8, 3.2, leaf, seed + 9);
+    foliage(b, 4, -7, 3.2, 2.6, leaf, seed + 10);
   }
   b.outline();
   contact(b, 2, 14, 12, 3, 0.24);
@@ -597,45 +985,64 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
 
 // ------------------------------------------------------------------ divisórias de vidro
 
+/** Ponta talhada de um tronco da paliçada (madeira clara no corte). */
+function stakeTip(b: PixelBuf, x: number, top: number, w: number, log: Ramp): void {
+  b.hline(x + 1, x + w - 2, top - 1, log.lt);
+  b.set(x + 1, top - 1, '#e2c89a');
+  b.set(x + Math.floor(w / 2), top - 2, '#e2c89a');
+  if (w > 4) b.set(x + Math.floor(w / 2), top - 3, '#f0dcb4');
+}
+
 export function glassPartition(variant: string | undefined): BufFurniture {
-  // Cerca de paliçada: troncos pontudos amarrados (separa áreas do acampamento).
+  // Paliçada: troncos apontados, amarrados com corda e cintados de ferro (separa áreas do acampamento).
   const v = variant ?? 'h';
   const s = floorSheet(1, 1, 22, 2);
   const b = s.buf;
-  const log = M.oak;
+  const log = ramp('#9a6a3c', 0.07);
   if (v === 'v') {
     // Norte-sul: vista de cima é uma faixa de topos de tronco (sem contorno para emendar).
-    const cols = ['#4e3420', '#8a6239', '#b98a55', '#d9b88e', '#b98a55', '#8a6239', '#6b4a2b', '#3f2a18'];
+    const cols = ['#3f2a18', '#7a5232', '#a8763f', '#c9a06a', '#a8763f', '#7a5232', '#5e3d24', '#3f2a18'];
     cols.forEach((c, i) => b.vline(4 + i, -16, 15, c));
-    for (let y = -16; y < 16; y += 4) b.hline(5, 10, y, '#5a3f26');
+    for (let y = -16; y < 16; y += 4) {
+      b.hline(5, 10, y, '#4a321e');
+      b.set(7, y + 2, '#e2c89a');
+    }
+    b.hline(4, 11, -6, '#c9a46a');
+    b.hline(4, 11, 6, '#c9a46a');
     underRect(b, 12, -16, 2, 32, 'rgba(36,24,14,0.14)');
     return { base: s };
   }
   if (v === 'end') {
-    // Ponta: poste mais grosso com topo pontudo e amarração.
+    // Ponta: poste mais grosso com ponta talhada, cintas de ferro e flâmula vermelha.
     b.rect(5, -16, 6, 32, log.base);
     b.vline(5, -16, 15, log.lt);
+    b.vline(6, -16, 15, log.lt);
     b.vline(10, -16, 15, log.dk);
-    b.hline(6, 9, -17, log.lt);
-    b.hline(7, 8, -18, log.hi);
-    b.hline(5, 10, -6, '#c9b483');
-    b.hline(5, 10, 6, '#c9b483');
+    stakeTip(b, 5, -16, 6, log);
+    for (const y of [-6, 6]) {
+      ironBand(b, 5, 10, y);
+      b.hline(5, 10, y + 1, '#c9a46a');
+    }
+    drape(b, 11, -14, 4, 7, FACTION.horde.red, { notch: true });
+    b.hline(10, 14, -15, '#3a3a40');
     b.outline();
     contact(b, 3, 13, 10, 4, 0.2);
     return { base: s };
   }
-  // 'h': leste-oeste — 4 troncos de 4px com pontas, amarrados por duas cordas.
+  // 'h': leste-oeste — 4 troncos de 4px com pontas, amarrados por cordas e uma cinta de ferro.
   for (let i = 0; i < 4; i++) {
     const x = i * 4;
     const top = -14 - ((i * 5) % 3);
     b.rect(x, top, 4, 16 - top, log.base);
     b.vline(x, top, 15, log.lt);
     b.vline(x + 3, top, 15, log.dk);
-    b.hline(x + 1, x + 2, top - 1, log.lt);
-    b.set(x + 1, top - 2, log.hi);
+    stakeTip(b, x, top, 4, log);
+    b.set(x + 1, top + 6 + (i % 2) * 5, log.dk);
   }
-  b.hline(0, 15, -4, '#c9b483');
-  b.hline(0, 15, 8, '#c9b483');
+  b.hline(0, 15, -4, '#c9a46a');
+  b.hline(0, 15, -3, '#8a6a3c');
+  ironBand(b, 0, 15, 8, false);
+  for (let x = 1; x < 16; x += 4) b.set(x, 8, '#8a8a94');
   b.hline(0, 15, 15, log.dd);
   b.outline();
   for (let y = 0; y < b.h; y++) {
@@ -648,34 +1055,58 @@ export function glassPartition(variant: string | undefined): BufFurniture {
 
 // ------------------------------------------------------------------ reunião e apoio
 
+/** Miniatura de soldado (peão) da mesa de guerra: base, corpo colorido e cabeça. */
+function figurine(b: PixelBuf, x: number, y: number, c: string): void {
+  b.hline(x, x + 2, y + 3, '#3a3a40');
+  b.rect(x, y + 1, 3, 2, c);
+  b.set(x, y + 1, shade(c, 0.25));
+  b.set(x + 1, y, shade(c, 0.15));
+}
+
 export function meetingTable(seed: number): BufFurniture {
-  const s = floorSheet(3, 2, 10);
+  const s = floorSheet(3, 2, 12);
   const b = s.buf;
-  // Mesa de guerra: tampo de tábuas com um mapa aberto no meio.
-  const m = M.oak;
+  // Mesa de guerra: tampo de tábuas com borda cintada, mapa aberto, miniaturas, adaga e velas.
+  const m = ramp('#9a6a3c', 0.07);
   const r = rngOf(seed, 31);
-  for (const x of [2, 43]) {
-    b.rect(x, 21, 3, 11, M.walnut.base);
-    b.vline(x, 21, 31, M.walnut.lt);
-    b.vline(x + 2, 21, 31, M.walnut.dk);
+  // Cavaletes em X nas pontas.
+  for (const x of [3, 41]) {
+    b.line(x, 31, x + 4, 22, M.walnut.base, 2);
+    b.line(x + 4, 31, x, 22, M.walnut.lt, 2);
   }
   topFace(b, 0, -4, 48, 24, m);
   b.hline(0, 47, 20, m.base);
   b.hline(0, 47, 21, m.dk);
   woodGrain(b, 1, -3, 46, 22, m, seed);
-  // Mapa de pergaminho no centro, com rio, montanhas e marcadores.
+  for (const y of [4, 12]) b.hline(1, 46, y, m.base);
+  // Borda cintada de ferro com cantoneiras.
+  ironBand(b, 0, 47, 20);
+  for (const [x, y] of [[0, -4], [45, -4], [0, 17], [45, 17]] as const) cornerIron(b, x, y);
+  // Mapa de pergaminho no centro, com rio, montanhas, floresta e fronteira.
   b.rect(4, 2, 40, 10, '#e2d2a4');
   b.hline(4, 43, 2, '#c9b483');
   b.hline(4, 43, 11, '#b8a272');
-  b.line(6, 9, 40, 4, '#5f8aa8', 1);
+  b.set(4, 2, '#b8a272');
+  b.set(43, 11, '#a8925a');
+  b.line(6, 9, 40, 4, '#4f7aa8', 1);
   for (const x of [12, 16, 30]) {
     b.set(x, 4, '#7a6a58');
     b.hline(x - 1, x + 1, 5, '#7a6a58');
   }
-  b.rect(21, 5, 2, 2, '#9c2f25');
-  b.rect(26, 7, 2, 2, '#2f7a78');
-  b.set(24, 6, '#e0b23c');
-  // Notebooks e objetos (variam por semente).
+  for (const [x, y] of [[34, 8], [36, 9], [9, 5]] as const) {
+    b.set(x, y, '#4f7a34');
+    b.set(x + 1, y, '#3a5a28');
+  }
+  for (let y = 3; y < 11; y += 2) b.set(24, y, '#9c2f25');
+  // Miniaturas: Horda (vermelho) à esquerda, Aliança (azul) à direita; adaga cravada.
+  figurine(b, 18, 4, '#b8402e');
+  figurine(b, 20, 7, '#b8402e');
+  figurine(b, 27, 5, '#3d63b8');
+  figurine(b, 30, 7, '#3d63b8');
+  b.line(14, 6, 16, 10, '#c4c8d0');
+  b.rect(13, 4, 2, 2, '#5a3c22');
+  b.set(12, 5, '#e0b23c');
+  // Tomos e objetos (variam por semente).
   const laptop = (x: number, y: number, facing: 'up' | 'down') => {
     // Tomos abertos (de pé, virados para a câmera) ou fechados (capa de couro).
     if (facing === 'down') {
@@ -696,13 +1127,11 @@ export function meetingTable(seed: number): BufFurniture {
   if (seed % 2 === 0) laptop(34, -3, 'down');
   else papers(b, 34, -1, 7, 5);
   papers(b, 8, 14, 6, 4);
-  // Copos de água / canecas.
   mug(b, 18, 14, pick(r, MUG_COLORS));
   // Velas.
-  b.rect(29, -1, 2, 3, '#efe6cc');
-  b.set(29, -2, '#f6c04a');
-  b.rect(16, -2, 2, 3, '#efe6cc');
-  b.set(16, -3, '#f6c04a');
+  candle(b, 29, 1, 3);
+  candle(b, 16, 0, 3);
+  skullCandle(b, 24, 13);
   b.outline();
   contact(b, -1, 28, 50, 5, 0.22);
   underRect(b, 4, 22, 40, 8, 'rgba(36,24,14,0.18)');
@@ -710,80 +1139,114 @@ export function meetingTable(seed: number): BufFurniture {
 }
 
 export function stool(): BufFurniture {
-  // Toco de árvore com anéis no topo.
+  // Toco de árvore com raízes, anéis no topo e marca de machado.
   const s = floorSheet(1, 1, 2);
   const b = s.buf;
-  const bark = M.walnut;
+  const bark = ramp('#5e3d24', 0.07);
   b.rect(4, 6, 8, 9, bark.base);
   b.vline(4, 6, 14, bark.lt);
+  b.vline(5, 7, 13, bark.lt);
   b.vline(11, 6, 14, bark.dk);
-  b.vline(7, 8, 13, bark.dk);
-  b.set(3, 14, bark.dk);
-  b.set(12, 14, bark.dk);
+  b.vline(8, 8, 13, bark.dk);
+  // Raízes.
+  b.hline(2, 4, 15, bark.base);
+  b.set(2, 14, bark.lt);
+  b.hline(11, 13, 15, bark.dk);
+  b.set(13, 14, bark.dk);
+  b.set(7, 15, bark.dk);
+  // Musgo.
+  b.set(5, 12, '#6a8a3a');
+  b.set(4, 13, '#5f7a34');
   b.ellipse(8, 6, 4.5, 2.2, '#d9b88e');
   b.ellipse(8, 6, 2.6, 1.2, '#c49a68');
   b.set(8, 6, '#a87a48');
+  b.set(10, 5, '#8a6239');
+  b.set(11, 6, '#8a6239');
   b.outline();
   contact(b, 3, 13, 10, 3, 0.22);
   return { base: s };
 }
 
 export function floorLamp(): BufFurniture {
-  // Tocha alta num poste de madeira com braseiro de ferro.
+  // Braseiro alto: tripé de ferro, poste e cesto de ferro com chamas grandes.
   const s = floorSheet(1, 1, 26);
   const b = s.buf;
-  b.hline(5, 10, 14, '#4f5459');
-  b.hline(6, 9, 13, '#6a645a');
-  b.vline(8, -16, 13, '#6b4a2b');
-  b.vline(7, -16, 13, '#8a6239');
-  b.hline(6, 9, -2, '#c9b483');
-  // Braseiro.
-  b.rect(4, -18, 8, 3, '#4f5459');
-  b.hline(4, 11, -18, '#8f949a');
-  b.set(4, -16, '#3a3630');
-  b.set(11, -16, '#3a3630');
+  const iron = FACTION.horde.iron;
+  // Tripé.
+  b.line(8, 9, 3, 15, iron.base);
+  b.line(8, 9, 13, 15, iron.dk);
+  b.line(8, 9, 8, 14, iron.lt);
+  b.set(3, 15, iron.dd);
+  b.set(13, 15, iron.dd);
+  // Poste.
+  b.rect(7, -14, 2, 24, iron.base);
+  b.vline(7, -14, 9, iron.lt);
+  b.hline(6, 9, -2, '#c9a46a');
+  b.hline(6, 9, -1, '#a8844e');
+  // Cesto.
+  b.rect(3, -18, 10, 4, iron.base);
+  b.hline(3, 12, -18, iron.hi);
+  b.hline(4, 11, -15, iron.dk);
+  b.hline(5, 10, -14, iron.dd);
+  for (const x of [5, 8, 11]) b.vline(x, -17, -15, iron.dd);
+  b.set(3, -19, iron.lt);
+  b.set(12, -19, iron.lt);
   // Chamas.
-  b.hline(5, 10, -19, '#e08a2c');
-  b.hline(6, 9, -20, '#f0b040');
-  b.hline(6, 8, -21, '#f6c04a');
-  b.set(7, -22, '#ffe08a');
-  b.set(8, -23, '#fff2b0');
+  b.hline(4, 11, -19, '#d0451e');
+  b.hline(4, 11, -20, '#e08a2c');
+  b.hline(5, 10, -21, '#f0b040');
+  b.hline(5, 9, -22, '#f6c04a');
+  b.hline(6, 8, -23, '#ffe08a');
+  b.set(7, -24, '#fff2b0');
+  b.set(9, -24, '#f6c04a');
+  b.set(5, -23, '#e08a2c');
+  b.set(8, -25, '#fff2b0');
   b.outline();
-  contact(b, 3, 13, 10, 3, 0.22);
+  contact(b, 2, 13, 12, 3, 0.22);
   s.rects = { glow: rectAt(s, 4, -22, 8, 6) };
   return { base: s };
 }
 
 export function waterCooler(): BufFurniture {
-  // Barril de água num suporte, com torneira de madeira e concha pendurada.
+  // Barril de água num suporte, com torneira de madeira, balde embaixo e concha pendurada.
   const s = floorSheet(1, 1, 20);
   const b = s.buf;
-  const st = M.oakDark;
+  const st = ramp('#5e3d24', 0.07);
   // Suporte.
   b.rect(3, 4, 2, 12, st.base);
   b.rect(11, 4, 2, 12, st.base);
+  b.vline(3, 4, 15, st.lt);
   b.hline(3, 12, 10, st.lt);
   // Balde embaixo.
-  b.rect(6, 11, 4, 4, M.oak.base);
-  b.hline(6, 9, 12, '#4f5459');
-  // Barril deitado de pé.
-  const m = M.oak;
+  b.rect(6, 11, 4, 4, '#9a6a3c');
+  b.hline(6, 9, 12, '#3a3a40');
+  b.hline(6, 9, 11, '#5f8aa8');
+  // Barril.
+  const m = ramp('#9a6a3c', 0.07);
   for (let y = -14; y <= 3; y++) {
     const bulge = y > -11 && y < 0 ? 1 : 0;
     b.hline(3 - bulge, 12 + bulge, y, m.base);
     b.set(3 - bulge, y, m.lt);
+    b.set(4 - bulge, y, m.lt);
     b.set(12 + bulge, y, m.dk);
   }
   for (const x of [6, 9]) b.vline(x, -13, 2, m.dk);
-  for (const y of [-12, -5, 2]) b.hline(2, 13, y, '#4f5459');
+  for (const y of [-12, -5, 2]) {
+    b.hline(2, 13, y, '#3a3a40');
+    b.set(3, y, '#8a8a94');
+  }
   b.ellipse(7.5, -14.5, 4.5, 1.5, m.lt);
-  b.ellipse(7.5, -14.5, 3, 0.8, '#5f8aa8');
-  // Torneira.
-  b.rect(7, 4, 2, 2, '#6b4a2b');
+  b.ellipse(7.5, -14.5, 3, 0.8, '#4f8ac0');
+  b.set(6, -15, '#a8d8f0');
+  // Torneira com gota.
+  b.rect(7, 3, 2, 2, '#6b4a2b');
+  b.set(7, 3, '#8a6239');
   b.set(8, 6, '#7fb0d0');
-  // Concha.
-  b.vline(14, -8, -3, '#8a6239');
+  // Concha pendurada na lateral.
+  b.vline(14, -9, -3, '#8a6239');
+  b.set(14, -10, '#3a3a40');
   b.rect(13, -3, 3, 2, '#6b4a2b');
+  b.set(13, -3, '#8a6239');
   b.outline();
   contact(b, 1, 13, 14, 4, 0.22);
   return { base: s };
