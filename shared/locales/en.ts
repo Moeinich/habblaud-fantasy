@@ -3306,4 +3306,7 @@ export const EN: Readonly<Record<string, string>> = {
   "Para mandar mensagens a esta máquina: instale o plugin habblaud-mensagens nela (npm run mod:install e npm run remote:install)": "To message this machine: install the habblaud-mensagens plugin on it (npm run mod:install and npm run remote:install)",
   "Esta sessão roda em {0}: o terminal, assumir e encerrar só funcionam lá.": "This session runs on {0}: the terminal, taking over and ending only work there.",
   "Roda em outra máquina: {0}": "Runs on another machine: {0}",
+  " com {0}": " with {0}",
+  "{0} e {1}": "{0} and {1}",
+  "{0} em {1}": "{0} in {1}",
 };

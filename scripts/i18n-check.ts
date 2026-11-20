@@ -35,6 +35,12 @@ export function collectKeys(root = ROOT): Map<string, string[]> {
   return keys;
 }
 
+/**
+ * Portuguese joining words between interpolations in a template literal (`${a} em ${b}`, `${n} de ${total}`): no
+ * accent to give them away, but they still reach the user untranslated.
+ */
+const PT_JOINERS = /(?:^|\s)(?:de|em|e|ou|com|para|às|há)\s/;
+
 /** Letters that only show up in Portuguese text (none of them in plain English). */
 const PT_CHARS = /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]/;
 
@@ -62,8 +68,8 @@ const PT_ALLOWED = [
  * Text pieces of the string and template literals in `src` (comments and regex literals skipped). For a template
  * literal only the text outside `${}` counts. `trArg` = the literal is the first argument of tr().
  */
-export function stringLiterals(src: string): Array<{ text: string; index: number; trArg: boolean }> {
-  const out: Array<{ text: string; index: number; trArg: boolean }> = [];
+export function stringLiterals(src: string): Array<{ text: string; index: number; trArg: boolean; template?: true }> {
+  const out: Array<{ text: string; index: number; trArg: boolean; template?: true }> = [];
   const regexAfterChar = /[(,=:[!&|?{};+\-*%<>~^]/;
   const regexAfterWord = /\b(return|typeof|case|in|of|delete|void|throw|new|yield|await)\s*$/;
   const isTrArg = (at: number) => /\btr\(\s*$/.test(src.slice(Math.max(0, at - 40), at));
@@ -87,7 +93,7 @@ export function stringLiterals(src: string): Array<{ text: string; index: number
         j = lex(j + 2, true);
       } else text += src[j++];
     }
-    out.push({ text, index: start, trArg });
+    out.push({ text, index: start, trArg, template: true });
     return j + 1;
   };
   /** Code from `from`; with `untilBrace`, stops after the `}` that closes a `${`. Returns where it stopped. */
@@ -163,7 +169,9 @@ export function findPortugueseLiterals(root = ROOT): string[] {
       if (PT_ALLOWED.some((re) => re.test(rel))) continue;
       const src = readFileSync(p, 'utf8');
       for (const lit of stringLiterals(src)) {
-        if (lit.trArg || !PT_CHARS.test(lit.text)) continue;
+        if (lit.trArg) continue;
+        // Joiners only in short templates (a long one is a script or a document, not a sentence for the user).
+        if (!PT_CHARS.test(lit.text) && !(lit.template && lit.text.trim().length <= 80 && PT_JOINERS.test(lit.text))) continue;
         const line = src.slice(0, lit.index).split('\n').length;
         found.push(`${rel}:${line}  ${JSON.stringify(lit.text.slice(0, 80))}`);
       }

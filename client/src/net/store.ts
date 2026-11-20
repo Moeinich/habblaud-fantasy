@@ -364,7 +364,7 @@ export class OfficeStore {
       try {
         cb(value);
       } catch (err) {
-        console.error(`[store] listener de "${event}" falhou`, err);
+        console.error(`[store] listener for "${event}" failed`, err);
       }
     });
   }

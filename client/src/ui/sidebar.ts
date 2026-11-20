@@ -391,7 +391,8 @@ export class Sidebar implements UiComponent {
     r.head.dataset.room = n.agent.roomId;
     const router = this.ctx.terminals;
     const a = n.agent;
-    const canTerm = !!router?.available && a.status !== 'offline';
+    // Agents of other machines have no terminal here (ui/machine.ts).
+    const canTerm = !!router?.available && a.status !== 'offline' && !a.machine;
     setHidden(r.term, !canTerm);
     if (canTerm && router) {
       const open = router.openAgentId === a.id;
@@ -406,7 +407,7 @@ export class Sidebar implements UiComponent {
     setHidden(r.subsWrap, !has);
     if (has) {
       const shown = n.subs.length;
-      setText(r.subsCaption, shown === n.subTotal ? plural(n.subTotal, tr('subagente'), tr('subagentes')) : `${shown} de ${plural(n.subTotal, tr('subagente'), tr('subagentes'))}`);
+      setText(r.subsCaption, shown === n.subTotal ? plural(n.subTotal, tr('subagente'), tr('subagentes')) : tr('{0} de {1}', [shown, plural(n.subTotal, tr('subagente'), tr('subagentes'))]));
     }
     r.subs.sync(n.subs);
   }

@@ -213,7 +213,7 @@ export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): 
         failures++;
         continue;
       }
-      ctx.out(tr('[remote] {0}: pronto. Sessões novas (ou /reload-plugins) aparecem em {1}.', [label, o.server!]));
+      if (!o.dryRun) ctx.out(tr('[remote] {0}: pronto. Sessões novas (ou /reload-plugins) aparecem em {1}.', [label, o.server!]));
     } else {
       if (!o.dryRun) {
         const env = accountEnv(ctx.env, dir, ctx.home);

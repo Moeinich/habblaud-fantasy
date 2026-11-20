@@ -21,3 +21,11 @@ describe('i18n-check: string literals', () => {
     expect(texts(`const x = a / 2; const y = 'é';`)).toEqual([{ text: 'é', trArg: false }]);
   });
 });
+
+describe('i18n-check: Portuguese joiners', () => {
+  it('template literals marked as such (the check looks for `${a} em ${b}` in them)', () => {
+    const lits = stringLiterals('const a = `${x} em ${y}`; const b = "plain";');
+    expect(lits[0]).toMatchObject({ text: '  em  ', template: true });
+    expect(lits[1].template).toBeUndefined();
+  });
+});
