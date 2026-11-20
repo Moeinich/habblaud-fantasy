@@ -1,7 +1,8 @@
 // Tokens na fachada (Fase 5; PLANO 17.2, itens 1 e 2) e o confete do fim de turno (16.3, item 8), só no navegador:
-// - Medidor de energia ao lado da porta, como um relógio de luz: 5 barras pela faixa do DIA (`tokens.day`) e um ponteiro
-//   que balança quando a faixa muda.
-// - Letreiro com 5 intensidades pela faixa da SEMANA (`tokens.week`): apagado, fraco, normal, neon e neon com faíscas.
+// - Tabuleta do tesouro ao lado da porta: 5 pilhas de moedas (cobre, bronze, ouro, ouro claro e mithril) pela faixa do
+//   DIA (`tokens.day`) e um pêndulo num mostrador de pergaminho que balança quando a faixa muda.
+// - Placa com 5 intensidades pela faixa da SEMANA (`tokens.week`): apagada, brasa, chama, fogo verde arcano e fogo
+//   violeta com faíscas.
 // - Sem `tokens` (o dono desligou), nada disso aparece. Nunca o número, só a faixa que o mundo publica.
 // - Confete na fachada quando um `area.patch` mostra agentes trabalhando a menos e à toa a mais no mesmo prédio.
 // Desenho por quadro, por cima da fachada (o cache das fachadas não ganha chave nova). Modelos puros (testados).
@@ -37,33 +38,42 @@ export function shiftEnded(prev: WorldBuildingPublic['agents'] | undefined, next
   return n.working < prev.working && n.idle > prev.idle;
 }
 
-/** Cores das 5 barras do medidor (de baixo para cima): verde, lima, âmbar, laranja e rosa-choque. */
-export const METER_COLORS: readonly string[] = ['#4fd18b', '#b7e05a', '#ffd24a', '#ff9a3c', '#ff4f8b'];
+/** Cores das 5 pilhas da tabuleta (da menor para a maior): cobre, bronze, ouro, ouro claro e mithril. */
+export const METER_COLORS: readonly string[] = ['#b86a3a', '#c98f3c', '#e8b83a', '#ffe48a', '#8fe8ff'];
 
-/** Medidor de energia (px de mundo): caixa, mostrador com ponteiro (`wiggle` 0..1 = quanto ainda balança) e 5 barras. */
+/** Tabuleta do tesouro (px de mundo): tábua com cravos, mostrador de pergaminho com pêndulo (`wiggle` 0..1 = quanto
+ * ainda balança) e as 5 pilhas de moedas. */
 export function drawMeter(ctx: CanvasRenderingContext2D, x: number, y: number, bars: number, now: number, wiggle: number, on: boolean): void {
   const X = Math.round(x);
   const Y = Math.round(y);
-  // caixa de metal com o mostrador
-  ctx.fillStyle = '#1b1f28';
+  // tábua de madeira com cravos nos cantos
+  ctx.fillStyle = '#1e140e';
   ctx.fillRect(X, Y, 11, 15);
-  ctx.fillStyle = '#5d6577';
+  ctx.fillStyle = '#6b4429';
   ctx.fillRect(X + 1, Y + 1, 9, 13);
-  ctx.fillStyle = '#7d8699';
+  ctx.fillStyle = '#855636';
   ctx.fillRect(X + 1, Y + 1, 9, 1);
-  ctx.fillStyle = on ? '#efe6c8' : '#9aa3b2';
+  ctx.fillStyle = '#9a9aa4';
+  ctx.fillRect(X + 1, Y + 1, 1, 1);
+  ctx.fillRect(X + 9, Y + 1, 1, 1);
+  // mostrador de pergaminho e o pêndulo: aponta pela faixa e balança quando ela muda
+  ctx.fillStyle = on ? '#e4d6b4' : '#8a7e68';
   ctx.fillRect(X + 2, Y + 2, 7, 4);
-  // ponteiro: aponta pela faixa e balança quando ela muda
   const a = -Math.PI * 0.9 + (bars / 5) * Math.PI * 0.8 + Math.sin(now / 60) * 0.55 * wiggle;
-  ctx.fillStyle = '#c23a3a';
+  ctx.fillStyle = '#8e2a22';
   ctx.fillRect(X + 5 + Math.round(Math.cos(a) * 2.4), Y + 5 + Math.round(Math.sin(a) * 2.4), 1, 1);
-  ctx.fillStyle = '#20242e';
+  ctx.fillStyle = '#2a1c14';
   ctx.fillRect(X + 5, Y + 5, 1, 1);
-  // as 5 barras, de alturas crescentes (como as do sinal do celular)
+  // as 5 pilhas de moedas, de alturas crescentes (as apagadas são só o buraco na tábua)
   for (let i = 0; i < 5; i++) {
     const hgt = 2 + i;
-    ctx.fillStyle = on && i < bars ? METER_COLORS[i]! : '#2c313d';
+    const lit = on && i < bars;
+    ctx.fillStyle = lit ? METER_COLORS[i]! : '#3a2618';
     ctx.fillRect(X + 1 + i * 2, Y + 13 - hgt, 1, hgt);
+    if (lit && hgt > 2) {
+      ctx.fillStyle = 'rgba(255,250,220,0.6)';
+      ctx.fillRect(X + 1 + i * 2, Y + 13 - hgt, 1, 1);
+    }
   }
 }
 
@@ -84,12 +94,12 @@ export function drawMeterGlow(ctx: CanvasRenderingContext2D, x: number, y: numbe
   ctx.globalAlpha = 1;
 }
 
-/** Cor do neon do letreiro, pela intensidade. */
-const NEON: readonly string[] = ['', '#ffd9a0', '#ffe9b8', '#7cf3ff', '#ff6bd6'];
+/** Cor do fogo da placa, pela intensidade: brasa, chama, fogo arcano verde e fogo violeta. */
+const NEON: readonly string[] = ['', '#ffb070', '#ffd28a', '#9be86a', '#c08cff'];
 
 /**
- * O letreiro brilhando (px de mundo, por cima da noite, em `lighter`): fraco = um halo morno; normal = halo mais forte;
- * neon = tubo colorido em volta; neon com faíscas = tubo pulsando e faíscas pulando das bordas.
+ * A placa brilhando (px de mundo, por cima da noite, em `lighter`): brasa = um halo morno; chama = halo mais forte;
+ * fogo arcano = uma moldura de fogo colorido em volta; fogo violeta = moldura pulsando e faíscas pulando das bordas.
  */
 export function drawSignGlow(ctx: CanvasRenderingContext2D, vx: number, vy: number, m: Pick<FacadeModel, 'side' | 'height'>, level: number, now: number, night: number, seed: number): void {
   if (level <= 0) return;
@@ -130,7 +140,7 @@ export function drawSignGlow(ctx: CanvasRenderingContext2D, vx: number, vy: numb
     const px = cx + dir * ph * 7;
     const py = cy - Math.sin(ph * Math.PI) * 6 + ph * ph * 8;
     ctx.globalAlpha = 1 - ph;
-    ctx.fillStyle = i % 2 ? '#fff6b0' : color;
+    ctx.fillStyle = i % 2 ? '#ffe6a0' : color;
     ctx.fillRect(Math.round(px), Math.round(py), 1, 1);
   }
   ctx.globalAlpha = 1;

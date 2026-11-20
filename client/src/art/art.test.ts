@@ -5,10 +5,10 @@ import { ACCESSORIES, BOTTOM_STYLES, FACIAL_HAIR, HAIR_STYLES, PART_KEYS, TOP_ST
 import { FURNITURE, TILE, type Accessory, type Appearance, type Dir, type FloorKind, type FurnitureKind, type HairStyle, type HeldItem, type Pose, type ScreenMode, type TopStyle, type WallPattern } from './api';
 import { appearanceFromSeed, appearanceKey, editorConflict, editorOptions, fitToOptions } from './character/appearance';
 import { HAIR, HEAD_BASE } from './character/hair';
-import { CHAR_AX, CHAR_AY, CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, renderCharacter } from './character/render';
+import { CHAR_AX, CHAR_AY, CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, orcSkin, renderCharacter } from './character/render';
 import { PixelBuf } from './core/pixbuf';
 import type { BufSprite } from './core/sprite';
-import { drawBoard, drawClock, drawScreen, drawWindowView } from './dynamic';
+import { drawBoard, drawClock, drawScreen, drawWindowView, runeTint } from './dynamic';
 import { normalizeFurniture, renderFurniture } from './furniture/index';
 import { ICON_NAMES, iconTemplates, renderIcon } from './icons';
 import { CHUNK_PX, floorChunk } from './surfaces/floor';
@@ -96,7 +96,7 @@ describe('appearanceFromSeed', () => {
 
 describe('templates de cabeça e cabelo', () => {
   const allowedHair = new Set('.ohHdDzka');
-  const allowedHead = new Set('.sSLeEbmr');
+  const allowedHead = new Set('.sSLeEbmrBT');
   it('têm linhas de mesmo comprimento e só caracteres conhecidos', () => {
     for (const tpl of Object.values(HEAD_BASE)) {
       for (const row of tpl.rows) {
@@ -267,13 +267,13 @@ describe("pose 'wait' (esperando o shell) e o balde de pipoca", () => {
 
   it('sem item: braços cruzados acima do tampo da desk_back, com a mão batendo os dedos', () => {
     for (const a of cast) {
-      const skin = (frame: number) => countColor(wait(a, 'down', frame, 'none').buf.crop(5, 20, 3, 6), a.skin);
+      const skin = (frame: number) => countColor(wait(a, 'down', frame, 'none').buf.crop(5, 20, 3, 6), orcSkin(a.skin));
       // A mão sobre o braço esquerdo aparece nos dois quadros e muda de altura (dedos batendo).
       expect(skin(0)).toBeGreaterThan(0);
       expect(skin(1)).toBeGreaterThan(0);
       const rowsWithSkin = (frame: number) => {
         const b = wait(a, 'down', frame, 'none').buf;
-        return [20, 21, 22, 23, 24].filter((y) => countColor(b.crop(5, y, 2, 1), a.skin) > 0).join(',');
+        return [20, 21, 22, 23, 24].filter((y) => countColor(b.crop(5, y, 2, 1), orcSkin(a.skin)) > 0).join(',');
       };
       expect(rowsWithSkin(0)).not.toBe(rowsWithSkin(1));
       // Visível com a desk_back na frente: braços (manga ou pele) acima da linha de corte.
@@ -314,7 +314,7 @@ describe('vida social: poses, itens e gestos', () => {
   };
   /** Pixels com cor próxima da pele (luz, base e sombra do ramp). */
   const skinIn = (b: PixelBuf, x0: number, x1: number, y0: number, y1: number) => {
-    const n = parseInt(A.skin.slice(1), 16);
+    const n = parseInt(orcSkin(A.skin).slice(1), 16);
     const [sr, sg, sb] = [n >> 16, (n >> 8) & 255, n & 255];
     let c = 0;
     for (let y = y0; y < y1; y++) {
@@ -396,8 +396,8 @@ describe('vida social: poses, itens e gestos', () => {
   });
 
   it("'groom': de costas o cotovelo sobe para fora e a mão fica na lateral da cabeça; batom e pente aparecem", () => {
-    expect(opaqueIn(draw('stand', 'up', 0), 20, CHAR_W, 8, 17)).toBe(0);
-    expect(opaqueIn(draw('groom', 'up', 0), 20, CHAR_W, 8, 17)).toBeGreaterThan(0);
+    // A ponta da orelha já chega a x = 20; a mão do 'groom' acrescenta pixels além dela.
+    expect(opaqueIn(draw('groom', 'up', 0), 20, CHAR_W, 8, 17)).toBeGreaterThan(opaqueIn(draw('stand', 'up', 0), 20, CHAR_W, 8, 17) + 4);
     expect(countColor(draw('groom', 'down', 0, 'lipstick'), '#d8365a')).toBeGreaterThan(0);
     expect(countColor(draw('groom', 'left', 0, 'lipstick'), '#d8365a')).toBeGreaterThan(0);
     expect(countColor(draw('groom', 'up', 0, 'comb'), '#3d4252')).toBeGreaterThan(0);
@@ -498,14 +498,14 @@ describe('legibilidade das mesas, sofá e olhos', () => {
     return (0.2126 * s.buf.data[i] + 0.7152 * s.buf.data[i + 1] + 0.0722 * s.buf.data[i + 2]) / 255;
   }
 
-  it('o verso do monitor (desk_back) é plástico claro/médio, nunca escuro como tela', () => {
+  it('o verso da laje rúnica (desk_back) é pedra clara/média, nunca escura como a face', () => {
     for (const v of ['white', 'wood', 'dark']) {
       for (let seed = 0; seed < 4; seed++) {
         const f = renderFurniture('desk_back', v, 0, seed);
         // Centro da carcaça do monitor (x 8..23 ou 2..16 na variação 1; y -7..2).
         const cx = seed % 4 === 1 ? 6 : 13;
         const l = lumAt(f.base, 2, 1, cx, -4);
-        expect(l, `${v}/${seed}`).toBeGreaterThan(v === 'dark' ? 0.45 : 0.7);
+        expect(l, `${v}/${seed}`).toBeGreaterThan(v === 'dark' ? 0.4 : 0.5);
       }
     }
   });
@@ -782,7 +782,7 @@ describe('desenhos por quadro', () => {
       drawScreen(ctx as unknown as CanvasRenderingContext2D, r, 'progress', t, seed);
       return fills;
     };
-    const filled = (t: number) => Math.max(0, ...snap(t).filter((f) => f.c === '#3ccf63' || f.c === '#b9ffca').map((f) => f.w));
+    const filled = (t: number) => Math.max(0, ...snap(t).filter((f) => f.c === runeTint('#3ccf63') || f.c === runeTint('#b9ffca')).map((f) => f.w));
     for (const base of [0, 1.8e12]) {
       expect(JSON.stringify(snap(base + 1234))).toBe(JSON.stringify(snap(base + 1234)));
       // Ao longo de um ciclo (~3,4–4,6 s) a barra cresce e depois volta a zero.
@@ -794,7 +794,7 @@ describe('desenhos por quadro', () => {
       expect(grows).toBeGreaterThan(4);
     }
     // Spinner: a cabeça clara muda de lugar entre quadros próximos.
-    const head = (t: number) => JSON.stringify(snap(t).filter((f) => f.c === '#9ff3ff'));
+    const head = (t: number) => JSON.stringify(snap(t).filter((f) => f.c === runeTint('#9ff3ff')));
     expect(head(0)).not.toBe(head(110));
     // Escuro como um terminal (fundo é o 1º fill e cobre a tela toda).
     const bg = snap(0)[0];
@@ -815,14 +815,14 @@ describe('desenhos por quadro', () => {
       return fills;
     };
     for (const k of [0, 3, 6]) {
-      expect(colors('show', k), `futebol ${k}`).toContain('#3f9a4a');
-      expect(colors('show', k + 1), `novela ${k + 1}`).not.toContain('#3f9a4a');
-      expect(colors('show', k + 1), `novela ${k + 1}`).not.toContain('#7fd3ff');
-      expect(colors('show', k + 2), `desenho ${k + 2}`).toContain('#7fd3ff');
+      expect(colors('show', k), `futebol ${k}`).toContain(runeTint('#3f9a4a'));
+      expect(colors('show', k + 1), `novela ${k + 1}`).not.toContain(runeTint('#3f9a4a'));
+      expect(colors('show', k + 1), `novela ${k + 1}`).not.toContain(runeTint('#7fd3ff'));
+      expect(colors('show', k + 2), `desenho ${k + 2}`).toContain(runeTint('#7fd3ff'));
     }
     for (const k of [0, 2, 4]) {
-      expect(colors('game', k), `corrida ${k}`).toContain('#6a7280');
-      expect(colors('game', k + 1), `luta ${k + 1}`).toContain('#3b2a6b');
+      expect(colors('game', k), `corrida ${k}`).toContain(runeTint('#6a7280'));
+      expect(colors('game', k + 1), `luta ${k + 1}`).toContain(runeTint('#3b2a6b'));
     }
     // O "GOL" (faixa escura + letras) aparece no fim de cada lance; o "KO", no fim do round.
     const banner = 'rgba(12,16,28,0.78)';

@@ -525,7 +525,7 @@ légère teinte sépia, avec le badge **REPLAY 14:32**, et le fil d'activité co
 Le serveur enregistre la chronologie **à partir du moment où il est allumé** (impossible de reconstituer le passé) :
 des résumés de ce que le bureau affiche, sans les conversations, dans `~/.habblaud/timeline/` (dans Docker, dans le
 volume de données), avec une taille limite par jour et les **7 derniers jours** conservés. Pour ne pas enregistrer :
-`HABBLAUD_TIMELINE=0`. Détails dans [`server/README.md`](server/README.md#linha-do-tempo-timelapse).
+`HABBLAUD_TIMELINE=0`. Détails dans [`server/README.md`](server/README.md#timeline-timelapse).
 
 Les personnages marchent plus vite pendant le replay, mais aux vitesses élevées, ceux qui restent peu de temps au
 bureau atteignent à peine leur poste ; sauter à un autre moment montre tout le monde déjà en place.
@@ -1114,10 +1114,10 @@ HABBLAUD_DATA_DIR=/tmp/habblaud-demo HABBLAUD_TIMELINE=0 HABBLAUD_CLAUDE_DIRS=/t
 `HABBLAUD_TIMELINE=0` évite d'écrire dans ce dossier ; avec l'enregistrement activé, les jours de plus de 7 jours sont supprimés.
 
 **Publier une version :** chaque version a sa section dans [`CHANGELOG.md`](CHANGELOG.md), avec ce qu'elle apporte.
-Pendant le travail, notez les changements sous « Não lançado » (non publié). Pour publier :
+Pendant le travail, notez les changements sous « Unreleased » (non publié). Pour publier :
 
 1. Augmentez le numéro avec `npm version minor --no-git-tag-version` (ou `patch`, pour une version qui ne contient que des corrections).
-2. Remplacez « Não lançado » par la version et la date (`## [0.3.0] - AAAA-MM-DD`), laissez un « Não lançado » vide
+2. Remplacez « Unreleased » par la version et la date (`## [0.3.0] - AAAA-MM-DD`), laissez un « Unreleased » vide
    au-dessus et mettez à jour les liens de la fin. `npm test` échoue si la version du `package.json` n'a pas de section.
 3. Faites le merge dans `main` et lancez `npm run release` (nécessite [`gh`](https://cli.github.com/) authentifié ; `-- --dry-run`
    affiche seulement les notes). Le script crée le tag `v0.3.0` et la release avec le texte de la section. À partir de

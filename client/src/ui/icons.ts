@@ -307,7 +307,7 @@ export const ICONS = {
 
 export type IconKey = keyof typeof ICONS;
 
-/** Marca do Habblaud em pixels (usada quando /assets/brand/logo-mark.png não existe): prédio com janelas acesas. */
+/** Marca do Habblaud em pixels (usada quando /assets/brand/logo-mark.png não existe): casa de madeira com janelas à luz de tocha. */
 export const FALLBACK_MARK = pixelIcon(
   [
     '.....######.....',
@@ -325,14 +325,14 @@ export const FALLBACK_MARK = pixelIcon(
     '..#llllddllll#..',
     '################',
   ],
-  { '#': '#2b3550', l: '#dfe6f2', r: '#ff8a5b', w: '#ffd36b', b: '#7cc8ff', d: '#3a4566' },
+  { '#': '#2a1a0d', l: '#8a5f34', r: '#c2402f', w: '#ffc85a', b: '#e08a3a', d: '#1a110a' },
   'ui-px-icon ui-mark',
 );
 
 /**
  * Logotipo "Habblaud" em pixels, com a mesma fonte bitmap da placa da marca (assets/brand/signage.png, gerada por
  * scripts/assets/pixelart.py): a Pixelify Sans não fica nítida nesse tamanho.
- * c = "Hab" (creme), t = "blaud" (âmbar), s = sombra de 1 px.
+ * c = "Hab" (pergaminho), t = "blaud" (dourado), s = sombra de 1 px.
  */
 export const WORDMARK_ROWS = [
   'c...c.......c.....t.....tt..................t',
@@ -345,4 +345,4 @@ export const WORDMARK_ROWS = [
   's...s..ssss.ssss..ssss..sss..ssss..ssss..ssss',
 ] as const;
 
-export const WORDMARK = pixelIcon(WORDMARK_ROWS, { s: 'rgba(6, 8, 14, 0.62)', c: '#f4f1ea', t: '#fac665' }, 'ui-wordmark');
+export const WORDMARK = pixelIcon(WORDMARK_ROWS, { s: 'rgba(12, 7, 3, 0.7)', c: '#f3e7c9', t: '#e9bb4f' }, 'ui-wordmark');

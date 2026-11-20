@@ -2,7 +2,7 @@
 // Folha de 24x34 px com âncora (12, 31) no centro dos pés. Em pé: cabelo a partir de y≈5,
 // cabeça y 7–17, tronco 18–23, calça 24–28, sapatos 29–30. Sentado: tronco/cabeça 4px abaixo.
 import type { Appearance, CharacterFrameRequest, HeldItem, Pose } from '../api';
-import { luminance, mix, ramp, shade, type Ramp } from '../core/color';
+import { clamp01, luminance, mix, ramp, shade, type Ramp } from '../core/color';
 import { PixelBuf, type Palette } from '../core/pixbuf';
 import type { BufSprite } from '../core/sprite';
 import { HAIR, HEAD_BASE, TEXTURED, type HeadView, type Tpl } from './hair';
@@ -59,11 +59,40 @@ interface CharPal {
 
 const palCache = new Map<Appearance, CharPal>();
 
+/**
+ * Rampa de pele dos trabalhadores (verde-oliva claro -> verde-acinzentado escuro). Os tons da
+ * semente (SKINS, do claro ao escuro) são mapeados pela luminância na hora de desenhar: a ordem e a
+ * variedade continuam, só o matiz muda. A aparência (e o que vai ao servidor) não é alterada.
+ */
+const ORC_SKIN = ['#bcc47e', '#a3b66a', '#8aa65a', '#73934b', '#617f46', '#526e43', '#445b3b', '#374934'] as const;
+/** Luminância do tom mais claro e do mais escuro de SKINS (#ffe2cc e #5a3623). */
+const SKIN_LUM_HI = 0.904;
+const SKIN_LUM_LO = 0.236;
+const orcCache = new Map<string, string>();
+
+/** Tom de pele desenhado para um tom da aparência (mesma ordem claro -> escuro). */
+export function orcSkin(skin: string): string {
+  let c = orcCache.get(skin);
+  if (c) return c;
+  const t = clamp01((SKIN_LUM_HI - luminance(skin)) / (SKIN_LUM_HI - SKIN_LUM_LO)) * (ORC_SKIN.length - 1);
+  const i = Math.min(ORC_SKIN.length - 2, Math.floor(t));
+  const f = t - i;
+  c = f < 0.02 ? ORC_SKIN[i] : f > 0.98 ? ORC_SKIN[i + 1] : mix(ORC_SKIN[i], ORC_SKIN[i + 1], f);
+  if (orcCache.size > 256) orcCache.clear();
+  orcCache.set(skin, c);
+  return c;
+}
+
+/** Osso das presas e dos adornos. */
+const TUSK = '#efe6c6';
+const TUSK_SH = '#c9bc95';
+
 function paletteOf(a: Appearance): CharPal {
   let p = palCache.get(a);
   if (p) return p;
-  const skin = ramp(a.skin, 0.07);
-  const dark = luminance(a.skin) < 0.38;
+  const sk = orcSkin(a.skin);
+  const skin = ramp(sk, 0.07);
+  const dark = luminance(sk) < 0.38;
   p = {
     skin,
     hair: ramp(a.hair, 0.09),
@@ -74,11 +103,11 @@ function paletteOf(a: Appearance): CharPal {
     item: ramp(a.accessoryColor, 0.1),
     eyeTop: dark ? '#ece8f2' : '#1d1826',
     eyeBot: dark ? mix(a.eyes, '#0c0910', 0.55) : mix(a.eyes, '#1d1826', 0.25),
-    blush: mix(a.skin, '#ff7a7a', 0.32),
-    mouth: shade(a.skin, -0.2),
+    blush: shade(sk, -0.1),
+    mouth: shade(sk, -0.24),
     mouthOpen: '#7a2e35',
-    shaved: mix(a.skin, a.hair, 0.42),
-    stubble: mix(a.skin, a.hair, 0.3),
+    shaved: mix(sk, a.hair, 0.42),
+    stubble: mix(sk, a.hair, 0.3),
   };
   if (palCache.size > 4096) palCache.clear();
   palCache.set(a, p);
@@ -645,6 +674,8 @@ function drawHead(dc: Dc): void {
     b: p.blush,
     m: r.mouth === 'open' || r.mouth === 'wide' ? p.mouthOpen : dc.a.look === 'f' ? mix(p.mouth, '#c0505a', 0.25) : p.mouth,
     r: p.skin.dk,
+    B: p.skin.dd,
+    T: TUSK,
   };
   dc.b.stamp(tpl.rows, HX + tpl.x + r.lean, HY + tpl.y + dy, pal);
   const ox = HX + tpl.x + r.lean;
@@ -728,6 +759,53 @@ function drawFacialHair(dc: Dc): void {
   }
 }
 
+/** Presas por cima da barba (a barba cobre o queixo, as presas continuam aparecendo). */
+function drawTusks(dc: Dc): void {
+  const { b, r } = dc;
+  if (r.view === 'up' || (dc.a.facialHair ?? 'none') === 'none') return;
+  const ox = HX + r.lean;
+  const oy = HY + r.ub + r.hd;
+  const cols = r.view === 'down' ? [4, 9] : [3];
+  for (const cx of cols) {
+    b.set(ox + cx, oy + 12, TUSK);
+    b.set(ox + cx, oy + 13, TUSK_SH);
+  }
+}
+
+/** Orelhas pontudas, para fora e para cima; por cima do cabelo (atravessam penteados volumosos). */
+function drawEars(dc: Dc): void {
+  const { b, p, r } = dc;
+  const ox = HX + r.lean;
+  const oy = HY + r.ub + r.hd;
+  const sk = p.skin;
+  const put = (cx: number, cy: number, col: string) => b.set(ox + cx, oy + cy, col);
+  if (r.view === 'side') {
+    // Perfil (virado à esquerda): a orelha aponta para trás e para cima.
+    put(9, 10, sk.dk);
+    put(10, 10, sk.base);
+    put(9, 11, sk.dd);
+    put(10, 9, sk.base);
+    put(11, 9, sk.lt);
+    put(11, 8, sk.lt);
+    put(12, 8, sk.base);
+    return;
+  }
+  const inner = r.view === 'down';
+  // Esquerda da tela (luz) e direita (sombra), espelhadas.
+  put(0, 10, sk.base);
+  put(0, 11, sk.dk);
+  put(-1, 9, sk.lt);
+  put(-1, 10, inner ? sk.dk : sk.base);
+  put(-2, 8, sk.lt);
+  put(-2, 9, sk.base);
+  put(13, 10, sk.dk);
+  put(13, 11, sk.dd);
+  put(14, 9, sk.base);
+  put(14, 10, inner ? sk.dd : sk.dk);
+  put(15, 8, sk.base);
+  put(15, 9, sk.dk);
+}
+
 function drawHair(dc: Dc, layer: 'front' | 'back'): void {
   const style = dc.a.hairStyle;
   const set = HAIR[style]?.[dc.r.view];
@@ -739,6 +817,11 @@ function drawHair(dc: Dc, layer: 'front' | 'back'): void {
   stampTpl(dc, tpl, pal2, dc.r.ub + dc.r.hd, TEXTURED.has(style));
 }
 
+/**
+ * Adornos por chave do contrato: glasses = pintura de guerra (faixa nos olhos); sunglasses = tapa-olho;
+ * headphones = ombreira com espigão (desenhada à parte, ver drawPauldron); cap = bandana amarrada;
+ * beanie = elmo com chifres; earrings = argolas com dente de osso; bow = pena presa no cabelo.
+ */
 function drawAccessory(dc: Dc): void {
   const { b, p, r, a } = dc;
   const ox = HX + r.lean;
@@ -748,116 +831,143 @@ function drawAccessory(dc: Dc): void {
   const v = r.view;
   switch (a.accessory) {
     case 'glasses': {
-      // Duas lentes emolduradas (o olho continua visível dentro) + ponte e hastes.
-      const fr = shade(it.dk, -0.08);
-      const lens = 'rgba(225,240,255,0.6)';
+      // Faixa de pintura atravessando os olhos (os olhos continuam por cima).
+      const paint = it.base;
+      const paintDk = it.dk;
       if (v === 'down') {
-        for (const x0 of [3, 8]) {
-          put(x0, 10, fr);
-          put(x0 + 1, 10, fr);
-          put(x0 + 2, 10, fr);
-          put(x0, 11, fr);
-          put(x0 + 2, 11, lens);
+        for (let cx = 2; cx <= 11; cx++) {
+          if (cx === 4 || cx === 9) continue;
+          put(cx, 10, cx > 9 ? paintDk : paint);
+          if (cx !== 6 && cx !== 7) put(cx, 11, cx > 9 ? paintDk : paint);
         }
-        for (const cx of [1, 2, 6, 7, 11, 12]) put(cx, 10, it.base);
       } else if (v === 'side') {
-        put(2, 10, fr);
-        put(3, 10, fr);
-        put(4, 10, fr);
-        put(2, 11, fr);
-        put(4, 11, fr);
-        for (let cx = 5; cx <= 8; cx++) put(cx, 10, it.base);
-      } else {
-        put(0, 10, it.dk);
-        put(13, 10, it.dk);
+        for (let cx = 1; cx <= 6; cx++) {
+          if (cx === 3) continue;
+          put(cx, 10, paint);
+          if (cx > 1) put(cx, 11, cx > 4 ? paintDk : paint);
+        }
       }
       break;
     }
     case 'sunglasses': {
+      // Tapa-olho de couro com tira em diagonal.
+      const patch = '#1d1712';
+      const strap = '#3a2a1e';
       if (v === 'down') {
-        for (let cx = 2; cx <= 11; cx++) put(cx, 10, '#15161c');
-        for (const cx of [2, 3, 4, 5, 8, 9, 10, 11]) put(cx, 11, cx === 3 || cx === 9 ? '#5a6b8a' : '#15161c');
-        put(0, 10, '#15161c');
-        put(13, 10, '#15161c');
+        for (let cx = 3; cx <= 5; cx++) {
+          put(cx, 10, patch);
+          put(cx, 11, patch);
+        }
+        put(4, 12, patch);
+        put(4, 10, '#4a3a2e');
+        put(2, 9, strap);
+        put(6, 9, strap);
+        put(7, 8, strap);
+        put(8, 8, strap);
+        put(9, 7, strap);
+        put(10, 7, strap);
+        put(11, 6, strap);
       } else if (v === 'side') {
-        for (let cx = 1; cx <= 4; cx++) put(cx, 10, '#15161c');
-        for (let cx = 1; cx <= 3; cx++) put(cx, 11, cx === 2 ? '#5a6b8a' : '#15161c');
-        for (let cx = 5; cx <= 8; cx++) put(cx, 10, '#15161c');
+        for (let cx = 2; cx <= 4; cx++) {
+          put(cx, 10, patch);
+          put(cx, 11, patch);
+        }
+        put(3, 12, patch);
+        for (let cx = 5; cx <= 9; cx++) put(cx, 10 - Math.floor((cx - 5) / 2), strap);
       } else {
-        put(0, 10, '#15161c');
-        put(13, 10, '#15161c');
+        for (let cx = 1; cx <= 12; cx++) put(cx, 8 + (cx > 6 ? 1 : 0), strap);
       }
       break;
     }
-    case 'headphones': {
-      if (v === 'side') {
-        for (let cx = 5; cx <= 9; cx++) put(cx, 2, cx === 7 ? it.lt : it.base);
-        put(4, 3, it.base);
-        put(10, 3, it.dk);
-        for (let cy = 4; cy <= 8; cy++) put(7, cy, it.dk);
-        for (let cy = 9; cy <= 12; cy++) for (let cx = 6; cx <= 9; cx++) put(cx, cy, cy === 9 || cx === 6 ? it.lt : it.base);
-        put(9, 12, it.dk);
-      } else {
-        for (let cx = 3; cx <= 10; cx++) put(cx, 1, cx < 6 ? it.lt : it.base);
-        put(2, 2, it.base);
-        put(11, 2, it.dk);
-        for (let cy = 3; cy <= 8; cy++) {
-          put(1, cy, it.base);
-          put(12, cy, it.dk);
-        }
-        for (let cy = 9; cy <= 12; cy++) {
-          put(0, cy, it.base);
-          put(1, cy, cy === 9 ? it.lt : it.base);
-          put(12, cy, it.dk);
-          put(13, cy, it.dk);
-        }
-      }
+    case 'headphones':
+      // Ombreira: desenhada no fim (drawPauldron), por cima dos braços.
       break;
-    }
     case 'cap': {
-      const brim = it.dk;
+      // Bandana justa na cabeça, com o nó e as pontas caindo atrás.
+      const pal = { o: it.base, h: it.lt, H: it.hi, d: it.dk, D: it.dd };
       if (v === 'down') {
-        const rows = ['....oooooo....', '..oohhhhoooo..', '.ohhHhhhooood.', '.oohhhooooood.', 'bbbbbbbbbbbbbb'];
-        b.stamp(rows, ox, oy + 2, { o: it.base, h: it.lt, H: it.hi, d: it.dk, b: brim });
-        put(6, 3, '#f4f2ee');
-        put(7, 3, '#f4f2ee');
+        b.stamp(['...oooooooo...', '..ohhHhhoood..', '.ohhhoooooodd.', '.DDDDDDDDDDDD.'], ox, oy + 3, pal);
+        put(4, 4, it.dk);
+        put(8, 5, it.dk);
+        put(13, 6, it.base);
+        put(13, 7, it.dk);
+        put(14, 8, it.dk);
       } else if (v === 'up') {
-        const rows = ['....oooooo....', '..oohhhhoooo..', '.ohhHhhhooood.', '.oohhhooooood.', '.oooo....oodd.', '.....d..d.....'];
-        b.stamp(rows, ox, oy + 2, { o: it.base, h: it.lt, H: it.hi, d: it.dk });
+        b.stamp(['...oooooooo...', '..ohhhhooood..', '.ohhoooooooddd', '.DDDDDDDDDDDD.', '.....oddo.....', '.....od.d.....', '......d..d....'], ox, oy + 3, pal);
       } else {
-        const rows = ['.....oooooo...', '...oohhhhooo..', '..ohHhhhoooood', '..ohhhooooooo.', 'bbbbbboooood..'];
-        b.stamp(rows, ox - 1, oy + 2, { o: it.base, h: it.lt, H: it.hi, d: it.dk, b: brim });
+        b.stamp(['...oooooooo...', '..ohhHhhoood..', '.ohhhooooooodo', '.DDDDDDDDDDDod', '...........o.d', '............d.'], ox, oy + 3, pal);
       }
       break;
     }
     case 'beanie': {
-      const rib = it.dk;
+      // Elmo de ferro com aro rebitado e dois chifres de osso.
+      const pal = { o: it.base, h: it.lt, H: it.hi, d: it.dk, r: it.dd };
       const rows =
         v === 'side'
-          ? ['.....ww.......', '....oooooo....', '..oohhhooooo..', '.ohhHhhoooood.', '.ohhhhooooood.', '.rrrrrrrrrrrr.']
-          : ['......ww......', '....oooooo....', '..oohhhooooo..', '.ohhHhhoooood.', '.ohhhhooooood.', 'rrrrrrrrrrrrrr'];
-      b.stamp(rows, ox, oy + 1, { o: it.base, h: it.lt, H: it.hi, d: it.dk, r: rib, w: '#f4f2ee' });
-      for (let cx = 1; cx <= 12; cx += 2) put(cx, 6, shade(rib, -0.06));
+          ? ['....oooooo....', '..oohhhooooo..', '.ohhHhhoooood.', '.ohhhhooooood.', '.rrrrrrrrrrrr.']
+          : ['....oooooo....', '..oohhhooooo..', '.ohhHhhoooood.', '.ohhhhooooood.', 'rrrrrrrrrrrrrr'];
+      b.stamp(rows, ox, oy + 2, pal);
+      for (let cx = 1; cx <= 12; cx += 3) put(cx, 6, it.lt);
+      // Chifres de 2 px de espessura curvando para fora e para cima.
+      const horn: readonly (readonly [number, number, boolean])[] = [
+        [0, 5, false], [1, 5, true], [-1, 4, false], [0, 4, true], [-1, 3, false], [-2, 2, false], [-1, 2, true], [-2, 1, false],
+      ];
+      if (v === 'side') {
+        for (const [hx, hy, sh] of horn) put(7 - hx, hy - 2, sh ? TUSK_SH : TUSK);
+      } else {
+        for (const [hx, hy, sh] of horn) {
+          put(hx, hy, sh ? TUSK_SH : TUSK);
+          put(13 - hx, hy, TUSK_SH);
+        }
+      }
       break;
     }
     case 'earrings': {
+      // Argola de metal com um dentinho de osso pendurado, logo abaixo da orelha pontuda.
       if (v === 'down') {
-        put(0, 12, it.base);
-        put(13, 12, it.dk);
-      } else if (v === 'side') put(8, 12, it.base);
+        put(-1, 11, it.base);
+        put(-1, 12, TUSK);
+        put(14, 11, it.dk);
+        put(14, 12, TUSK_SH);
+      } else if (v === 'side') {
+        put(10, 12, it.base);
+        put(10, 13, TUSK);
+      } else {
+        put(-1, 11, it.dk);
+        put(14, 11, it.dk);
+      }
       break;
     }
     case 'bow': {
-      const rows = ['oo.oo', 'ohdho', '.o.o.'];
-      const pal = { o: it.base, h: it.lt, d: it.dd };
-      if (v === 'down') b.stamp(rows, ox + 8, oy + 2, pal);
-      else if (v === 'up') b.stamp(rows, ox + 1, oy + 2, pal);
-      else b.stamp(rows, ox + 7, oy + 1, pal);
+      // Pena espetada no cabelo, presa por uma conta de osso.
+      const feather = [
+        [3, 0, it.lt],
+        [2, 1, it.lt],
+        [3, 1, it.base],
+        [2, 2, it.base],
+        [1, 3, it.dk],
+        [0, 4, TUSK],
+      ] as const;
+      const [fx, fy, flip] = v === 'down' ? [9, 0, false] : v === 'up' ? [1, 0, true] : [7, -1, false];
+      for (const [dx, dy, col] of feather) put(flip ? fx + 3 - dx : fx + dx, fy + dy, col);
       break;
     }
     case 'none':
       break;
   }
+}
+
+/** Ombreira de metal com espigão de osso (acessório 'headphones'), por cima dos braços. */
+function drawPauldron(dc: Dc): void {
+  if (dc.a.accessory !== 'headphones') return;
+  const { b, p, r } = dc;
+  const it = p.item;
+  const rows = ['.T..', 'ohho', 'ohood', '.dddd'].map((row) => row.padEnd(5, '.'));
+  const pal: Palette = { o: it.base, h: it.lt, d: it.dk, T: TUSK };
+  const y = 17 + r.ub;
+  if (r.view === 'side') b.stamp(rows, 9 + r.lean, y, pal, true);
+  else if (r.view === 'down') b.stamp(rows, 4, y, pal);
+  else b.stamp(rows, 15, y, pal, true);
 }
 
 // ----- corpo
@@ -904,8 +1014,10 @@ function drawArm(dc: Dc, a: Arm, sleeveCol: Ramp, sleeve: number, dim = 0, backS
 
 function sleeveLength(a: Appearance): number {
   switch (a.topStyle) {
-    case 'tshirt':
+    case 'shirt_tie':
     case 'polo':
+      return 0; // colete e arreio: braços nus
+    case 'tshirt':
       return 2;
     case 'blouse':
       return 3;
@@ -973,13 +1085,16 @@ function drawLegs(dc: Dc): void {
     b.set(11, top + 1, pants.dk);
     b.set(12, top + 2, pants.dk);
   }
+  const wrap = legWrap(pants);
   const leg = (x: number, dyFoot: number, shadeRight: boolean) => {
     const y1 = 28 + dyFoot;
     for (let y = top + 2; y <= y1; y++) {
       const isSkin = skinLeg && y >= top + 3;
-      const c = isSkin ? p.skin : pants;
+      // Faixas de pano enroladas na canela (calça) ou no tornozelo (pernas nuas).
+      const wrapped = isSkin ? y === y1 : y === y1 || y === y1 - 2;
+      const c = wrapped ? wrap : isSkin ? p.skin : pants;
       b.set(x, y, c.base);
-      b.set(x + 1, y, c.base);
+      b.set(x + 1, y, wrapped ? c.lt : c.base);
       b.set(x + 2, y, shadeRight ? c.dk : c.base);
     }
     // Sapato: duas linhas, ponta clara, sola escura.
@@ -995,6 +1110,30 @@ function drawLegs(dc: Dc): void {
     b.set(10, top + 2, pants.dk);
     b.set(13, top + 2, pants.base);
   }
+  if (style === 'shorts') {
+    // Tanga: aba de pano caindo entre as pernas, ponta irregular.
+    b.rect(10, top + 2, 4, 2, pants.base);
+    b.set(10, top + 2, pants.lt);
+    b.set(13, top + 2, pants.dk);
+    b.set(13, top + 3, pants.dk);
+    b.set(11, top + 4, pants.base);
+    b.set(12, top + 4, pants.dk);
+  } else if (style === 'skirt') {
+    // Saiote de tiras: pregas escuras.
+    for (const x of [9, 11, 13]) b.vline(x, top + 1, top + 2, pants.dk);
+  }
+  // Cinto de couro com fivela de osso.
+  b.hline(8, 15, top, LEATHER);
+  b.set(15, top, LEATHER_DK);
+  if (r.view === 'down') {
+    b.set(11, top, TUSK);
+    b.set(12, top, TUSK_SH);
+  }
+}
+
+/** Faixas de pano das pernas: palha clara puxada para a cor da calça. */
+function legWrap(pants: Ramp): Ramp {
+  return ramp(mix('#d6c39a', pants.base, 0.25), 0.07);
 }
 
 function drawLegsSide(dc: Dc, pants: Ramp, sh: Ramp, skinLeg: boolean): void {
@@ -1030,17 +1169,21 @@ function drawLegsSide(dc: Dc, pants: Ramp, sh: Ramp, skinLeg: boolean): void {
     b.set(8, top + 1, pants.lt);
     b.set(14, top + 2, pants.dk);
   }
+  const wr = legWrap(pants);
   const leg = (dx: number, lift: number, dim: boolean) => {
     // Perna de 3px do quadril (x≈11) ao pé deslocado `dx`.
     const pc = dim ? ramp(pants.dk, 0.07) : pants;
     const sc = dim ? ramp(p.skin.dk, 0.07) : p.skin;
     const shc = dim ? ramp(sh.dk, 0.08) : sh;
+    const wc = dim ? ramp(wr.dk, 0.07) : wr;
     const y0 = top + 2;
     const y1 = 28 - lift;
     for (let y = y0; y <= y1; y++) {
       const tt = (y - y0) / Math.max(1, y1 - y0);
       const x = Math.round(10 + dx * tt);
-      const c = skinLeg && y >= top + 3 ? sc : pc;
+      const isSkin = skinLeg && y >= top + 3;
+      const wrapped = isSkin ? y === y1 : y === y1 || y === y1 - 2;
+      const c = wrapped ? wc : isSkin ? sc : pc;
       b.set(x, y, c.lt);
       b.set(x + 1, y, c.base);
       b.set(x + 2, y, c.dk);
@@ -1052,155 +1195,248 @@ function drawLegsSide(dc: Dc, pants: Ramp, sh: Ramp, skinLeg: boolean): void {
   };
   leg(r.legA.dx, -r.legA.dy, true);
   leg(r.legB.dx, -r.legB.dy, false);
+  if (style === 'shorts') {
+    // Aba da tanga na frente.
+    b.rect(8, top + 1, 2, 3, pants.base);
+    b.set(8, top + 1, pants.lt);
+    b.set(9, top + 3, pants.dk);
+  }
+  b.rect(9, top, 5, 1, LEATHER);
+  b.set(9, top, LEATHER_LT);
 }
 
+/** Couro dos cintos, alças e botas. */
+const LEATHER = '#5b3a22';
+const LEATHER_DK = '#3f2716';
+const LEATHER_LT = '#7a5332';
+
+/** Pele de animal (manto, barra do saiote): mistura a cor de destaque com um marrom-palha. */
+function furRamp(acc: string): Ramp {
+  return ramp(mix(acc, '#a88a5e', 0.55), 0.08);
+}
+
+/**
+ * Roupas de trabalhador por estilo (mesmas chaves do contrato):
+ * tshirt = túnica com cinto de corda; hoodie = manto de pele; shirt_tie = colete de couro sobre o
+ * peito nu; sweater = gibão acolchoado com bandoleira; jacket = casaco de couro com cordões;
+ * blouse = avental de ferreiro; polo = arreio de guerra (peito nu, alça e cinturão).
+ */
 function drawTorso(dc: Dc): void {
   const { b, p, r, a } = dc;
   const y = 18 + r.ub;
   const t = p.top;
   const ac = p.acc;
+  const sk = p.skin;
   const lx = r.lean;
+  const bare = a.topStyle === 'shirt_tie' || a.topStyle === 'polo';
   if (r.view === 'side') {
     // Tronco de perfil (x 8..14), frente à esquerda.
-    b.rect(8 + lx, y, 7, 6, t.base);
+    const body = a.topStyle === 'polo' ? sk : t;
+    b.rect(8 + lx, y, 7, 6, body.base);
     for (let yy = y; yy < y + 6; yy++) {
-      b.set(8 + lx, yy, t.lt);
-      b.set(14 + lx, yy, t.dk);
+      b.set(8 + lx, yy, body.lt);
+      b.set(14 + lx, yy, body.dk);
     }
-    b.rect(8 + lx, y + 5, 7, 1, t.dk);
+    b.rect(8 + lx, y + 5, 7, 1, body.dk);
     switch (a.topStyle) {
-      case 'hoodie':
-        b.rect(12 + lx, y - 1, 3, 2, t.dk);
-        b.set(13 + lx, y - 1, t.base);
-        b.set(9 + lx, y + 1, ac.base);
-        b.set(9 + lx, y + 2, ac.base);
-        b.rect(9 + lx, y + 4, 4, 1, t.dk);
+      case 'tshirt':
+        b.set(8 + lx, y, sk.base);
+        b.set(9 + lx, y, sk.dk);
+        b.rect(8 + lx, y + 4, 7, 1, ac.dk);
+        b.set(8 + lx, y + 4, ac.lt);
+        b.set(8 + lx, y + 5, ac.base);
         break;
+      case 'hoodie': {
+        const fur = furRamp(a.topAccent);
+        b.rect(9 + lx, y - 1, 6, 2, fur.base);
+        b.set(10 + lx, y - 1, fur.lt);
+        b.set(12 + lx, y - 1, fur.hi);
+        for (let x = 9; x <= 14; x += 2) b.set(x + lx, y + 2, fur.dk);
+        b.set(9 + lx, y + 1, TUSK);
+        break;
+      }
       case 'shirt_tie':
-        b.set(9 + lx, y, t.hi);
-        b.set(10 + lx, y, t.hi);
-        for (let yy = y + 1; yy <= y + 4; yy++) b.set(9 + lx, yy, ac.base);
-        b.set(9 + lx, y, ac.dk);
+        // Colete aberto: o peito aparece na frente.
+        b.rect(8 + lx, y, 2, 5, sk.base);
+        b.set(8 + lx, y, sk.lt);
+        b.set(9 + lx, y + 2, sk.dk);
+        b.vline(10 + lx, y, y + 4, t.dk);
+        b.rect(8 + lx, y + 5, 7, 1, LEATHER);
+        break;
+      case 'sweater':
+        b.rect(8 + lx, y + 2, 7, 1, t.dk);
+        b.set(9 + lx, y, ac.base);
+        b.set(10 + lx, y + 1, ac.base);
+        b.set(11 + lx, y + 2, ac.dk);
+        b.set(12 + lx, y + 3, ac.base);
+        b.set(13 + lx, y + 4, ac.base);
+        b.set(11 + lx, y + 2, TUSK);
         break;
       case 'jacket':
         b.set(9 + lx, y + 1, ac.base);
-        b.set(9 + lx, y + 2, ac.base);
         b.set(9 + lx, y + 3, ac.base);
+        b.set(8 + lx, y + 2, ac.lt);
         b.set(10 + lx, y, t.hi);
-        break;
-      case 'sweater':
-        b.rect(9 + lx, y + 2, 6, 1, ac.base);
-        b.rect(9 + lx, y + 5, 6, 1, t.dd);
-        break;
-      case 'polo':
-        b.set(10 + lx, y, ac.base);
-        b.set(11 + lx, y, ac.base);
+        b.rect(8 + lx, y + 5, 7, 1, furRamp(a.topAccent).base);
         break;
       case 'blouse':
-        b.set(9 + lx, y, ac.lt);
-        b.set(10 + lx, y, ac.lt);
-        b.set(9 + lx, y + 2, ac.base);
-        b.rect(8 + lx, y + 5, 7, 1, t.dk);
+        // Avental de couro na frente, descendo até as coxas.
+        b.rect(8 + lx, y + 1, 2, 7, ac.base);
+        b.vline(8 + lx, y + 1, y + 7, ac.lt);
+        b.set(9 + lx, y + 7, ac.dk);
+        b.set(10 + lx, y, ac.dk);
+        b.set(11 + lx, y + 3, ac.dk);
         break;
-      case 'tshirt':
-        b.set(9 + lx, y + 2, ac.base);
+      case 'polo':
+        b.set(10 + lx, y, t.base);
+        b.set(10 + lx, y + 1, t.base);
+        b.set(9 + lx, y + 2, t.dk);
+        b.rect(8 + lx, y + 4, 7, 2, t.base);
+        b.rect(8 + lx, y + 4, 7, 1, t.lt);
+        b.set(8 + lx, y + 5, TUSK);
         break;
     }
     drawLanyard(dc);
     return;
   }
   // Frente / costas: x 8..15.
-  b.rect(8, y, 8, 6, t.base);
-  for (let yy = y; yy < y + 6; yy++) {
-    b.set(8, yy, t.lt);
-    b.set(15, yy, t.dk);
-  }
-  b.rect(8, y + 5, 8, 1, t.dk);
-  b.set(8, y + 5, t.base);
   const front = r.view === 'down';
+  const body = a.topStyle === 'polo' || (front && a.topStyle === 'shirt_tie') ? sk : t;
+  b.rect(8, y, 8, 6, body.base);
+  for (let yy = y; yy < y + 6; yy++) {
+    b.set(8, yy, body.lt);
+    b.set(15, yy, body.dk);
+  }
+  b.rect(8, y + 5, 8, 1, body.dk);
+  b.set(8, y + 5, body.base);
+  if (bare && (front || a.topStyle === 'polo')) {
+    // Peito/costas nus: linha dos peitorais (ou da coluna) e barriga.
+    if (front) {
+      b.hline(9, 10, y + 2, sk.dk);
+      b.hline(13, 14, y + 2, sk.dk);
+      b.set(11, y + 1, sk.dk);
+      b.set(12, y + 3, sk.dk);
+      b.set(11, y + 4, sk.dk);
+    } else b.vline(11, y + 1, y + 4, sk.dk);
+  }
   switch (a.topStyle) {
     case 'tshirt':
-      b.rect(10, y, 4, 1, t.dk);
+      // Túnica: decote em V com a pele, cinto de corda com nó pendurado.
       if (front) {
-        b.rect(10, y + 2, 2, 2, ac.base);
-        b.set(11, y + 3, ac.dk);
+        b.set(11, y, sk.base);
+        b.set(12, y, sk.dk);
+        b.set(11, y + 1, sk.dk);
+        b.set(10, y, t.dk);
+        b.set(13, y, t.dk);
+      } else b.rect(10, y, 4, 1, t.dk);
+      b.hline(8, 15, y + 4, ac.dk);
+      b.hline(9, 14, y + 4, ac.base);
+      if (front) {
+        b.set(10, y + 4, ac.lt);
+        b.set(10, y + 5, ac.base);
+        b.set(10, y + 6, ac.dk);
       }
       break;
-    case 'hoodie':
-      if (front) {
-        b.rect(9, y, 6, 1, t.dk);
-        b.set(9, y, t.lt);
-        b.set(10, y + 1, ac.lt);
-        b.set(10, y + 2, ac.base);
-        b.set(13, y + 1, ac.lt);
-        b.set(13, y + 2, ac.base);
-        b.rect(9, y + 3, 6, 2, t.dk);
-        b.rect(10, y + 3, 4, 1, t.base);
-      } else {
-        b.rect(9, y, 6, 3, t.dk);
-        b.rect(10, y, 4, 2, t.dd);
-        b.rect(10, y, 4, 1, t.dk);
+    case 'hoodie': {
+      // Manto de pele sobre os ombros: borda felpuda e fivela de osso.
+      const fur = furRamp(a.topAccent);
+      b.rect(7, y, 10, 2, fur.base);
+      b.hline(8, 15, y - 1, fur.base);
+      for (let x = 7; x <= 16; x++) {
+        if (x % 2 === 0) b.set(x, y + 2, fur.dk);
+        if (x % 3 === 0) b.set(x, y, fur.lt);
       }
-      b.rect(8, y + 5, 8, 1, t.dd);
+      b.set(9, y - 1, fur.hi);
+      b.set(16, y, fur.dk);
+      b.set(16, y + 1, fur.dd);
+      if (front) {
+        b.set(11, y + 1, TUSK);
+        b.set(12, y + 1, TUSK_SH);
+        b.vline(11, y + 3, y + 5, t.dk);
+      }
       break;
+    }
     case 'shirt_tie':
+      // Colete de couro aberto sobre o peito, com cordão de amarrar.
       if (front) {
-        b.set(9, y, t.hi);
-        b.set(10, y, t.hi);
-        b.set(13, y, t.hi);
-        b.set(14, y, t.hi);
-        b.set(11, y, ac.lt);
-        b.set(12, y, ac.base);
-        for (let yy = y + 1; yy <= y + 4; yy++) {
-          b.set(11, yy, ac.base);
-          b.set(12, yy, ac.dk);
-        }
-        b.set(11, y + 5, ac.dk);
+        b.rect(8, y, 2, 6, t.base);
+        b.vline(8, y, y + 5, t.lt);
+        b.rect(14, y, 2, 6, t.dk);
+        b.vline(15, y, y + 5, t.dd);
+        b.set(10, y + 1, ac.base);
+        b.set(13, y + 1, ac.base);
+        b.set(10, y + 3, ac.base);
+        b.set(13, y + 3, ac.base);
       } else {
-        b.rect(9, y, 6, 1, t.hi);
+        b.vline(11, y + 1, y + 4, t.dk);
+        b.rect(9, y, 6, 1, t.lt);
       }
+      b.hline(8, 15, y + 5, LEATHER);
+      if (front) b.set(11, y + 5, TUSK);
       break;
     case 'sweater':
-      if (front) b.rect(10, y, 4, 1, t.dd);
-      b.rect(8, y + 2, 8, 1, ac.base);
-      b.set(15, y + 2, ac.dk);
-      b.rect(8, y + 5, 8, 1, t.dd);
+      // Gibão acolchoado (costuras horizontais) com bandoleira de couro na diagonal.
+      b.hline(8, 15, y + 2, t.dk);
+      b.hline(9, 14, y + 4, t.dk);
+      for (let i = 0; i < 6; i++) {
+        const x = front ? 9 + i : 14 - i;
+        b.set(x, y + i, ac.base);
+        b.set(x + 1, y + i, ac.dk);
+      }
+      if (front) b.set(11, y + 2, TUSK);
       break;
     case 'jacket':
+      // Casaco de couro: abertura no meio com cordões cruzados e barra de pele.
       if (front) {
-        b.rect(10, y, 4, 6, ac.base);
-        b.set(13, y, ac.dk);
-        for (let yy = y; yy < y + 6; yy++) b.set(13, yy, ac.dk);
+        b.vline(11, y, y + 5, t.dd);
+        b.vline(12, y, y + 5, t.dd);
+        for (let yy = y; yy < y + 5; yy += 2) {
+          b.set(11, yy, ac.lt);
+          b.set(12, yy + 1, ac.base);
+        }
         b.set(10, y, t.hi);
         b.set(13, y, t.lt);
-        b.set(10, y + 1, t.lt);
-        b.set(13, y + 1, t.base);
       } else {
         b.vline(11, y + 1, y + 5, t.dk);
         b.rect(9, y, 6, 1, t.lt);
       }
+      b.hline(8, 15, y + 5, furRamp(a.topAccent).base);
+      b.set(15, y + 5, furRamp(a.topAccent).dk);
       break;
     case 'blouse':
+      // Avental de ferreiro (couro) por cima da túnica; de costas, as alças cruzadas.
       if (front) {
-        b.rect(9, y, 6, 1, ac.lt);
-        b.set(11, y + 1, ac.lt);
-        b.set(12, y + 1, ac.base);
-        b.set(11, y + 3, ac.dk);
-      } else b.rect(9, y, 6, 1, ac.base);
-      b.rect(7, y + 5, 10, 1, t.dk);
-      b.set(7, y + 5, t.base);
+        b.rect(9, y + 1, 6, 7, ac.base);
+        b.vline(9, y + 1, y + 7, ac.lt);
+        b.vline(14, y + 1, y + 7, ac.dk);
+        b.hline(9, 14, y + 7, ac.dk);
+        b.set(9, y, ac.dk);
+        b.set(14, y, ac.dk);
+        b.rect(11, y + 3, 2, 1, ac.dk);
+      } else {
+        for (let i = 0; i < 5; i++) {
+          b.set(9 + i, y + i, ac.base);
+          b.set(14 - i, y + i, ac.dk);
+        }
+        b.hline(8, 15, y + 4, ac.base);
+      }
       break;
     case 'polo':
+      // Arreio de guerra: alça do ombro ao quadril e cinturão largo na cor da roupa.
+      for (let i = 0; i < 4; i++) {
+        const x = front ? 14 - i : 9 + i;
+        b.set(x, y + i, t.base);
+        b.set(x - 1, y + i, t.dk);
+      }
+      b.rect(8, y + 4, 8, 2, t.base);
+      b.hline(8, 15, y + 4, t.lt);
+      b.set(15, y + 5, t.dk);
       if (front) {
-        b.set(9, y, ac.lt);
-        b.set(10, y, ac.base);
-        b.set(13, y, ac.base);
-        b.set(14, y, ac.dk);
-        b.set(11, y, t.dk);
-        b.set(12, y, t.dk);
-        b.set(11, y + 1, t.dk);
-        b.set(11, y + 2, ac.lt);
-      } else b.rect(9, y, 6, 1, ac.base);
+        b.set(11, y + 4, TUSK);
+        b.set(12, y + 4, TUSK);
+        b.set(11, y + 5, TUSK_SH);
+        b.set(12, y + 5, TUSK_SH);
+      }
       break;
   }
   drawLanyard(dc);
@@ -1211,7 +1447,8 @@ function drawLanyard(dc: Dc): void {
   if (!col) return;
   const { b, r } = dc;
   const y = 18 + r.ub;
-  const card = '#f6f4ee';
+  // Cordão com uma plaqueta de madeira entalhada (marca dos ajudantes).
+  const card = '#d8bf8c';
   const lx = r.lean;
   if (r.view === 'down') {
     b.set(10, y, col);
@@ -1222,9 +1459,9 @@ function drawLanyard(dc: Dc): void {
     b.set(12, y + 2, col);
     b.rect(10, y + 3, 4, 3, card);
     b.rect(10, y + 3, 4, 1, shade(col, -0.05));
-    b.set(11, y + 4, '#7f93b3');
-    b.set(12, y + 4, '#c9d2e0');
-    b.set(13, y + 5, '#d6d3cb');
+    b.set(11, y + 4, '#6b4a2a');
+    b.set(12, y + 4, '#8a6a42');
+    b.set(13, y + 5, '#b39a6a');
   } else if (r.view === 'up') {
     b.hline(9, 14, y, col);
     b.set(9, y + 1, shade(col, -0.1));
@@ -1240,9 +1477,22 @@ function drawLanyard(dc: Dc): void {
 }
 
 // ----- itens segurados
+// Mesmas chaves do contrato, redesenhadas como ferramentas e coisas do acampamento:
+// coffee = caneca de madeira (tankard), water = odre, papers = pergaminho, book = tomo de couro,
+// laptop = picareta (nas duas mãos), box = feixe de lenha, paddle = martelo, phone = pedra rúnica.
 
-const MUG: readonly string[] = ['wwwo', 'cccw', 'rrrh', 'wwwh', 'www.'];
-const CUP: readonly string[] = ['bbb', 'www', 'www', '.w.'];
+const TANKARD: readonly string[] = ['FfF.', 'iiih', 'wWwh', 'wwwh', 'iii.'];
+const TANKARD_PAL: Palette = { F: '#f6eedb', f: '#dccfae', i: '#6f747d', w: '#8a5a32', W: '#a8784a', h: '#4e3220' };
+const WATERSKIN: readonly string[] = ['.c.', 'lLl', 'lLl', 'lld', '.d.'];
+const WATERSKIN_PAL: Palette = { c: '#c9a874', l: '#8a6440', L: '#a8804f', d: '#5e4029' };
+const IRON = '#6f747d';
+const IRON_LT = '#b9bfc7';
+const WOOD = '#8a5a32';
+const WOOD_LT = '#a8784a';
+const PICK: readonly string[] = ['...........i', '..........Ii', '..........I.', 'hhhhhhhhhhIh', '..........I.', '..........Ii', '...........i'];
+const PICK_SIDE: readonly string[] = ['iIi', '.h.', '.h.', '.h.', '.h.', '.h.'];
+const HAMMER: readonly string[] = ['IIii', 'IiiD', '.h..', '.h..', '.h..', '.h..'];
+const TOOL_PAL: Palette = { i: IRON, I: IRON_LT, D: '#4a4e56', h: WOOD };
 
 function drawItem(dc: Dc, x: number, y: number): void {
   const { b, r } = dc;
@@ -1250,63 +1500,81 @@ function drawItem(dc: Dc, x: number, y: number): void {
   const side = r.view === 'side';
   switch (it) {
     case 'coffee':
-      b.stamp(MUG, x, y, { w: '#f4f2ee', c: '#6b4226', r: '#e2604f', h: '#cfcac0', o: '#f4f2ee' }, side);
+      b.stamp(TANKARD, x, y, TANKARD_PAL, side);
       break;
     case 'water':
-      b.stamp(CUP, x, y, { b: '#9ad4f5', w: '#eef6fb' });
+      b.stamp(WATERSKIN, x, y, WATERSKIN_PAL);
       break;
-    case 'papers':
-      if (side) {
-        b.rect(x, y, 2, 6, '#f6f4ee');
-        b.vline(x + 1, y, y + 5, '#d9d5cb');
-      } else {
-        b.rect(x + 1, y - 1, 6, 6, '#e7e3d8');
-        b.rect(x, y, 6, 6, '#f8f6f0');
-        for (let i = 0; i < 3; i++) b.hline(x + 1, x + 3 + (i % 2), y + 1 + i * 2, '#a6b0c0');
-      }
+    case 'papers': {
+      // Pergaminho enrolado nas pontas.
+      const pal: Palette = { p: '#ecdcb4', r: '#c9a874', R: '#a8844e', l: '#7a5a3a' };
+      if (side) b.stamp(['Rr', 'pp', 'pl', 'pp', 'pl', 'Rr'], x, y, pal);
+      else b.stamp(['RppppR', 'rplllr', 'rppppr', 'rpllpr', 'RppppR'], x, y, pal);
       break;
-    case 'book':
+    }
+    case 'book': {
+      const cover = '#6a3a24';
+      const coverDk = '#4a2616';
       if (side) {
-        b.rect(x, y, 2, 6, '#3f63a8');
-        b.vline(x + 1, y + 1, y + 4, '#f2efe6');
+        b.rect(x, y, 2, 6, cover);
+        b.vline(x + 1, y + 1, y + 4, '#e6d6ae');
       } else if (r.view === 'down' && r.twoHands) {
-        // Livro aberto diante do peito.
-        b.rect(x, y, 8, 5, '#f6f3ea');
-        b.vline(x + 3, y, y + 4, '#cfc8b8');
-        b.vline(x + 4, y, y + 4, '#e2dccd');
+        // Tomo aberto diante do peito.
+        b.rect(x, y, 8, 5, '#eee0bc');
+        b.vline(x + 3, y, y + 4, '#c9b48a');
+        b.vline(x + 4, y, y + 4, '#dccba2');
         for (let i = 0; i < 2; i++) {
-          b.hline(x + 1, x + 2, y + 1 + i * 2, '#a8b0bf');
-          b.hline(x + 5, x + 6, y + 1 + i * 2, '#a8b0bf');
+          b.hline(x + 1, x + 2, y + 1 + i * 2, '#8a6a4a');
+          b.hline(x + 5, x + 6, y + 1 + i * 2, '#8a6a4a');
         }
-        b.hline(x, x + 7, y + 5, '#3f63a8');
+        b.hline(x, x + 7, y + 5, cover);
       } else {
-        b.rect(x, y, 5, 6, '#3f63a8');
-        b.rect(x + 1, y + 1, 3, 1, '#f2c14e');
-        b.vline(x + 4, y, y + 5, '#2d4a85');
+        b.rect(x, y, 5, 6, cover);
+        b.set(x + 2, y + 2, '#d9b45a');
+        b.set(x + 2, y + 3, '#d9b45a');
+        b.set(x, y, IRON_LT);
+        b.set(x, y + 5, IRON);
+        b.vline(x + 4, y, y + 5, coverDk);
       }
       break;
+    }
     case 'laptop':
-      if (side) {
-        b.rect(x, y, 2, 7, '#aeb6c2');
-        b.vline(x, y, y + 6, '#d3d8df');
-      } else {
-        b.rect(x, y, 8, 5, '#b9c0cb');
-        b.hline(x, x + 7, y, '#d9dee5');
-        b.rect(x + 3, y + 2, 2, 1, '#eef1f5');
-        b.hline(x, x + 7, y + 4, '#8d96a5');
-      }
+      if (side) b.stamp(PICK_SIDE, x - 1, y, TOOL_PAL);
+      else b.stamp(PICK, x, y - 2, TOOL_PAL);
       break;
     case 'box': {
-      const w = side ? 6 : 10;
-      b.rect(x, y, w, 7, '#c99a5e');
-      b.hline(x, x + w - 1, y, '#dcb27a');
-      b.hline(x, x + w - 1, y + 6, '#a87b45');
-      b.rect(x + Math.floor(w / 2) - 1, y, 2, 7, '#e8d3a8');
-      b.vline(x + w - 1, y + 1, y + 5, '#b3854d');
+      // Feixe de lenha: três toras empilhadas, amarradas com corda; de perfil, os topos das toras.
+      const bark = '#6b4a2e';
+      const barkLt = '#8a6440';
+      const ring = '#d9b680';
+      const rope = '#cdb57e';
+      if (side) {
+        for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 2; j++) {
+            const lx = x + j * 3;
+            const ly = y + i * 2 + (j ? 1 : 0);
+            b.rect(lx, ly, 3, 2, bark);
+            b.set(lx + 1, ly, ring);
+            b.set(lx + 1, ly + 1, barkLt);
+          }
+        }
+      } else {
+        const w = 10;
+        for (let i = 0; i < 3; i++) {
+          const ly = y + 1 + i * 2;
+          b.hline(x, x + w - 1, ly, barkLt);
+          b.hline(x, x + w - 1, ly + 1, bark);
+          b.set(x, ly, ring);
+          b.set(x, ly + 1, ring);
+          b.set(x + w - 1, ly + 1, '#4e3420');
+        }
+        b.vline(x + 2, y + 1, y + 6, rope);
+        b.vline(x + w - 3, y + 1, y + 6, rope);
+      }
       break;
     }
     case 'paddle':
-      b.stamp(['.rr.', 'rRrr', 'rrrd', '.rd.', '.h..', '.h..'], x, y, { r: '#d64545', R: '#ef7a6a', d: '#a83232', h: '#6b4a32' }, side);
+      b.stamp(HAMMER, x, y, TOOL_PAL, side);
       break;
     case 'popcorn':
       b.stamp(POPCORN, x, y, POPCORN_PAL);
@@ -1318,8 +1586,8 @@ function drawItem(dc: Dc, x: number, y: number): void {
       b.stamp(side ? PHONE_SIDE : PHONE, x, y, PHONE_PAL);
       break;
     case 'lipstick':
-      // Batom deitado, ponta vermelha para o lado da boca (de costas não aparece).
-      if (r.view !== 'up') b.stamp(['rgG'], x, y, { r: '#d8365a', g: '#f0c75a', G: '#b38a2e' });
+      // Bastão de tinta de guerra (de costas não aparece).
+      if (r.view !== 'up') b.stamp(['rgG'], x, y, { r: '#d8365a', g: '#c9a874', G: '#8a6a42' });
       break;
     case 'comb':
       b.stamp(['cccc', 'c.c.'], x, y, { c: '#3d4252' });
@@ -1334,14 +1602,14 @@ function drawItem(dc: Dc, x: number, y: number): void {
   }
 }
 
-/** Controle de videogame (7x3): corpo grafite com brilho, direcional escuro e dois botões. */
+/** Tabuleiro de jogo entalhado (7x3): madeira, peças vermelha e azul. */
 const CONTROLLER: readonly string[] = ['.hLLLL.', 'LdLLrbL', 'cc...cc'];
 const CONTROLLER_SIDE: readonly string[] = ['hLL', 'cLr'];
-const CONTROLLER_PAL: Palette = { L: '#4c5263', h: '#737b8f', d: '#1d2029', r: '#e8545a', b: '#4f8fe6', c: '#363b48' };
-/** Celular (3x5) com a tela azul acesa; de perfil (2x4), a borda com a tela virada para o rosto. */
+const CONTROLLER_PAL: Palette = { L: '#8a5a32', h: '#b08050', d: '#3a2414', r: '#e8545a', b: '#4f8fe6', c: '#5e3c22' };
+/** Pedra rúnica (3x5) com a runa brilhando em azul; de perfil (2x4), a borda com o brilho para o rosto. */
 const PHONE: readonly string[] = ['dDd', 'dBd', 'dbd', 'dbd', 'ddd'];
 const PHONE_SIDE: readonly string[] = ['dB', 'db', 'db', 'dd'];
-const PHONE_PAL: Palette = { d: '#2b2f3a', D: '#5a6172', b: '#6fbdf0', B: '#c8eaff' };
+const PHONE_PAL: Palette = { d: '#5d636d', D: '#8b919b', b: '#6fbdf0', B: '#c8eaff' };
 
 /**
  * Gestos do jokenpô em pele (L = luz, s = base, S = sombra), relativos à mão (canto do pincel 2x2).
@@ -1528,7 +1796,7 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
   const dc: Dc = { b, a, p: paletteOf(a), r: makeRig(req, view) };
   const r = dc.r;
   const sleeve = sleeveLength(a);
-  const sr = dc.p.top;
+  const sr = sleeve === 0 ? dc.p.skin : dc.p.top;
   const ip = itemPos(dc);
 
   // 1) Atrás de tudo: cabelo longo (frente), item nas costas.
@@ -1543,6 +1811,8 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
     drawHead(dc);
     drawFacialHair(dc);
     drawHair(dc, 'front');
+    drawTusks(dc);
+    drawEars(dc);
     drawAccessory(dc);
     drawCostume(dc, req.costume);
   };
@@ -1570,6 +1840,8 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
     drawHead(dc);
     drawFacialHair(dc);
     drawHair(dc, 'front');
+    drawTusks(dc);
+    drawEars(dc);
     drawAccessory(dc);
     drawCostume(dc, req.costume);
     if (ip && !r.itemBehind) drawItem(dc, ip[0], ip[1]);
@@ -1590,10 +1862,16 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
     drawHead(dc);
     drawFacialHair(dc);
     drawHair(dc, 'front');
+    drawTusks(dc);
+    drawEars(dc);
     drawAccessory(dc);
     drawCostume(dc, req.costume);
     // Braços cruzados por cima do cabelo comprido que cai no peito (a mão que bate fica visível).
-    if (r.crossFront !== null) drawCrossedArms(dc, sr, sleeve, r.crossFront === 1);
+    if (r.crossFront !== null) {
+      // A ombreira fica por baixo da mão que bate os dedos no braço.
+      drawPauldron(dc);
+      drawCrossedArms(dc, sr, sleeve, r.crossFront === 1);
+    }
     if (ip && !r.itemBehind) {
       drawItem(dc, ip[0], ip[1]);
       if (r.twoHands) {
@@ -1618,6 +1896,7 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
     b.set(kx + 1 + r.lean, ky + r.ub, POPCORN_PAL.y);
   }
 
+  if (r.crossFront === null) drawPauldron(dc);
   b.outline();
   if (!r.seated) b.shadow(CHAR_AX, CHAR_AY - 0.5, 6, 2, '#1c2034', 0.2);
   return { buf: b, ax: CHAR_AX, ay: CHAR_AY };

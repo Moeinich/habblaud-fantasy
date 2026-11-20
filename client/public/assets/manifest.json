@@ -194,66 +194,6 @@
         "w": 64,
         "h": 30
       }
-    },
-    {
-      "id": "poster-coffee",
-      "kind": "poster",
-      "file": "art/poster-coffee.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Café",
-      "variant": "coffee"
-    },
-    {
-      "id": "poster-rocket",
-      "kind": "poster",
-      "file": "art/poster-rocket.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Foguete",
-      "variant": "rocket"
-    },
-    {
-      "id": "poster-code",
-      "kind": "poster",
-      "file": "art/poster-code.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Código",
-      "variant": "code"
-    },
-    {
-      "id": "poster-cat",
-      "kind": "poster",
-      "file": "art/poster-cat.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Gato",
-      "variant": "cat"
-    },
-    {
-      "id": "poster-bug",
-      "kind": "poster",
-      "file": "art/poster-bug.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Sem bugs",
-      "variant": "bug"
-    },
-    {
-      "id": "poster-ship-it",
-      "kind": "poster",
-      "file": "art/poster-ship-it.png",
-      "w": 12,
-      "h": 16,
-      "tiles": 1,
-      "title": "Ship it!",
-      "variant": "ship_it"
     }
   ],
   "og": "og-image.png"

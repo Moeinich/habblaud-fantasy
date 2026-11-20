@@ -6,14 +6,14 @@ import { ACCENTS, M, book, foliage, glass, mug, pick, pot, rngOf, smallSucculent
 
 /** Sombra suave projetada na parede (abaixo/direita do objeto). */
 function wallShadow(b: import('../core/pixbuf').PixelBuf, x: number, y: number, w: number, h: number): void {
-  for (let yy = y + 1; yy <= y + h; yy++) b.under(x + w, yy, 'rgba(30,34,52,0.16)');
-  for (let xx = x + 1; xx <= x + w; xx++) b.under(xx, y + h, 'rgba(30,34,52,0.16)');
+  for (let yy = y + 1; yy <= y + h; yy++) b.under(x + w, yy, 'rgba(36,24,14,0.2)');
+  for (let xx = x + 1; xx <= x + w; xx++) b.under(xx, y + h, 'rgba(36,24,14,0.2)');
 }
 
 export function whiteboard(): BufFurniture {
   const s = wallSheet(3);
   const b = s.buf;
-  const frame = ramp('#c3cad4', 0.06);
+  const frame = M.oakDark;
   const x = 2;
   const y = -27;
   const w = 44;
@@ -23,18 +23,18 @@ export function whiteboard(): BufFurniture {
   b.vline(x, y, y + h - 1, frame.lt);
   b.vline(x + w - 1, y, y + h - 1, frame.dk);
   b.hline(x, x + w - 1, y + h - 1, frame.dk);
-  b.rect(x + 1, y + 1, w - 2, h - 2, '#fbfcfd');
-  // Reflexo sutil.
-  b.line(x + 30, y + 1, x + 24, y + h - 2, 'rgba(210,225,240,0.5)');
-  b.line(x + 33, y + 1, x + 27, y + h - 2, 'rgba(210,225,240,0.35)');
+  // Couro esticado (o mapa de guerra), com cravos de ferro nos cantos.
+  b.rect(x + 1, y + 1, w - 2, h - 2, '#b89a72');
+  for (const [cx, cy] of [[x + 1, y + 1], [x + w - 2, y + 1], [x + 1, y + h - 2], [x + w - 2, y + h - 2]] as const) b.set(cx, cy, '#4f5459');
   // Bandeja com pincéis e apagador.
   b.rect(x + 3, y + h, w - 6, 2, frame.base);
   b.hline(x + 3, x + w - 4, y + h, frame.lt);
-  for (const [i, c] of [[0, '#e05a5a'], [3, '#3f7fd8'], [6, '#2b2f3b'], [9, '#4cae6a']] as const) {
+  for (const [i, c] of [[0, '#9c2f25'], [3, '#2f7a78'], [6, '#2a1d14'], [9, '#5f8a3a']] as const) {
     b.rect(x + 8 + i, y + h - 1, 2, 1, c);
   }
-  b.rect(x + w - 14, y + h - 2, 5, 2, '#3a3f4b');
-  b.hline(x + w - 14, x + w - 10, y + h - 2, '#f2efe6');
+  // Adaga cravada na moldura.
+  b.hline(x + w - 14, x + w - 9, y + h - 1, '#8f949a');
+  b.rect(x + w - 16, y + h - 2, 2, 2, '#6b4a2b');
   b.outline();
   wallShadow(b, x - 1, y - 1, w + 2, h + 3);
   s.rects = { board: rectAt(s, x + 2, y + 2, w - 4, h - 4) };
@@ -44,7 +44,7 @@ export function whiteboard(): BufFurniture {
 export function windowItem(): BufFurniture {
   const s = wallSheet(2);
   const b = s.buf;
-  const fr = ramp('#f4f4f1', 0.05);
+  const fr = M.oakDark;
   const x = 2;
   const y = -27;
   const w = 28;
@@ -73,6 +73,14 @@ export function windowItem(): BufFurniture {
   b.rect(x - 1, y + h, w + 2, 2, fr.lt);
   b.hline(x - 1, x + w, y + h, fr.hi);
   b.hline(x - 1, x + w, y + h + 1, fr.dk);
+  // Venezianas de tábua abertas dos lados.
+  for (const sx of [x - 5, x + w + 1]) {
+    b.rect(sx, y, 4, h, M.oak.base);
+    b.vline(sx, y, y + h - 1, M.oak.lt);
+    b.vline(sx + 3, y, y + h - 1, M.oak.dk);
+    b.hline(sx, sx + 3, y + 4, '#4f5459');
+    b.hline(sx, sx + 3, y + h - 5, '#4f5459');
+  }
   b.outline();
   wallShadow(b, x - 1, y, w + 2, h + 3);
   s.rects = { glass: rectAt(s, gx, gy, gw, gh) };
@@ -84,11 +92,11 @@ export function clock(): BufFurniture {
   const b = s.buf;
   const cx = 8;
   const cy = -21.5;
-  b.ellipse(cx, cy, 6.5, 6.5, '#3a3f4b');
-  b.ellipse(cx, cy, 5.5, 5.5, '#fbfbf8');
-  b.ellipse(cx - 1, cy - 1, 3, 3, '#ffffff');
-  // Marcações das horas.
-  for (const [dx, dy] of [[0, -5], [5, 0], [0, 4], [-5, 0]] as const) b.set(Math.floor(cx + dx), Math.floor(cy + dy), '#5a6070');
+  // Escudo redondo com mostrador de bronze (o relógio do acampamento).
+  b.ellipse(cx, cy, 6.5, 6.5, '#5e3f27');
+  b.ellipse(cx, cy, 5.5, 5.5, '#c9a45a');
+  b.ellipse(cx - 1, cy - 1, 3, 3, '#e0c070');
+  for (const [dx, dy] of [[0, -5], [5, 0], [0, 4], [-5, 0]] as const) b.set(Math.floor(cx + dx), Math.floor(cy + dy), '#4f5459');
   b.outline();
   wallShadow(b, 1, -29, 14, 14);
   s.rects = { face: rectAt(s, 3, -27, 10, 10) };
@@ -96,84 +104,84 @@ export function clock(): BufFurniture {
 }
 
 export function poster(variant: string | undefined): BufFurniture {
+  // Estandartes de tecido pendurados numa vara, com emblemas originais do clã.
   const s = wallSheet(1);
   const b = s.buf;
   const x = 2;
   const y = -28;
   const w = 12;
   const h = 16;
-  b.rect(x, y, w, h, '#2f3440');
-  const ix = x + 1;
-  const iy = y + 1;
-  const iw = w - 2;
-  const ih = h - 2;
-  switch (variant ?? 'code') {
+  const v = variant ?? 'code';
+  const cloth: Record<string, string> = {
+    code: '#2f4a3a', coffee: '#7a2e25', rocket: '#2a3a5a', cat: '#5a3a6a', bug: '#8a6a2a', ship_it: '#2f6a68',
+  };
+  const c = cloth[v] ?? cloth.code;
+  // Vara.
+  b.hline(x - 1, x + w, y - 1, '#6b4a2b');
+  b.set(x - 2, y - 1, '#8a6239');
+  b.set(x + w + 1, y - 1, '#8a6239');
+  // Pano com ponta em V.
+  b.rect(x, y, w, h - 3, c);
+  for (let i = 0; i < 3; i++) {
+    b.hline(x + i * 2, x + w - 1 - i * 2, y + h - 3 + i, c);
+  }
+  b.vline(x, y, y + h - 4, shade(c, 0.12));
+  b.vline(x + w - 1, y, y + h - 4, shade(c, -0.15));
+  b.hline(x, x + w - 1, y + 1, '#c9a45a');
+  const ix = x + 2;
+  const iy = y + 3;
+  const gold = '#e0b23c';
+  const bone = '#e8dcc0';
+  switch (v) {
     case 'coffee': {
-      b.rect(ix, iy, iw, ih, '#f2d7b0');
-      b.rect(ix, iy + ih - 4, iw, 4, '#c98a52');
-      mug(b, ix + 3, iy + 5, '#e2604f');
-      b.set(ix + 4, iy + 3, '#ffffff');
-      b.set(ix + 5, iy + 2, '#ffffff');
-      b.set(ix + 4, iy + 1, '#ffffff');
-      b.hline(ix + 2, ix + 7, iy + ih - 2, '#f4efe2');
+      // Machado de duas lâminas.
+      b.vline(ix + 4, iy, iy + 8, '#8a6239');
+      b.rect(ix + 1, iy + 1, 3, 3, bone);
+      b.rect(ix + 5, iy + 1, 3, 3, bone);
+      b.set(ix, iy + 2, bone);
+      b.set(ix + 8, iy + 2, bone);
       break;
     }
     case 'rocket': {
-      b.rect(ix, iy, iw, ih, '#24325a');
-      for (const [px, py] of [[1, 2], [8, 1], [6, 5], [2, 9], [9, 8]] as const) b.set(ix + px, iy + py, '#f7e7a1');
-      b.rect(ix + 4, iy + 3, 2, 6, '#f4f2ee');
-      b.set(ix + 4, iy + 2, '#e05a5a');
-      b.set(ix + 5, iy + 2, '#e05a5a');
-      b.set(ix + 4, iy + 5, '#5bc0de');
-      b.set(ix + 3, iy + 8, '#e05a5a');
-      b.set(ix + 6, iy + 8, '#e05a5a');
-      b.rect(ix + 4, iy + 9, 2, 2, '#f2a03d');
-      b.set(ix + 4, iy + 11, '#f7d154');
-      b.hline(ix, ix + iw - 1, iy + ih - 1, '#3b4a7a');
+      // Lua crescente e estrelas.
+      b.rect(ix + 2, iy + 1, 4, 6, '#e8e2c0');
+      b.rect(ix + 4, iy + 1, 3, 5, c);
+      b.set(ix + 7, iy, '#f7e7a1');
+      b.set(ix + 1, iy + 8, '#f7e7a1');
       break;
     }
     case 'cat': {
-      b.rect(ix, iy, iw, ih, '#f7c9d4');
-      const c = '#3a3f4b';
-      b.set(ix + 2, iy + 4, c);
-      b.set(ix + 7, iy + 4, c);
-      b.rect(ix + 2, iy + 5, 6, 5, c);
-      b.set(ix + 3, iy + 7, '#f7d154');
-      b.set(ix + 6, iy + 7, '#f7d154');
-      b.set(ix + 4, iy + 8, '#e47aa8');
-      b.set(ix + 5, iy + 8, '#e47aa8');
-      b.hline(ix + 1, ix + 8, iy + ih - 2, '#e47aa8');
+      // Cabeça de lobo estilizada.
+      b.set(ix + 1, iy + 1, bone);
+      b.set(ix + 6, iy + 1, bone);
+      b.rect(ix + 1, iy + 2, 6, 4, bone);
+      b.rect(ix + 3, iy + 6, 2, 2, bone);
+      b.set(ix + 2, iy + 3, '#9c2f25');
+      b.set(ix + 5, iy + 3, '#9c2f25');
       break;
     }
     case 'bug': {
-      b.rect(ix, iy, iw, ih, '#f7d154');
-      const c = '#3a3f4b';
-      b.rect(ix + 3, iy + 5, 4, 5, '#4cae6a');
-      b.vline(ix + 5, iy + 5, iy + 9, c);
-      b.rect(ix + 4, iy + 3, 2, 2, c);
-      for (const dy of [5, 7, 9]) {
-        b.set(ix + 2, iy + dy, c);
-        b.set(ix + 7, iy + dy, c);
-      }
-      b.line(ix + 1, iy + 1, ix + 8, iy + 12, '#e05a5a');
+      // Bigorna.
+      b.rect(ix + 1, iy + 2, 7, 2, '#3b3530');
+      b.set(ix, iy + 2, '#3b3530');
+      b.rect(ix + 3, iy + 4, 3, 2, '#3b3530');
+      b.rect(ix + 2, iy + 6, 5, 1, '#3b3530');
+      b.hline(ix + 1, ix + 7, iy + 2, '#6a645a');
       break;
     }
     case 'ship_it': {
-      b.rect(ix, iy, iw, ih, '#bfe3f2');
-      b.rect(ix, iy + 9, iw, 5, '#3f7fd8');
-      b.hline(ix, ix + iw - 1, iy + 9, '#8fc8f0');
-      b.rect(ix + 2, iy + 7, 6, 2, '#e05a5a');
-      b.hline(ix + 3, ix + 6, iy + 9, '#a83232');
-      b.vline(ix + 5, iy + 1, iy + 6, '#6b4a32');
-      b.rect(ix + 6, iy + 2, 3, 2, '#f4f2ee');
-      b.set(ix + 1, iy + 2, '#f7d154');
+      // Árvore sagrada.
+      b.vline(ix + 4, iy + 4, iy + 8, '#5e3f27');
+      b.rect(ix + 1, iy + 1, 7, 3, '#7fae5a');
+      b.rect(ix + 2, iy, 5, 1, '#9ac870');
       break;
     }
     default: {
-      // code: editor escuro com linhas coloridas e "</>".
-      b.rect(ix, iy, iw, ih, '#1f2433');
-      const cols = ['#ff79c6', '#8be9fd', '#f1fa8c', '#50fa7b', '#bd93f9'];
-      for (let i = 0; i < 6; i++) b.hline(ix + 1 + (i % 3), ix + 2 + ((i * 3) % 5) + 2, iy + 1 + i * 2, cols[i % cols.length]);
+      // Presas cruzadas sobre escudo.
+      b.rect(ix + 1, iy + 1, 6, 6, gold);
+      b.rect(ix + 2, iy + 2, 4, 4, shade(gold, -0.2));
+      b.line(ix, iy + 8, ix + 7, iy, bone);
+      b.line(ix + 7, iy + 8, ix, iy, bone);
       break;
     }
   }
@@ -185,7 +193,7 @@ export function poster(variant: string | undefined): BufFurniture {
 export function painting(seed: number): BufFurniture {
   const s = wallSheet(2);
   const b = s.buf;
-  const fr = ramp('#c89b5c', 0.07);
+  const fr = M.oakDark;
   const x = 3;
   const y = -27;
   const w = 26;
@@ -225,13 +233,14 @@ export function tv(): BufFurniture {
   const y = -27;
   const w = 30;
   const h = 18;
-  b.rect(x, y, w, h, '#23262f');
-  b.hline(x, x + w - 1, y, '#3a3f4b');
-  b.hline(x, x + w - 1, y + h - 1, '#15171d');
-  b.rect(x + 1, y + 1, w - 2, h - 3, '#151b26');
+  // Espelho d'água / pedra de vidência em moldura de pedra.
+  b.rect(x, y, w, h, '#6a645a');
+  b.hline(x, x + w - 1, y, '#8f887c');
+  b.hline(x, x + w - 1, y + h - 1, '#3a3630');
+  b.rect(x + 1, y + 1, w - 2, h - 3, '#1c2620');
   b.line(x + 20, y + 1, x + 12, y + h - 3, 'rgba(255,255,255,0.08)');
   b.line(x + 22, y + 1, x + 14, y + h - 3, 'rgba(255,255,255,0.05)');
-  b.set(x + w - 3, y + h - 2, '#e05a5a');
+  b.set(x + w - 3, y + h - 2, '#7fe0a0');
   b.outline();
   wallShadow(b, x - 1, y - 1, w + 2, h + 2);
   s.rects = { tv: rectAt(s, x + 1, y + 1, w - 2, h - 3) };
@@ -239,68 +248,57 @@ export function tv(): BufFurniture {
 }
 
 export function lightSwitch(variant: string | undefined): BufFurniture {
+  // Arandela de ferro com vela (acesa ou apagada).
   const s = wallSheet(1);
   const b = s.buf;
   const on = (variant ?? 'on') === 'on';
-  b.rect(6, -19, 5, 7, '#f6f6f3');
-  b.hline(6, 10, -19, '#ffffff');
-  b.vline(10, -19, -13, '#d3d6dc');
-  b.hline(6, 10, -13, '#c9cdd4');
-  b.rect(7, -17, 3, 3, on ? '#e9ebee' : '#d5d8de');
-  b.hline(7, 9, on ? -17 : -15, on ? '#ffffff' : '#b9bec7');
-  b.hline(7, 9, on ? -15 : -17, on ? '#c3c8d0' : '#f4f5f7');
-  b.set(8, -18, on ? '#7be08a' : '#9aa1ad');
+  b.rect(7, -15, 3, 2, '#4f5459');
+  b.vline(8, -17, -15, '#4f5459');
+  b.rect(7, -20, 3, 3, '#efe6cc');
+  if (on) {
+    b.set(8, -21, '#f6c04a');
+    b.set(8, -22, '#fff2b0');
+  } else b.set(8, -21, '#3a3630');
   b.outline();
   return { base: s };
 }
 
 export function elevator(state: number): BufFurniture {
+  // Elevador de corda e roldana: armação de troncos, plataforma e portão de grade que sobe.
   const s = wallSheet(2, 2);
   const b = s.buf;
   const st = Math.max(0, Math.min(4, Math.round(state)));
-  const frame = ramp('#aeb6c2', 0.06);
-  const door = ramp('#c9d0d9', 0.05);
-  // Moldura de aço escovado.
+  const frame = M.oakDark;
   b.rect(0, -28, 32, 28, frame.base);
   b.hline(0, 31, -28, frame.hi);
   b.vline(0, -28, -1, frame.lt);
   b.vline(31, -28, -1, frame.dk);
-  // Painel indicador.
-  b.rect(10, -27, 12, 3, '#22262f');
+  // Roldana no alto.
   const lit = st > 0;
-  b.set(13, -26, lit ? '#5fd07a' : '#3b4a3f');
-  b.set(12, -25, lit ? '#5fd07a' : '#3b4a3f');
-  b.set(14, -25, lit ? '#5fd07a' : '#3b4a3f');
-  b.rect(16, -26, 4, 1, lit ? '#f2c14e' : '#4a4535');
-  // Vão interno (cabine): luz quente, parede de fundo e corrimão.
+  b.ellipse(16, -26, 3, 1.5, '#4f5459');
+  b.set(16, -26, lit ? '#e0b23c' : '#8f949a');
+  // Poço interno com luz de tocha.
   const ix = 3;
   const iy = -23;
   const iw = 26;
   const ih = 23;
-  b.rect(ix, iy, iw, ih, '#f3e2bf');
-  b.rect(ix, iy, iw, 3, '#fff3d6');
-  b.rect(ix + 2, iy + 3, iw - 4, ih - 7, '#e4caa0');
-  b.hline(ix + 2, ix + iw - 3, iy + 12, '#b9c0ca');
-  b.rect(ix, iy + ih - 4, iw, 4, '#b89a72');
-  b.hline(ix, ix + iw - 1, iy + ih - 4, '#a5865f');
-  // Portas deslizantes: cada folha recua 3px por estado.
-  const leaf = 13;
-  const open = st * 3;
-  const drawLeaf = (x0: number, w: number) => {
-    if (w <= 0) return;
-    b.rect(x0, iy, w, ih, door.base);
-    b.hline(x0, x0 + w - 1, iy, door.hi);
-    b.vline(x0, iy, iy + ih - 1, door.lt);
-    b.vline(x0 + w - 1, iy, iy + ih - 1, door.dk);
-    for (let k = 2; k < w - 1; k += 4) b.vline(x0 + k, iy + 2, iy + ih - 3, 'rgba(255,255,255,0.18)');
-  };
-  drawLeaf(ix, leaf - open);
-  drawLeaf(ix + leaf + open, leaf - open);
-  if (st === 0) b.vline(ix + leaf, iy, iy + ih - 1, door.dd);
-  // Botoeira lateral.
-  b.rect(29, -15, 2, 4, '#22262f');
-  b.set(29, -14, lit ? '#f2c14e' : '#6b7282');
-  b.set(29, -12, '#6b7282');
+  b.rect(ix, iy, iw, ih, '#3a2a1c');
+  b.rect(ix, iy, iw, 3, '#5a3f26');
+  b.vline(ix + 4, iy, iy + ih - 5, '#c9b483');
+  b.vline(ix + iw - 5, iy, iy + ih - 5, '#c9b483');
+  b.rect(ix + 1, iy + ih - 5, iw - 2, 2, M.oak.base);
+  b.hline(ix + 1, ix + iw - 2, iy + ih - 5, M.oak.lt);
+  b.rect(ix + 11, iy + 5, 3, 3, lit ? '#f6c04a' : '#6a4a2a');
+  b.rect(ix, iy + ih - 3, iw, 3, '#5e3f27');
+  // Portão de grade: sobe 5px por estado.
+  const gateTop = iy + st * 5;
+  if (gateTop < iy + ih) {
+    for (let gx = ix; gx < ix + iw; gx += 3) b.vline(gx, gateTop, iy + ih - 1, '#6b4a2b');
+    for (let gy = gateTop + 2; gy < iy + ih; gy += 5) b.hline(ix, ix + iw - 1, gy, '#8a6239');
+  }
+  // Alavanca lateral.
+  b.rect(29, -15, 2, 4, '#4f5459');
+  b.set(29, -14, lit ? '#e0b23c' : '#6a645a');
   b.outline();
   return { base: s };
 }
@@ -308,7 +306,7 @@ export function elevator(state: number): BufFurniture {
 export function doorFrame(): BufFurniture {
   const s = wallSheet(2, 3);
   const b = s.buf;
-  const tr = ramp('#f2f1ed', 0.05);
+  const tr = M.oakDark;
   // Batentes laterais e verga.
   b.rect(-2, -27, 3, 27, tr.base);
   b.vline(-2, -27, -1, tr.hi);
@@ -318,7 +316,7 @@ export function doorFrame(): BufFurniture {
   b.vline(33, -27, -1, tr.dd);
   b.rect(-2, -30, 36, 3, tr.lt);
   b.hline(-2, 33, -30, tr.hi);
-  b.hline(1, 30, -27, 'rgba(30,34,52,0.35)');
+  b.hline(1, 30, -27, 'rgba(36,24,14,0.4)');
   b.outline();
   return { base: s };
 }
@@ -330,18 +328,17 @@ export function sign(): BufFurniture {
   const y = -28;
   const w = 42;
   const h = 11;
-  const fr = ramp('#3a4256', 0.07);
+  // Tábua entalhada pendurada por correntes.
+  const fr = M.walnut;
+  b.vline(x + 4, y - 3, y - 1, '#4f5459');
+  b.vline(x + w - 5, y - 3, y - 1, '#4f5459');
   b.rect(x, y, w, h, fr.base);
   b.hline(x, x + w - 1, y, fr.lt);
   b.hline(x, x + w - 1, y + h - 1, fr.dd);
-  b.rect(x + 1, y + 1, w - 2, h - 2, '#f7f3e8');
-  b.hline(x + 1, x + w - 2, y + 1, '#ffffff');
-  b.hline(x + 1, x + w - 2, y + h - 2, '#e6e0cf');
-  // Parafusos.
-  b.set(x + 2, y + 2, '#b9c0ca');
-  b.set(x + w - 3, y + 2, '#b9c0ca');
-  b.set(x + 2, y + h - 3, '#b9c0ca');
-  b.set(x + w - 3, y + h - 3, '#b9c0ca');
+  b.rect(x + 1, y + 1, w - 2, h - 2, '#d9b88e');
+  b.hline(x + 1, x + w - 2, y + 1, '#e8cca2');
+  b.hline(x + 1, x + w - 2, y + h - 2, '#b98a55');
+  for (const [px, py] of [[x + 2, y + 2], [x + w - 3, y + 2], [x + 2, y + h - 3], [x + w - 3, y + h - 3]] as const) b.set(px, py, '#4f5459');
   b.outline();
   wallShadow(b, x - 1, y - 1, w + 2, h + 2);
   s.rects = { sign: rectAt(s, x + 4, y + 2, w - 8, h - 4) };
@@ -355,11 +352,12 @@ export function mirror(): BufFurniture {
   const y = -28;
   const w = 12;
   const h = 14;
-  const fr = ramp('#c3cad4', 0.06);
+  // Espelho de bronze polido em moldura de madeira.
+  const fr = M.oakDark;
   b.rect(x, y, w, h, fr.base);
   b.hline(x, x + w - 1, y, fr.hi);
   b.vline(x + w - 1, y, y + h - 1, fr.dk);
-  b.rect(x + 1, y + 1, w - 2, h - 2, '#cfe6f2');
+  b.rect(x + 1, y + 1, w - 2, h - 2, '#c9a45a');
   glass(b, x + 1, y + 1, w - 2, h - 2, { alpha: 0.5 });
   b.line(x + 8, y + 1, x + 3, y + h - 2, 'rgba(255,255,255,0.75)');
   b.outline();
@@ -378,7 +376,7 @@ export function shelfWall(seed: number): BufFurniture {
     b.rect(1, y, 30, 2, w.lt);
     b.hline(1, 30, y, w.hi);
     b.hline(1, 30, y + 1, w.dk);
-    for (const x of [4, 26]) b.rect(x, y + 2, 2, 2, '#5a6070');
+    for (const x of [4, 26]) b.rect(x, y + 2, 2, 2, '#4f5459');
   };
   // Prateleira de cima: livros + planta; de baixo: caixas, troféu, caneca.
   plank(-19);
@@ -400,26 +398,26 @@ export function shelfWall(seed: number): BufFurniture {
   // Prateleira de baixo.
   const v = seed % 3;
   if (v === 0) {
-    b.rect(3, -14, 6, 5, '#e9e4d6');
-    b.hline(3, 8, -14, '#f7f3e8');
-    b.rect(4, -12, 4, 1, '#c9bfa6');
+    b.rect(3, -14, 6, 5, '#c9b483');
+    b.hline(3, 8, -14, '#e2d2a4');
+    b.rect(4, -12, 4, 1, '#8a6239');
     b.rect(11, -13, 3, 2, '#f2c14e');
     b.set(10, -13, '#d9a42e');
     b.set(14, -13, '#d9a42e');
     b.set(12, -11, '#d9a42e');
     b.rect(11, -10, 3, 1, '#6b4a32');
-    mug(b, 18, -13, '#3f7fd8');
+    mug(b, 18, -13, '#2f7a78');
     smallSucculent(b, 24, -12);
   } else if (v === 1) {
     for (let i = 0; i < 4; i++) book(b, 4 + i * 2, -16, 2, 7, pick(r, ACCENTS));
     b.rect(14, -13, 7, 4, '#c99a5e');
     b.hline(14, 20, -13, '#dcb27a');
-    b.rect(23, -15, 4, 6, '#3a3f4b');
-    b.rect(24, -14, 2, 2, '#8fc8f0');
+    b.rect(23, -15, 4, 6, '#3b3530');
+    b.rect(24, -14, 2, 2, '#7fe0a0');
   } else {
     smallSucculent(b, 4, -12);
-    b.rect(10, -15, 5, 6, '#f4f2ee');
-    b.rect(11, -14, 3, 3, '#e47aa8');
+    b.rect(10, -15, 5, 6, '#d9cba8');
+    b.rect(11, -14, 3, 3, '#9c2f25');
     for (let i = 0; i < 3; i++) book(b, 18 + i * 2, -15 + (i % 2), 2, 6 - (i % 2), pick(r, ACCENTS));
   }
   b.outline();

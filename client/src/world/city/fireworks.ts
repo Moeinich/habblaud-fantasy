@@ -1,5 +1,5 @@
-// A praça da cidade (Fase 5): o termômetro da meta coletiva da semana ("10 mil horas de agentes trabalhando"), a placa
-// da prefeitura ("a cidade consumiu ≈ X esta semana" e os prédios acesos), os fogos quando a meta é batida (20 s) e o
+// A praça da cidade (Fase 5): o cofre de ouro da meta coletiva da semana ("10 mil horas de agentes trabalhando": uma
+// pilha de moedas que sobe numa caixa de tábuas), a placa do salão do conselho ("a cidade consumiu ≈ X esta semana" e os prédios acesos), os fogos quando a meta é batida (20 s) e o
 // enfeite da semana para todos depois disso (bandeirinhas entre os postes e, da segunda meta em diante, o enfeite da
 // estação: abóboras em outubro, árvore e presentes no fim do ano). Tudo cosmético e no navegador, a partir do `city` e
 // do `city.fireworks` (o servidor só soma, e só com 10 prédios acesos ou mais).
@@ -107,7 +107,8 @@ export const BUNTING: ReadonlyArray<readonly [number, number, number, number]> =
 
 // ------------------------------------------------------------------ fogos
 
-const SPARK_COLORS: readonly string[] = ['#ff5d73', '#ffd166', '#7cf3ff', '#b28dff', '#6dff9e', '#ff9f43', '#ffffff', '#ff7ad9'];
+// brasas, ouro, chama arcana (violeta e verde) e fogo: faíscas de fogueira e de magia, não de pólvora
+const SPARK_COLORS: readonly string[] = ['#ff6a3a', '#ffd166', '#9be86a', '#b28dff', '#6ae0c8', '#ff9f43', '#fff2d0', '#e05a9a'];
 /** Índice do branco (rastro dos foguetes). */
 const WHITE = 6;
 
@@ -286,8 +287,10 @@ export class Fireworks {
     ctx.globalCompositeOperation = 'source-over';
     for (const r of this.rockets) {
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#fff4c8';
+      ctx.fillStyle = '#ffe6a8';
       ctx.fillRect(Math.round(r.x), Math.round(r.y), 2, 3);
+      ctx.fillStyle = '#ff9a3c';
+      ctx.fillRect(Math.round(r.x), Math.round(r.y) + 3, 2, 1);
     }
     for (let i = 0; i < this.n; i++) {
       const x = Math.round(this.x[i]);
@@ -325,77 +328,109 @@ function drawBoardFrame(ctx: CanvasRenderingContext2D, cx: number, by: number, a
     ctx.fillStyle = '#6b4a33';
     ctx.fillRect(px, y + h - 2, 1, BOARDS.posts + 2);
   }
-  // moldura e painel
+  // moldura de toras com cravos de ferro e o painel de couro escuro
   ctx.fillStyle = '#2a1d16';
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = '#8a5f3f';
+  ctx.fillStyle = '#7a5032';
   ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-  ctx.fillStyle = '#a8784f';
+  ctx.fillStyle = '#a07a4e';
   ctx.fillRect(x + 1, y + 1, w - 2, 1);
-  ctx.fillStyle = '#1b2233';
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+  ctx.fillStyle = '#2a1e16';
   ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
-  // faixa de cor do título
+  ctx.fillStyle = '#9a9aa4';
+  for (const [cx, cy] of [
+    [x + 1, y + 1],
+    [x + w - 2, y + 1],
+    [x + 1, y + h - 2],
+    [x + w - 2, y + h - 2],
+  ] as const) ctx.fillRect(cx, cy, 1, 1);
+  // faixa de pano do título, com a ponta em rabo de andorinha dos dois lados
   ctx.fillStyle = accent;
   ctx.fillRect(x + 3, y + 3, w - 6, 8);
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(x - 1, y + 4, 4, 6);
+  ctx.fillRect(x + w - 3, y + 4, 4, 6);
+  ctx.fillStyle = '#2a1d16';
+  ctx.fillRect(x - 1, y + 6, 1, 2);
+  ctx.fillRect(x + w, y + 6, 1, 2);
+  ctx.fillStyle = 'rgba(255,240,210,0.25)';
   ctx.fillRect(x + 3, y + 3, w - 6, 1);
   return { x: x + 3, y: y + 3, w: w - 6, h: h - 6 };
 }
 
-/** O termômetro (painel da esquerda): tubo com a coluna da meta, bulbo e marcas de 25 %. */
+/** O cofre da meta (painel da esquerda): uma caixa de tábuas onde a pilha de moedas de ouro sobe até a bandeira. */
 export function drawGoalBoard(ctx: CanvasRenderingContext2D, goal: GoalView | null, now: number): void {
-  const p = drawBoardFrame(ctx, BOARDS.goal.x, BOARDS.goal.y, '#c8443c');
-  const tx = p.x + 6;
+  const p = drawBoardFrame(ctx, BOARDS.goal.x, BOARDS.goal.y, '#9a2f24');
+  const tx = p.x + 5;
   const top = p.y + 13;
   const bottom = p.y + p.h - 7;
-  // tubo de vidro
-  ctx.fillStyle = '#0d1018';
-  ctx.fillRect(tx - 1, top - 1, 6, bottom - top + 2);
-  ctx.fillStyle = '#d8e4f0';
-  ctx.fillRect(tx, top, 4, bottom - top);
-  // bulbo
-  ctx.fillStyle = '#0d1018';
-  ctx.fillRect(tx - 2, bottom - 1, 8, 6);
-  ctx.fillStyle = '#e8473f';
-  ctx.fillRect(tx - 1, bottom, 6, 4);
-  // coluna (sobe devagar até o valor e pulsa no topo)
+  // a caixa: fundo escuro e laterais de tábua
+  ctx.fillStyle = '#120c08';
+  ctx.fillRect(tx - 1, top - 1, 8, bottom - top + 2);
+  ctx.fillStyle = '#3a2618';
+  ctx.fillRect(tx, top, 6, bottom - top);
+  ctx.fillStyle = '#7a5032';
+  ctx.fillRect(tx - 1, top - 1, 1, bottom - top + 2);
+  ctx.fillRect(tx + 6, top - 1, 1, bottom - top + 2);
+  // o monte de ouro na base (sempre um pouco, a meta começa de algum lugar)
+  ctx.fillStyle = '#120c08';
+  ctx.fillRect(tx - 3, bottom - 1, 12, 6);
+  ctx.fillStyle = '#b8862a';
+  ctx.fillRect(tx - 2, bottom + 1, 10, 3);
+  ctx.fillStyle = '#e8c25a';
+  ctx.fillRect(tx - 1, bottom, 8, 2);
+  ctx.fillStyle = '#fff0b0';
+  ctx.fillRect(tx + 1, bottom, 2, 1);
+  // a pilha de moedas (sobe até o valor; a moeda do topo cintila)
   const pct = goal?.pct ?? 0;
   const hgt = Math.round((bottom - top) * pct);
-  if (hgt > 0) {
-    ctx.fillStyle = '#e8473f';
-    ctx.fillRect(tx + 1, bottom - hgt, 2, hgt);
-    ctx.fillStyle = '#ff9c74';
-    ctx.fillRect(tx + 1, bottom - hgt, 1, hgt);
-    if (Math.sin(now / 300) > 0) {
-      ctx.fillStyle = '#ffd7a0';
-      ctx.fillRect(tx + 1, bottom - hgt, 2, 1);
-    }
+  for (let y = bottom - 1; y >= bottom - hgt; y--) {
+    const k = (bottom - y) % 2;
+    ctx.fillStyle = k ? '#c9952e' : '#e8c25a';
+    ctx.fillRect(tx + 1 + ((bottom - y) % 4 === 1 ? 1 : 0), y, 4, 1);
   }
-  // marcas de 25 %
-  ctx.fillStyle = '#7d8aa3';
-  for (let k = 1; k < 4; k++) ctx.fillRect(tx + 5, Math.round(bottom - ((bottom - top) * k) / 4), 2, 1);
-  // a bandeira da meta no topo
-  ctx.fillStyle = '#ffd166';
-  ctx.fillRect(tx + 6, top - 1, 4, 3);
-  ctx.fillStyle = '#c9a24a';
-  ctx.fillRect(tx + 5, top - 1, 1, 6);
+  if (hgt > 0 && Math.sin(now / 300) > 0) {
+    ctx.fillStyle = '#fff6c8';
+    ctx.fillRect(tx + 2, bottom - hgt, 2, 1);
+    ctx.fillRect(tx + 3, bottom - hgt - 2, 1, 1);
+  }
+  // marcas de 25 % (entalhes na tábua)
+  ctx.fillStyle = '#c49a68';
+  for (let k = 1; k < 4; k++) ctx.fillRect(tx + 7, Math.round(bottom - ((bottom - top) * k) / 4), 2, 1);
+  // o estandarte da meta no topo
+  ctx.fillStyle = '#c94a3a';
+  ctx.fillRect(tx + 8, top - 1, 4, 3);
+  ctx.fillStyle = '#e8c25a';
+  ctx.fillRect(tx + 9, top, 1, 1);
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(tx + 7, top - 1, 1, 6);
 }
 
-/** A placa da prefeitura (painel da direita): um prediozinho iluminado no canto. */
+/** A placa do salão do conselho (painel da direita): o salão comprido em miniatura, com o fogo aceso lá dentro. */
 export function drawHallBoard(ctx: CanvasRenderingContext2D, lit: boolean): void {
-  const p = drawBoardFrame(ctx, BOARDS.hall.x, BOARDS.hall.y, '#2f6fa8');
-  // a prefeitura em miniatura: frontão, colunas e janelas acesas
+  const p = drawBoardFrame(ctx, BOARDS.hall.x, BOARDS.hall.y, '#1f6b62');
   const x = p.x + 4;
   const y = p.y + 15;
-  ctx.fillStyle = '#c9c2b2';
-  ctx.fillRect(x, y + 5, 14, 11);
-  ctx.fillStyle = '#e8e2d4';
-  ctx.fillRect(x - 1, y + 3, 16, 2);
-  ctx.fillRect(x + 2, y + 1, 10, 2);
-  ctx.fillRect(x + 5, y, 4, 1);
-  ctx.fillStyle = lit ? '#ffd27a' : '#4a5468';
-  for (const cx of [x + 2, x + 6, x + 10]) ctx.fillRect(cx, y + 7, 2, 4);
-  ctx.fillStyle = '#8f8676';
+  // paredes de toras
+  ctx.fillStyle = '#6b4429';
+  ctx.fillRect(x, y + 7, 14, 9);
+  ctx.fillStyle = '#855636';
+  for (let yy = y + 7; yy < y + 16; yy += 2) ctx.fillRect(x, yy, 14, 1);
+  // telhado de palha em duas águas, com as pontas cruzadas na cumeeira
+  ctx.fillStyle = '#b08a3e';
+  for (let r = 0; r < 6; r++) ctx.fillRect(x + 6 - r - 1, y + 1 + r, 4 + r * 2, 1);
+  ctx.fillRect(x - 1, y + 6, 16, 1);
+  ctx.fillStyle = '#d2ac58';
+  ctx.fillRect(x + 5, y + 1, 4, 1);
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(x + 4, y - 1, 1, 2);
+  ctx.fillRect(x + 9, y - 1, 1, 2);
+  // porta e janelas com o fogo do salão
+  ctx.fillStyle = lit ? '#ffc65a' : '#2a1e16';
+  ctx.fillRect(x + 6, y + 11, 2, 5);
+  for (const cx of [x + 2, x + 10]) ctx.fillRect(cx, y + 9, 2, 2);
+  ctx.fillStyle = '#5e5446';
   ctx.fillRect(x - 1, y + 16, 16, 1);
 }
 

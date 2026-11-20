@@ -109,9 +109,9 @@ function treeSprite(seed: number): PropSprite {
   p.set(15, 45, '#4a3222');
   p.set(21, 45, '#4a3222');
   const variants = [
-    ['#2f6a43', '#3f8550', '#5aa45d', '#86c873'],
-    ['#356b3c', '#4b8a45', '#6aa956', '#9fcf74'],
-    ['#2c6250', '#3a7e5f', '#53a071', '#82c489'],
+    ['#2a4f30', '#3a6a3a', '#4f8a45', '#74a85a'],
+    ['#3a4f2a', '#4f6a35', '#6a8a45', '#90a85e'],
+    ['#264a3a', '#335f48', '#467a58', '#6a9a6e'],
   ];
   canopy(p, rng, 18, 18, 11 + Math.floor(rng() * 3), variants[Math.floor(rng() * variants.length)], '#25463a');
   p.flush();
@@ -150,7 +150,7 @@ function bushSprite(seed: number): PropSprite {
   canopy(p, rng, 11, 9, 6, ['#34663f', '#47864c', '#62a45a', '#8cc66f'], '#264a36');
   // florzinhas
   if (rng() < 0.6) {
-    const col = ['#f2d14b', '#f28aa5', '#ffffff'][Math.floor(rng() * 3)];
+    const col = ['#e0b23c', '#c46a8a', '#e8e2c0'][Math.floor(rng() * 3)];
     for (let i = 0; i < 4; i++) p.set(6 + Math.floor(rng() * 10), 5 + Math.floor(rng() * 6), col);
   }
   p.flush();
@@ -168,7 +168,7 @@ function flowersSprite(seed: number): PropSprite {
       p.set(x, y, border ? (y === 12 ? '#8d8a82' : '#b9b5aa') : '#6a4b35');
     }
   }
-  const cols = ['#e8574a', '#f2c94c', '#f08bb0', '#ffffff', '#9b7be0'];
+  const cols = ['#b8352a', '#e0b23c', '#c46a8a', '#e8e2c0', '#8a7ab0'];
   for (let i = 0; i < 26; i++) {
     const x = 3 + Math.floor(rng() * 24);
     const y = 2 + Math.floor(rng() * 9);
@@ -197,40 +197,47 @@ function hedgeSprite(seed: number): PropSprite {
   return { canvas: c, ax: 17, ay: 14 };
 }
 
+/** Braseiro de ferro no alto de um poste de madeira (substitui o poste de luz). */
 function lampSprite(): PropSprite {
   const [c, ctx] = makeCanvas(10, 36);
   shadowEllipse(ctx, 5, 34, 4, 1, 0.25);
-  ctx.fillStyle = '#2e3648';
-  ctx.fillRect(4, 6, 2, 28);
-  ctx.fillStyle = '#4a5468';
-  ctx.fillRect(4, 6, 1, 28);
-  ctx.fillStyle = '#2e3648';
-  ctx.fillRect(1, 2, 8, 5);
-  ctx.fillStyle = '#ffe9a8';
-  ctx.fillRect(2, 4, 6, 2);
-  ctx.fillStyle = '#fff6d6';
-  ctx.fillRect(3, 4, 2, 1);
-  ctx.fillStyle = '#3a4152';
+  ctx.fillStyle = '#4e3420';
+  ctx.fillRect(4, 8, 2, 26);
+  ctx.fillStyle = '#8a6239';
+  ctx.fillRect(4, 8, 1, 26);
+  ctx.fillStyle = '#c9b483';
+  ctx.fillRect(4, 20, 2, 1);
+  ctx.fillStyle = '#3b3530';
+  ctx.fillRect(1, 5, 8, 3);
+  ctx.fillStyle = '#6a645a';
+  ctx.fillRect(1, 5, 8, 1);
+  ctx.fillStyle = '#e08a2c';
+  ctx.fillRect(2, 3, 6, 2);
+  ctx.fillStyle = '#f6c04a';
+  ctx.fillRect(3, 1, 4, 2);
+  ctx.fillStyle = '#fff2b0';
+  ctx.fillRect(4, 0, 2, 1);
+  ctx.fillStyle = '#4e3420';
   ctx.fillRect(3, 32, 4, 2);
   return { canvas: c, ax: 5, ay: 34 };
 }
 
+/** Banco de tronco partido ao meio sobre dois tocos. */
 function benchSprite(): PropSprite {
   const [c, ctx] = makeCanvas(26, 14);
   shadowEllipse(ctx, 13, 12, 11, 2, 0.22);
-  ctx.fillStyle = '#2e3648';
-  ctx.fillRect(3, 8, 2, 4);
-  ctx.fillRect(21, 8, 2, 4);
-  // encosto e assento em ripas
-  ctx.fillStyle = '#7a5232';
-  ctx.fillRect(1, 1, 24, 3);
-  ctx.fillRect(1, 6, 24, 3);
-  ctx.fillStyle = '#a0703f';
-  ctx.fillRect(1, 1, 24, 1);
-  ctx.fillRect(1, 6, 24, 1);
-  ctx.fillStyle = '#5b3c25';
-  ctx.fillRect(1, 8, 24, 1);
-  ctx.fillRect(1, 3, 24, 1);
+  ctx.fillStyle = '#4e3420';
+  ctx.fillRect(3, 7, 4, 5);
+  ctx.fillRect(19, 7, 4, 5);
+  ctx.fillStyle = '#6b4a2b';
+  ctx.fillRect(1, 3, 24, 5);
+  ctx.fillStyle = '#d9b88e';
+  ctx.fillRect(1, 3, 24, 2);
+  ctx.fillStyle = '#b98a55';
+  ctx.fillRect(4, 3, 6, 1);
+  ctx.fillRect(14, 4, 7, 1);
+  ctx.fillStyle = '#3f2a18';
+  ctx.fillRect(1, 7, 24, 1);
   return { canvas: c, ax: 13, ay: 12 };
 }
 
@@ -238,7 +245,7 @@ function rockSprite(seed: number): PropSprite {
   const rng = mulberry32(seed);
   const [c, ctx] = makeCanvas(16, 12);
   const p = new Painter(ctx, 16, 12);
-  canopy(p, rng, 8, 7, 4, ['#7d8590', '#959da8', '#b3bac4', '#d3d8de'], '#4d5562');
+  canopy(p, rng, 8, 7, 4, ['#6a645a', '#7c766a', '#958f82', '#ada79a'], '#3f3a33');
   p.flush();
   return { canvas: c, ax: 8, ay: 11 };
 }
@@ -247,9 +254,10 @@ function rockSprite(seed: number): PropSprite {
 function parasolSprite(seed: number): PropSprite {
   const [c, ctx] = makeCanvas(32, 34);
   const palettes: [string, string, string][] = [
-    ['#e8574a', '#f6efe2', '#a83a33'],
-    ['#2fb3a3', '#f6efe2', '#1f8579'],
-    ['#f2b33d', '#fbf4e4', '#c88a1f'],
+    // Tenda de mercado: lona listrada em tons tribais.
+    ['#9c2f25', '#d9cba8', '#6e1f18'],
+    ['#2f7a78', '#d9cba8', '#1f5654'],
+    ['#d48a2c', '#e2d2a4', '#9a5e18'],
   ];
   const [a, b, dk] = palettes[seed % palettes.length];
   // sombra do guarda-sol no chão
@@ -261,14 +269,18 @@ function parasolSprite(seed: number): PropSprite {
   ctx.fillStyle = '#a0703f';
   ctx.fillRect(2, 24, 6, 2);
   ctx.fillRect(24, 24, 6, 2);
-  ctx.fillStyle = '#d8dde3';
+  ctx.fillStyle = '#8a6239';
   ctx.fillRect(10, 24, 12, 5);
-  ctx.fillStyle = '#f4f6f8';
+  ctx.fillStyle = '#b98a55';
   ctx.fillRect(10, 24, 12, 2);
-  ctx.fillStyle = '#8d96a3';
+  ctx.fillStyle = '#4e3420';
   ctx.fillRect(10, 28, 12, 1);
-  // haste
-  ctx.fillStyle = '#4a5468';
+  // mercadorias e haste
+  ctx.fillStyle = '#e0b23c';
+  ctx.fillRect(12, 23, 2, 1);
+  ctx.fillStyle = '#9c2f25';
+  ctx.fillRect(17, 23, 3, 1);
+  ctx.fillStyle = '#6b4a2b';
   ctx.fillRect(15, 11, 2, 14);
   // lona: octógono achatado com gomos alternados e borda escura
   const p = new Painter(ctx, 32, 34);
@@ -287,36 +299,40 @@ function parasolSprite(seed: number): PropSprite {
       p.set(x, y, edge ? dk : gomo ? (lit ? '#ffffff' : b) : lit ? a : dk);
     }
   }
-  p.set(15, 8, '#2e3648');
-  p.set(16, 8, '#2e3648');
+  p.set(15, 8, '#4e3420');
+  p.set(16, 8, '#4e3420');
   p.flush();
   return { canvas: c, ax: 16, ay: 29 };
 }
 
-/** Totem da entrada com a marca (azul-marinho e laranja, como a placa da recepção). */
+/** Totem entalhado da entrada: três rostos empilhados, asas e pintura tribal (o "logo" do acampamento). */
 function totemSprite(): PropSprite {
   const [c, ctx] = makeCanvas(14, 34);
   shadowEllipse(ctx, 7, 32, 6, 1.5, 0.25);
-  ctx.fillStyle = '#141b30';
-  ctx.fillRect(2, 2, 10, 30);
-  ctx.fillStyle = '#1c2541';
-  ctx.fillRect(3, 3, 8, 28);
-  ctx.fillStyle = '#2a355a';
-  ctx.fillRect(3, 3, 1, 28);
-  // faixa laranja no topo, "H" claro e "b" laranja (as cores de "Hab" e "blaud" na placa)
-  ctx.fillStyle = '#f2a33a';
-  ctx.fillRect(3, 5, 8, 2);
-  ctx.fillStyle = '#f5f1e6';
-  ctx.fillRect(4, 11, 1, 6);
-  ctx.fillRect(8, 11, 1, 6);
-  ctx.fillRect(5, 13, 3, 1);
-  ctx.fillStyle = '#f2a33a';
-  ctx.fillRect(5, 19, 1, 6);
-  ctx.fillRect(6, 21, 2, 1);
-  ctx.fillRect(8, 22, 1, 2);
-  ctx.fillRect(6, 24, 2, 1);
-  // base
-  ctx.fillStyle = '#8d96a3';
+  ctx.fillStyle = '#4e3420';
+  ctx.fillRect(3, 2, 8, 30);
+  ctx.fillStyle = '#7a5a38';
+  ctx.fillRect(4, 3, 6, 28);
+  ctx.fillStyle = '#9a7048';
+  ctx.fillRect(4, 3, 1, 28);
+  // asas no topo
+  ctx.fillStyle = '#9c2f25';
+  ctx.fillRect(0, 4, 3, 3);
+  ctx.fillRect(11, 4, 3, 3);
+  // três rostos: olhos, bocas e presas
+  for (const y of [5, 14, 23]) {
+    ctx.fillStyle = '#2a1d14';
+    ctx.fillRect(5, y, 1, 1);
+    ctx.fillRect(8, y, 1, 1);
+    ctx.fillRect(5, y + 3, 4, 1);
+    ctx.fillStyle = '#e8dcc0';
+    ctx.fillRect(5, y + 4, 1, 1);
+    ctx.fillRect(8, y + 4, 1, 1);
+    ctx.fillStyle = '#d48a2c';
+    ctx.fillRect(4, y + 6, 6, 1);
+  }
+  // base de pedra
+  ctx.fillStyle = '#6a645a';
   ctx.fillRect(1, 31, 12, 2);
   return { canvas: c, ax: 7, ay: 32 };
 }
@@ -364,13 +380,14 @@ export function propSprite(prop: ExteriorProp): PropSprite {
   return s;
 }
 
+// Carroças: madeira em tons diferentes; a lona da carga muda de cor.
 const CAR_COLORS: [string, string, string][] = [
-  ['#d9534a', '#a83a33', '#f08a80'],
-  ['#3f7fd8', '#2c5ea6', '#7fb0f0'],
-  ['#f2f2ee', '#c4c6c8', '#ffffff'],
-  ['#f2b33d', '#c88a1f', '#ffd889'],
-  ['#2fb3a3', '#1f8579', '#79dccf'],
-  ['#4a5468', '#323a4a', '#76819a'],
+  ['#9c2f25', '#6e1f18', '#c4483a'],
+  ['#2f7a78', '#1f5654', '#4fa09c'],
+  ['#d9cba8', '#a8986e', '#efe2c0'],
+  ['#d48a2c', '#9a5e18', '#f0b060'],
+  ['#5f8a3a', '#3f5f26', '#86b05a'],
+  ['#7a6a58', '#4e4234', '#a08a70'],
 ];
 
 /** Carro visto de lado (3/4), virado para a direita; `flip` desenha para a esquerda. */
@@ -385,39 +402,45 @@ export function carSprite(variant: number, flip: boolean): PropSprite {
     ctx.scale(-1, 1);
   }
   shadowEllipse(ctx, 18, 17, 16, 2, 0.3);
-  const o = '#2e3648';
-  // carroceria
+  // Carroça de madeira com carga coberta por lona (cor = body) e varal para o animal à frente.
+  const o = '#2a1d14';
   ctx.fillStyle = o;
-  ctx.fillRect(2, 8, 32, 8);
-  ctx.fillRect(8, 3, 18, 6);
+  ctx.fillRect(2, 7, 28, 7);
+  ctx.fillStyle = '#8a6239';
+  ctx.fillRect(3, 8, 26, 5);
+  ctx.fillStyle = '#b98a55';
+  ctx.fillRect(3, 8, 26, 1);
+  ctx.fillStyle = '#5e3f27';
+  ctx.fillRect(3, 11, 26, 1);
+  for (const px of [9, 16, 23]) ctx.fillRect(px, 8, 1, 5);
+  // lona
+  ctx.fillStyle = o;
+  ctx.fillRect(5, 1, 20, 7);
   ctx.fillStyle = body;
-  ctx.fillRect(3, 9, 30, 6);
-  ctx.fillRect(9, 4, 16, 5);
+  ctx.fillRect(6, 2, 18, 6);
   ctx.fillStyle = light;
-  ctx.fillRect(3, 9, 30, 1);
-  ctx.fillRect(9, 4, 16, 1);
+  ctx.fillRect(6, 2, 18, 1);
   ctx.fillStyle = dark;
-  ctx.fillRect(3, 13, 30, 2);
-  // vidros
-  ctx.fillStyle = '#3a5f86';
-  ctx.fillRect(10, 5, 6, 3);
-  ctx.fillRect(18, 5, 6, 3);
-  ctx.fillStyle = '#9cc7ec';
-  ctx.fillRect(10, 5, 2, 1);
-  ctx.fillRect(18, 5, 2, 1);
-  // farol e lanterna
-  ctx.fillStyle = '#fff3c4';
-  ctx.fillRect(32, 10, 2, 2);
-  ctx.fillStyle = '#e04a3a';
-  ctx.fillRect(2, 10, 1, 2);
-  // rodas
-  for (const wx of [7, 25]) {
+  ctx.fillRect(6, 6, 18, 2);
+  ctx.fillRect(12, 2, 1, 6);
+  ctx.fillRect(18, 2, 1, 6);
+  // varal
+  ctx.fillStyle = '#6b4a2b';
+  ctx.fillRect(30, 10, 5, 1);
+  // lanterna pendurada
+  ctx.fillStyle = '#f6c04a';
+  ctx.fillRect(28, 5, 2, 2);
+  // rodas raiadas
+  for (const wx of [5, 21]) {
     ctx.fillStyle = o;
-    ctx.fillRect(wx, 13, 5, 5);
-    ctx.fillStyle = '#6b7385';
-    ctx.fillRect(wx + 1, 14, 3, 3);
-    ctx.fillStyle = '#9aa3b5';
-    ctx.fillRect(wx + 2, 15, 1, 1);
+    ctx.fillRect(wx, 12, 6, 6);
+    ctx.fillStyle = '#6b4a2b';
+    ctx.fillRect(wx + 1, 13, 4, 4);
+    ctx.fillStyle = '#3f2a18';
+    ctx.fillRect(wx + 2, 13, 1, 4);
+    ctx.fillRect(wx + 1, 14, 4, 1);
+    ctx.fillStyle = '#8f949a';
+    ctx.fillRect(wx + 2, 14, 1, 1);
   }
   const s = { canvas: c, ax: 18, ay: 17 };
   cache.set(key, s);

@@ -6,8 +6,9 @@ import { M, contact, foliage, frontFace, glass, monitorBack, mug, papers, pick, 
 
 // ------------------------------------------------------------------ copa
 
-const CAB = ramp('#d8b98f', 0.06);
-const TOP = ramp('#eceae5', 0.04);
+// Cozinha do acampamento: armário de tábuas e tampo de pedra.
+const CAB = ramp('#9a7048', 0.07);
+const TOP = ramp('#a8a49a', 0.05);
 
 /** Remove o contorno lateral (x = -1 e x = 16) para módulos que se encaixam lado a lado. */
 function seamless(b: PixelBuf, w = 16): void {
@@ -23,21 +24,21 @@ function counterBase(b: PixelBuf, kind: 'plain' | 'drawers' | 'doors'): void {
   frontFace(b, 0, 5, 16, 11, CAB);
   b.vline(0, 5, 15, CAB.lt);
   b.vline(15, 5, 13, CAB.dd);
-  b.rect(1, 14, 14, 2, '#5a4a3c');
-  b.hline(1, 14, 14, '#43372d');
+  b.rect(1, 14, 14, 2, '#3f2a18');
+  b.hline(1, 14, 14, '#2f1f12');
   if (kind === 'drawers') {
     for (const y of [8, 11]) {
       b.hline(1, 14, y, CAB.dd);
       b.hline(1, 14, y + 1, CAB.lt);
     }
-    for (const y of [6, 9, 12]) b.rect(6, y, 4, 1, '#8b939f');
+    for (const y of [6, 9, 12]) b.rect(6, y, 4, 1, '#4f5459');
   } else if (kind === 'doors') {
     b.vline(7, 6, 13, CAB.dd);
     b.vline(8, 6, 13, CAB.lt);
-    b.rect(5, 8, 1, 3, '#8b939f');
-    b.rect(10, 8, 1, 3, '#8b939f');
+    b.rect(5, 8, 1, 3, '#4f5459');
+    b.rect(10, 8, 1, 3, '#4f5459');
   } else {
-    b.rect(12, 8, 1, 3, '#8b939f');
+    b.rect(12, 8, 1, 3, '#4f5459');
     b.hline(1, 14, 6, CAB.lt);
   }
   // Tampo de pedra clara com borda.
@@ -57,21 +58,20 @@ export function counter(variant: string | undefined): BufFurniture {
 }
 
 export function counterSink(): BufFurniture {
+  // Bacia de pedra com balde d'água e concha.
   const s = floorSheet(1, 1, 10);
   const b = s.buf;
   counterBase(b, 'doors');
-  // Cuba inox embutida.
-  b.rect(3, -1, 10, 4, '#aeb6c2');
-  b.rect(4, 0, 8, 3, '#7d8592');
-  b.hline(4, 11, 0, '#5d6573');
-  b.set(8, 2, '#3d4350');
-  b.hline(3, 12, -1, '#d3d8df');
-  // Torneira (pescoço de ganso).
-  b.rect(7, -6, 2, 5, '#c3cad4');
-  b.hline(7, 10, -7, '#e3e7ec');
-  b.set(10, -6, '#c3cad4');
-  b.set(9, -7, '#ffffff');
-  b.rect(5, -3, 1, 2, '#c3cad4');
+  b.rect(3, -1, 10, 4, '#7c766a');
+  b.rect(4, 0, 8, 3, '#4f7a8a');
+  b.hline(4, 11, 0, '#6a9aa8');
+  b.set(9, 1, '#9ac8d0');
+  b.hline(3, 12, -1, '#a8a296');
+  // Balde pendurado numa haste.
+  b.vline(13, -8, -2, '#6b4a2b');
+  b.hline(10, 13, -8, '#6b4a2b');
+  b.rect(9, -7, 3, 3, '#8a6239');
+  b.hline(9, 11, -6, '#4f5459');
   b.outline();
   seamless(b);
   contact(b, 0, 14, 16, 3, 0.2);
@@ -79,66 +79,63 @@ export function counterSink(): BufFurniture {
 }
 
 export function coffeeMachine(state: number): BufFurniture {
+  // Caldeirão de ferro sobre um fogareiro de pedra; state 1 = fervendo.
   const s = floorSheet(1, 1, 18);
   const b = s.buf;
   counterBase(b, 'drawers');
   const on = state >= 1;
-  const body = ramp('#3a3f4b', 0.06);
-  const steel = ramp('#c3cad4', 0.06);
-  // Corpo da máquina de espresso.
-  topFace(b, 2, -15, 12, 3, steel);
-  b.rect(2, -12, 12, 13, body.base);
-  b.vline(2, -12, 0, body.lt);
-  b.vline(13, -12, 0, body.dd);
-  // Painel e luzes.
-  b.rect(3, -11, 10, 2, '#22262f');
-  b.set(4, -10, on ? '#5fd07a' : '#3b4a3f');
-  b.set(6, -10, on ? '#f2c14e' : '#4a4535');
-  b.rect(9, -11, 3, 2, on ? '#7fd0ff' : '#2a3a52');
-  // Grupo e bico.
-  b.rect(5, -7, 6, 2, steel.base);
-  b.hline(5, 10, -7, steel.hi);
-  b.rect(7, -5, 2, 1, steel.dk);
-  // Xícara e bandeja.
-  b.rect(4, 0, 8, 1, steel.dk);
-  b.hline(4, 11, -1, steel.base);
-  b.rect(6, -3, 4, 3, '#f4f2ee');
-  b.set(10, -2, '#d6d2c8');
-  b.hline(6, 9, -3, on ? '#6b4226' : '#f4f2ee');
+  const iron = ramp('#3b3530', 0.08);
+  // Fogareiro.
+  b.rect(3, -3, 10, 3, '#6a645a');
+  b.hline(3, 12, -3, '#8f887c');
   if (on) {
-    b.vline(7, -4, -3, '#7a4a2a');
-    b.set(8, -4, '#9a6a3e');
+    b.hline(5, 10, -4, '#e08a2c');
+    b.set(7, -5, '#f6c04a');
   }
-  // Grãos no topo.
-  b.rect(10, -18, 3, 3, 'rgba(120,80,50,0.9)');
-  b.hline(10, 12, -18, 'rgba(240,240,240,0.8)');
+  // Caldeirão.
+  for (let y = -12; y <= -5; y++) {
+    const half = y < -10 ? 5 : y > -7 ? 4 : 6;
+    b.hline(8 - half, 7 + half, y, iron.base);
+    b.set(8 - half, y, iron.lt);
+    b.set(7 + half, y, iron.dk);
+  }
+  b.hline(2, 13, -13, iron.lt);
+  b.hline(3, 12, -12, on ? '#6a8a3a' : '#4a5a2a');
+  if (on) {
+    b.set(5, -12, '#9ac060');
+    b.set(10, -12, '#9ac060');
+  }
+  // Alça e concha.
+  b.set(1, -11, iron.dk);
+  b.set(14, -11, iron.dk);
+  b.line(11, -12, 14, -17, '#8a6239', 1);
   b.outline();
   seamless(b);
   contact(b, 0, 14, 16, 3, 0.2);
   if (on) {
-    // Vapor depois do contorno (não recebe borda).
-    for (const [x, y, a] of [[12, -17, 0.55], [13, -18, 0.45], [12, -19, 0.35]] as const) b.set(x, y, `rgba(255,255,255,${a})`);
+    for (const [x, y, a] of [[6, -14, 0.55], [9, -16, 0.45], [7, -18, 0.35]] as const) b.set(x, y, `rgba(220,240,200,${a})`);
   }
   return { base: s };
 }
 
 export function microwave(): BufFurniture {
+  // Fornalha de barro (domo) com pão assando.
   const s = floorSheet(1, 1, 12);
   const b = s.buf;
   counterBase(b, 'plain');
-  const body = ramp('#e8eaee', 0.05);
-  topFace(b, 1, -11, 14, 3, body);
-  frontFace(b, 1, -8, 14, 9, body);
-  b.rect(2, -7, 9, 6, '#2a303c');
-  b.hline(2, 10, -7, '#3d4656');
-  b.line(4, -7, 8, -2, 'rgba(255,255,255,0.12)');
-  b.rect(12, -7, 2, 2, '#1f2a1f');
-  b.set(12, -7, '#7be08a');
-  b.set(13, -7, '#7be08a');
-  b.set(12, -4, '#9aa2ae');
-  b.set(13, -4, '#9aa2ae');
-  b.set(12, -3, '#9aa2ae');
-  b.set(13, -3, '#9aa2ae');
+  const clay = M.terracotta;
+  for (let y = -10; y <= 1; y++) {
+    const half = y < -8 ? 4 + (y + 10) : 7;
+    b.hline(8 - half, 7 + half, y, clay.base);
+    b.set(8 - half, y, clay.lt);
+    b.set(7 + half, y, clay.dk);
+  }
+  b.hline(5, 10, -11, clay.lt);
+  b.rect(4, -5, 8, 6, '#2a1d14');
+  b.hline(5, 10, -6, clay.dd);
+  b.hline(5, 10, 0, '#e08a2c');
+  b.rect(6, -2, 4, 2, '#d9a050');
+  b.hline(6, 9, -2, '#e8c070');
   b.outline();
   seamless(b);
   contact(b, 0, 14, 16, 3, 0.2);
@@ -146,68 +143,63 @@ export function microwave(): BufFurniture {
 }
 
 export function fridge(): BufFurniture {
+  // Despensa alta de tábuas, com carne curada e ervas penduradas por fora.
   const s = floorSheet(1, 1, 24);
   const b = s.buf;
-  const m = ramp('#dfe3e9', 0.05);
+  const m = M.oakDark;
   topFace(b, 0, -23, 16, 3, m);
   frontFace(b, 0, -20, 16, 34, m);
+  woodGrain(b, 0, -20, 16, 34, m, 9, true);
   b.vline(0, -20, 13, m.hi);
-  b.rect(1, 14, 14, 2, '#4a505c');
-  // Divisão congelador / geladeira.
-  b.hline(0, 15, -9, m.dd);
-  b.hline(0, 15, -8, m.lt);
-  // Puxadores.
-  b.rect(12, -17, 2, 6, '#9aa2ae');
-  b.vline(12, -17, -12, '#c3cad4');
-  b.rect(12, -5, 2, 9, '#9aa2ae');
-  b.vline(12, -5, 3, '#c3cad4');
-  // Ímãs e bilhete.
-  b.rect(3, -4, 4, 5, '#fbf4c0');
-  b.hline(4, 6, -2, '#c9b77a');
-  b.hline(4, 5, 0, '#c9b77a');
-  b.set(5, -5, '#e05a5a');
-  b.set(8, 4, '#3f7fd8');
-  b.set(4, 6, '#4cae6a');
-  b.set(3, -15, '#f2c14e');
-  b.rect(6, -16, 3, 3, '#e47aa8');
+  b.rect(1, 14, 14, 2, '#3f2a18');
+  b.hline(0, 15, -9, '#4f5459');
+  b.hline(0, 15, 6, '#4f5459');
+  // Tranca de ferro.
+  b.rect(12, -6, 2, 4, '#4f5459');
+  b.set(12, -6, '#8f949a');
+  // Pernil e ervas pendurados.
+  b.vline(4, -19, -17, '#c9b483');
+  b.rect(3, -16, 3, 5, '#9c4a3a');
+  b.set(3, -16, '#c46a5a');
+  b.vline(4, -11, -10, '#e8dcc0');
+  b.vline(8, -19, -16, '#c9b483');
+  b.rect(7, -15, 3, 3, '#5f8a3a');
+  b.set(8, -13, '#4f7d3a');
   b.outline();
   contact(b, 0, 13, 16, 4, 0.24);
   return { base: s };
 }
 
 export function vendingMachine(): BufFurniture {
+  // Banca de suprimentos: estante de caixotes com mercadorias e uma lanterna (o brilho).
   const s = floorSheet(1, 1, 24);
   const b = s.buf;
-  const m = ramp('#c94a52', 0.07);
+  const m = M.oak;
   topFace(b, 0, -23, 16, 3, m);
   frontFace(b, 0, -20, 16, 36, m);
   b.vline(0, -20, 15, m.lt);
-  // Vitrine iluminada com fileiras de snacks.
   const gx = 2;
   const gy = -18;
-  const gw = 9;
+  const gw = 12;
   const gh = 22;
-  b.rect(gx, gy, gw, gh, '#fff7e0');
+  b.rect(gx, gy, gw, gh, '#3a2a1c');
   const r = rngOf(7, 61);
-  const snacks = ['#e05a5a', '#f2c14e', '#3f7fd8', '#4cae6a', '#ec8a3c', '#8d66cf', '#e47aa8'];
+  const goods = ['#e0b23c', '#9c2f25', '#d9cba8', '#5f8a3a', '#b8572c', '#8f949a', '#d48a2c'];
   for (let row = 0; row < 5; row++) {
     const y = gy + 1 + row * 4;
-    for (let k = 0; k < 3; k++) {
-      const c = pick(r, snacks);
-      b.rect(gx + 1 + k * 3, y, 2, 3, c);
-      b.set(gx + 1 + k * 3, y, shade(c, 0.2));
+    for (let k = 0; k < 4; k++) {
+      const c = pick(r, goods);
+      b.rect(gx + 1 + k * 3, y + 1, 2, 2, c);
+      b.set(gx + 1 + k * 3, y + 1, shade(c, 0.2));
     }
-    b.hline(gx, gx + gw - 1, y + 3, '#c9b98a');
+    b.hline(gx, gx + gw - 1, y + 3, m.lt);
   }
-  glass(b, gx, gy, gw, gh, { alpha: 0.18 });
-  // Painel de moedas e botões.
-  b.rect(12, -16, 3, 12, '#2f333d');
-  b.rect(13, -15, 1, 2, '#7fd0ff');
-  for (let i = 0; i < 4; i++) b.set(13, -11 + i * 2, '#d9dde3');
-  b.rect(12, -2, 3, 2, '#22262f');
-  // Saída de produtos.
-  b.rect(2, 7, 9, 4, '#22262f');
-  b.hline(2, 10, 7, '#3a3f4b');
+  // Lanterna pendurada.
+  b.rect(12, -22, 3, 3, '#f6c04a');
+  b.set(13, -21, '#fff2b0');
+  b.rect(2, 7, 12, 4, M.cardboard.base);
+  b.hline(2, 13, 7, M.cardboard.lt);
+  b.vline(7, 7, 10, M.cardboard.dk);
   b.outline();
   contact(b, 0, 13, 16, 4, 0.26);
   s.rects = { glow: rectAt(s, gx, gy, gw, gh) };
@@ -217,33 +209,32 @@ export function vendingMachine(): BufFurniture {
 export function cafeTable(): BufFurniture {
   const s = floorSheet(1, 1, 4);
   const b = s.buf;
-  b.ellipse(8, 14.5, 3.5, 1.3, '#3a3f4b');
-  b.rect(7, 7, 2, 7, '#4a505c');
-  b.vline(7, 7, 13, '#6b7282');
-  const t = ramp('#f2efe8', 0.05);
+  b.ellipse(8, 14.5, 3.5, 1.3, '#3f2a18');
+  b.rect(7, 7, 2, 7, '#6b4a2b');
+  b.vline(7, 7, 13, '#8a6239');
+  const t = M.oak;
   b.ellipse(8, 5.5, 7, 3.5, t.dk);
   b.ellipse(8, 4.8, 7, 3.2, t.lt);
   b.set(4, 3, t.hi);
   b.set(5, 3, t.hi);
-  // Vasinho com flor.
-  b.rect(7, 2, 2, 2, '#8fc8f0');
-  b.set(7, 1, '#4cae6a');
-  b.set(8, 0, '#f26d8a');
-  b.set(8, 1, '#4cae6a');
+  // Vela.
+  b.rect(7, 1, 2, 3, '#efe6cc');
+  b.set(7, 0, '#f6c04a');
+  b.set(8, -1, '#fff2b0');
   b.outline();
   contact(b, 3, 13, 10, 3, 0.22);
   return { base: s };
 }
 
-const CAFE_SEAT = ramp('#e0a84a', 0.07);
+const CAFE_SEAT = ramp('#9a7048', 0.07);
 
 export function cafeChair(variant: string | undefined): BufFurniture {
   const v = variant ?? 'down';
   const s = floorSheet(1, 1, 10);
   const b = s.buf;
-  const legs = '#3a3f4b';
+  const legs = '#4e3420';
   for (const x of [4, 11]) b.vline(x, 9, 15, legs);
-  for (const x of [5, 10]) b.vline(x, 9, 13, '#5a6070');
+  for (const x of [5, 10]) b.vline(x, 9, 13, '#6b4a2b');
   const seat = () => {
     b.rect(3, 5, 10, 4, CAFE_SEAT.lt);
     b.hline(3, 12, 5, CAFE_SEAT.hi);
@@ -288,8 +279,9 @@ export function cafeChair(variant: string | undefined): BufFurniture {
 
 // ------------------------------------------------------------------ lounge
 
-const SOFA = ramp('#5b7fbd', 0.07);
-const PILLOW = ramp('#ee8d3e', 0.07);
+// Bancos forrados de peles com almofadas de lã tingida.
+const SOFA = ramp('#7a6048', 0.07);
+const PILLOW = ramp('#9c2f25', 0.07);
 
 function pillow(b: PixelBuf, x: number, y: number): void {
   b.rect(x, y, 6, 5, PILLOW.base);
@@ -484,7 +476,7 @@ export function armchair(variant: string | undefined): BufFurniture {
 export function coffeeTable(seed: number): BufFurniture {
   const s = floorSheet(2, 1, 6);
   const b = s.buf;
-  const w = ramp('#5d4637', 0.06);
+  const w = ramp('#5e3f27', 0.06);
   for (const x of [2, 28]) {
     b.rect(x, 9, 2, 5, w.dd);
   }
@@ -493,17 +485,17 @@ export function coffeeTable(seed: number): BufFurniture {
   b.hline(1, 30, 9, w.base);
   b.hline(1, 30, 10, w.dk);
   // Fruteira.
-  b.ellipse(11, 4, 4, 2, '#f4f2ee');
-  b.ellipse(11, 4.6, 3, 1.3, '#d6d2c8');
-  for (const [x, y, c] of [[9, 2, '#ee8d3e'], [11, 2, '#e05a5a'], [13, 3, '#ee8d3e'], [10, 3, '#7cc45a']] as const) {
+  b.ellipse(11, 4, 4, 2, '#e2d2a4');
+  b.ellipse(11, 4.6, 3, 1.3, '#c9b483');
+  for (const [x, y, c] of [[9, 2, '#d48a2c'], [11, 2, '#9c2f25'], [13, 3, '#d48a2c'], [10, 3, '#5f8a3a']] as const) {
     b.rect(x, y, 2, 2, c);
     b.set(x, y, shade(c, 0.2));
   }
   // Revistas.
-  b.rect(19, 3, 8, 5, '#3f7fd8');
-  b.rect(20, 2, 7, 5, '#f4f2ee');
-  b.rect(21, 3, 4, 2, '#e05a5a');
-  b.hline(21, 25, 6, '#b9c2d0');
+  b.rect(19, 3, 8, 5, '#9c2f25');
+  b.rect(20, 2, 7, 5, '#e2d2a4');
+  b.rect(21, 3, 4, 2, '#9c2f25');
+  b.hline(21, 25, 6, '#7a5a3a');
   if (seed % 2) mug(b, 4, 4, '#f2c14e');
   b.outline();
   contact(b, 0, 12, 32, 4, 0.22);
@@ -513,38 +505,39 @@ export function coffeeTable(seed: number): BufFurniture {
 export function pingpongTable(): BufFurniture {
   const s = floorSheet(3, 2, 8);
   const b = s.buf;
-  const t = ramp('#2f72b8', 0.07);
+  const t = ramp('#7a5a38', 0.07);
   // Pernas.
   for (const x of [4, 42]) {
-    b.rect(x, 22, 2, 9, '#3a3f4b');
-    b.vline(x, 22, 30, '#5a6070');
+    b.rect(x, 22, 2, 9, '#4e3420');
+    b.vline(x, 22, 30, '#6b4a2b');
   }
-  b.rect(22, 22, 4, 7, '#3a3f4b');
+  b.rect(22, 22, 4, 7, '#4e3420');
   // Tampo.
   b.rect(0, -4, 48, 25, t.lt);
   b.hline(0, 47, 20, t.dk);
   b.hline(0, 47, 21, t.dd);
-  b.rect(0, 22, 48, 1, '#2a2e38');
+  b.rect(0, 22, 48, 1, '#3f2a18');
   // Linhas brancas: borda e linha central (ao longo do comprimento).
-  b.hline(0, 47, -4, '#f4f6f8');
-  b.hline(0, 47, 19, '#f4f6f8');
-  b.vline(0, -4, 19, '#f4f6f8');
-  b.vline(47, -4, 19, '#f4f6f8');
+  b.hline(0, 47, -4, '#e2d2a4');
+  b.hline(0, 47, 19, '#e2d2a4');
+  b.vline(0, -4, 19, '#e2d2a4');
+  b.vline(47, -4, 19, '#e2d2a4');
   b.hline(1, 46, 7, 'rgba(244,246,248,0.8)');
   // Rede (corre norte-sul no meio), com altura.
   for (let y = -8; y <= 18; y++) {
     b.set(23, y, y % 2 ? 'rgba(240,244,248,0.55)' : 'rgba(40,46,60,0.45)');
     b.set(24, y, 'rgba(40,46,60,0.35)');
   }
-  b.hline(22, 25, -9, '#3a3f4b');
-  b.hline(22, 25, 19, '#3a3f4b');
-  b.vline(22, -9, 15, '#f4f6f8');
+  b.hline(22, 25, -9, '#4e3420');
+  b.hline(22, 25, 19, '#4e3420');
+  b.vline(22, -9, 15, '#e2d2a4');
   b.outline();
   contact(b, 0, 27, 48, 5, 0.22);
   return { base: s };
 }
 
-const BEANBAG: Readonly<Record<string, string>> = { red: '#d65454', blue: '#4f78c8', yellow: '#e8b83f', green: '#4fae6a' };
+// Sacos de grãos de juta (tons de estopa, com uma faixa tingida).
+const BEANBAG: Readonly<Record<string, string>> = { red: '#a8805a', blue: '#9a8a6a', yellow: '#c4a46a', green: '#8a8a5a' };
 
 export function beanbag(variant: string | undefined): BufFurniture {
   const m = ramp(BEANBAG[variant ?? 'red'] ?? BEANBAG.red, 0.08);
@@ -566,34 +559,34 @@ export function beanbag(variant: string | undefined): BufFurniture {
 export function arcade(): BufFurniture {
   const s = floorSheet(1, 1, 24);
   const b = s.buf;
-  const m = ramp('#5b3f9a', 0.07);
+  const m = ramp('#5e3f27', 0.07);
   frontFace(b, 1, -20, 14, 36, m);
   b.vline(1, -20, 15, m.lt);
   // Letreiro aceso.
   b.rect(1, -22, 14, 4, '#f2c14e');
   b.hline(1, 14, -22, '#fff2b0');
-  for (const x of [3, 5, 8, 10, 12]) b.set(x, -20, '#e05a5a');
+  for (const x of [3, 5, 8, 10, 12]) b.set(x, -20, '#9c2f25');
   // Tela.
-  b.rect(2, -17, 12, 9, '#1a1f2e');
+  b.rect(2, -17, 12, 9, '#2a1d14');
   const screen = { x: 3, y: -16, w: 10, h: 7 };
-  b.rect(screen.x, screen.y, screen.w, screen.h, '#14213d');
-  b.rect(5, -13, 2, 2, '#7be08a');
-  b.rect(9, -15, 2, 1, '#ff79c6');
+  b.rect(screen.x, screen.y, screen.w, screen.h, '#26302a');
+  b.rect(5, -13, 2, 2, '#7fe0a0');
+  b.rect(9, -15, 2, 1, '#d48a2c');
   b.set(8, -11, '#f2c14e');
   // Painel de controle inclinado.
   b.rect(1, -7, 14, 4, m.hi);
   b.hline(1, 14, -4, m.dk);
-  b.rect(4, -7, 2, 2, '#e05a5a');
+  b.rect(4, -7, 2, 2, '#9c2f25');
   b.set(4, -7, '#ff9a9a');
-  b.vline(5, -5, -4, '#2a2e38');
-  for (const [x, c] of [[9, '#3f7fd8'], [11, '#f2c14e'], [13, '#4cae6a']] as const) b.set(x, -6, c);
+  b.vline(5, -5, -4, '#3f2a18');
+  for (const [x, c] of [[9, '#9c2f25'], [11, '#f2c14e'], [13, '#4cae6a']] as const) b.set(x, -6, c);
   // Porta de fichas.
   b.rect(5, 2, 6, 6, m.dd);
   b.set(6, 4, '#f2a03d');
   b.set(9, 4, '#f2a03d');
   // Arte lateral.
-  b.line(2, 13, 6, 9, '#e47aa8');
-  b.line(3, 13, 7, 9, '#36b0b0');
+  b.line(2, 13, 6, 9, '#9c2f25');
+  b.line(3, 13, 7, 9, '#2f7a78');
   b.outline();
   contact(b, 0, 13, 16, 4, 0.26);
   s.rects = { screen: rectAt(s, screen.x, screen.y, screen.w, screen.h) };
@@ -604,24 +597,24 @@ export function arcade(): BufFurniture {
 
 export function toiletStall(state: number): BufFurniture {
   const occupied = state >= 1;
-  const panel = ramp('#a9c4cf', 0.06);
-  const rail = ramp('#c3cad4', 0.06);
+  const panel = ramp('#8a6239', 0.06);
+  const rail = ramp('#6b4a2b', 0.06);
   const s = floorSheet(2, 2, 26, 3, 4);
   const b = s.buf;
   // Interior: sombra no piso e vaso ao fundo.
-  const c = ramp('#f6f6f3', 0.045);
+  const c = ramp('#a8a49a', 0.045);
   b.rect(11, -7, 10, 6, c.base);
   b.hline(11, 20, -7, c.hi);
   b.hline(11, 20, -2, c.dk);
-  b.rect(14, -6, 4, 1, '#c9ced6');
+  b.rect(14, -6, 4, 1, '#8a6239');
   b.ellipse(16, 3, 5.5, 4, c.dk);
   b.ellipse(16, 2.5, 5, 3.6, c.lt);
-  b.ellipse(16, 3, 3, 2.2, '#cfd8e0');
-  b.ellipse(16, 3.2, 2, 1.4, '#a9c9de');
+  b.ellipse(16, 3, 3, 2.2, '#7c766a');
+  b.ellipse(16, 3.2, 2, 1.4, '#4a3a2a');
   // Papel higiênico na divisória esquerda.
-  b.rect(3, 2, 3, 3, '#ffffff');
-  b.set(5, 4, '#d9dde3');
-  b.vline(3, 2, 4, '#9aa2ae');
+  b.rect(3, 2, 3, 3, '#e2d2a4');
+  b.set(5, 4, '#c9b483');
+  b.vline(3, 2, 4, '#4f5459');
   // Divisórias laterais (topo visto de cima, de y=-22 até a frente).
   for (const x of [0, 29]) {
     b.rect(x, -22, 3, 34, panel.base);
@@ -641,23 +634,23 @@ export function toiletStall(state: number): BufFurniture {
   f.vline(31, 11, 29, panel.dk);
   f.hline(0, 31, 29, panel.dk);
   // Pés metálicos (vão inferior).
-  for (const x of [1, 30]) f.rect(x, 30, 1, 2, '#9aa2ae');
+  for (const x of [1, 30]) f.rect(x, 30, 1, 2, '#4f5459');
   if (occupied) {
     f.rect(7, 12, 18, 17, panel.lt);
     f.vline(7, 12, 28, panel.dk);
     f.vline(24, 12, 28, panel.dd);
     f.hline(7, 24, 12, panel.hi);
-    f.rect(21, 18, 2, 3, '#5a6070');
-    f.rect(21, 15, 2, 2, '#e05a5a');
+    f.rect(21, 18, 2, 3, '#6b4a2b');
+    f.rect(21, 15, 2, 2, '#9c2f25');
   } else {
     // Porta entreaberta: vão escuro à direita e folha estreita em perspectiva.
-    f.rect(19, 12, 6, 17, '#3a4250');
-    f.rect(20, 13, 4, 15, '#5a6577');
+    f.rect(19, 12, 6, 17, '#3f2a18');
+    f.rect(20, 13, 4, 15, '#5e3f27');
     f.rect(7, 12, 12, 17, panel.lt);
     f.vline(7, 12, 28, panel.dk);
     f.vline(18, 12, 28, panel.dk);
     f.hline(7, 18, 12, panel.hi);
-    f.rect(16, 18, 2, 3, '#5a6070');
+    f.rect(16, 18, 2, 3, '#6b4a2b');
     f.rect(21, 15, 2, 2, '#5fd07a');
   }
   f.outline();
@@ -667,23 +660,23 @@ export function toiletStall(state: number): BufFurniture {
 export function sink(): BufFurniture {
   const s = floorSheet(1, 1, 10);
   const b = s.buf;
-  const cab = ramp('#e9e8e4', 0.05);
+  const cab = ramp('#9a7048', 0.05);
   frontFace(b, 1, 4, 14, 12, cab);
   b.vline(7, 5, 14, cab.dd);
   b.vline(8, 5, 14, cab.lt);
-  b.rect(5, 8, 1, 3, '#9aa2ae');
-  b.rect(10, 8, 1, 3, '#9aa2ae');
-  topFace(b, 0, -3, 16, 7, ramp('#d7dbe1', 0.04));
+  b.rect(5, 8, 1, 3, '#4f5459');
+  b.rect(10, 8, 1, 3, '#4f5459');
+  topFace(b, 0, -3, 16, 7, ramp('#a8a49a', 0.04));
   // Cuba de louça.
-  b.ellipse(8, 0.5, 5, 2.6, '#f8f8f6');
-  b.ellipse(8, 0.8, 4, 1.8, '#dfe5ea');
-  b.set(8, 1, '#7d8592');
+  b.ellipse(8, 0.5, 5, 2.6, '#8f887c');
+  b.ellipse(8, 0.8, 4, 1.8, '#4f7a8a');
+  b.set(8, 1, '#2f4a52');
   // Torneira e saboneteira.
-  b.rect(7, -5, 2, 3, '#c3cad4');
-  b.set(7, -5, '#ffffff');
-  b.hline(7, 9, -6, '#d3d8df');
+  b.rect(7, -5, 2, 3, '#6b4a2b');
+  b.set(7, -5, '#e2d2a4');
+  b.hline(7, 9, -6, '#6b4a2b');
   b.rect(12, -4, 2, 3, '#f2c14e');
-  b.set(12, -5, '#5a6070');
+  b.set(12, -5, '#6b4a2b');
   b.outline();
   contact(b, 0, 14, 16, 3, 0.2);
   return { base: s };
@@ -695,7 +688,7 @@ export function receptionDesk(seed: number): BufFurniture {
   const s = floorSheet(3, 1, 16);
   const b = s.buf;
   const wood = M.oak;
-  const stone = ramp('#efede8', 0.04);
+  const stone = ramp('#8a6239', 0.04);
   // Área de trabalho (atrás) com monitor de costas e planta.
   topFace(b, 1, -10, 46, 6, M.white);
   monitorBack(b, 8, -15, 13, 7);
@@ -704,9 +697,9 @@ export function receptionDesk(seed: number): BufFurniture {
   // Balcão frontal com faixa de acento.
   frontFace(b, 0, -2, 48, 18, wood);
   woodGrain(b, 1, -1, 46, 14, wood, seed, true);
-  b.rect(0, 5, 48, 3, '#3f7fd8');
-  b.hline(0, 47, 5, '#6aa0ec');
-  b.hline(0, 47, 7, '#2d62b3');
+  b.rect(0, 5, 48, 3, '#9c2f25');
+  b.hline(0, 47, 5, '#c4483a');
+  b.hline(0, 47, 7, '#6e1f18');
   b.rect(0, 14, 48, 2, wood.dd);
   // Tampo (prateleira de atendimento).
   topFace(b, -1, -6, 50, 5, stone);
@@ -716,7 +709,7 @@ export function receptionDesk(seed: number): BufFurniture {
   b.set(31, -7, '#f2c14e');
   b.set(32, -7, '#f2c14e');
   papers(b, 4, -5, 7, 3);
-  b.line(14, -4, 18, -5, '#3a3f4b');
+  b.line(14, -4, 18, -5, '#4e3420');
   b.outline();
   contact(b, -1, 13, 50, 4, 0.24);
   return { base: s };
@@ -726,11 +719,11 @@ export function bench(): BufFurniture {
   const s = floorSheet(2, 1, 10);
   const b = s.buf;
   const w = M.oak;
-  const frame = '#3a3f4b';
+  const frame = '#4e3420';
   // Estrutura metálica.
   for (const x of [2, 29]) {
     b.vline(x, -6, 15, frame);
-    b.vline(x + 1, 8, 15, '#5a6070');
+    b.vline(x + 1, 8, 15, '#6b4a2b');
   }
   b.hline(2, 30, 13, frame);
   // Encosto em ripas.

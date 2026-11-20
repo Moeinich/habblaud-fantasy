@@ -131,35 +131,35 @@ export class Minimap {
     const ctx = this.ctx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
-    // ruas (o fundo) e quarteirões
-    ctx.fillStyle = '#2a2f3a';
+    // estradas de terra (o fundo) e quarteirões
+    ctx.fillStyle = '#2e2216';
     ctx.fillRect(0, 0, cw, ch);
     for (const c of m.cells) {
       const x = Math.round(c.x);
       const y = Math.round(c.y);
       const w = Math.max(2, Math.round(c.w));
       const hh = Math.max(2, Math.round(c.h));
-      if (c.plaza) ctx.fillStyle = '#b9b2a4';
-      else if (c.light > 0) ctx.fillStyle = `rgba(255,206,110,${(0.25 + c.light * 0.75).toFixed(3)})`;
-      else ctx.fillStyle = c.occupied ? '#55607a' : '#3a5a45';
+      if (c.plaza) ctx.fillStyle = '#a8946a';
+      else if (c.light > 0) ctx.fillStyle = `rgba(255,178,74,${(0.25 + c.light * 0.75).toFixed(3)})`;
+      else ctx.fillStyle = c.occupied ? '#6a4e34' : '#3e5a2e';
       ctx.fillRect(x, y, w, hh);
       if (c.light > 0) {
-        ctx.fillStyle = `rgba(255,240,200,${(c.light * 0.5).toFixed(3)})`;
+        ctx.fillStyle = `rgba(255,232,170,${(c.light * 0.5).toFixed(3)})`;
         ctx.fillRect(x + 1, y + 1, Math.max(1, w - 2), 1);
       }
       if (c.plaza) {
-        ctx.fillStyle = '#5ea8d6';
+        ctx.fillStyle = '#9b7be0';
         ctx.fillRect(Math.round(x + w / 2 - 1), Math.round(y + hh / 2 - 1), 2, 2);
       }
     }
     // retângulo da câmera
-    ctx.strokeStyle = 'rgba(232,236,245,0.75)';
+    ctx.strokeStyle = 'rgba(236,220,180,0.8)';
     ctx.lineWidth = 1;
     ctx.strokeRect(Math.round(m.view.x) + 0.5, Math.round(m.view.y) + 0.5, Math.max(2, Math.round(m.view.w)), Math.max(2, Math.round(m.view.h)));
     // eu
-    ctx.fillStyle = '#12151d';
+    ctx.fillStyle = '#1a120c';
     ctx.fillRect(Math.round(m.me.x) - 3, Math.round(m.me.y) - 3, 6, 6);
-    ctx.fillStyle = '#7cc8ff';
+    ctx.fillStyle = '#9be86a';
     ctx.fillRect(Math.round(m.me.x) - 2, Math.round(m.me.y) - 2, 4, 4);
   }
 }

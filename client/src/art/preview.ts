@@ -132,7 +132,7 @@ function sampleScene(): void {
   const W = 26 * TILE;
   const H = 15 * TILE;
   const theme = art.roomTheme(0);
-  const lounge: WallStyle = { base: '#f3efe7', trim: '#a88a6a', pattern: 'wood_panel' };
+  const lounge: WallStyle = { base: '#8a6239', trim: '#4e3420', pattern: 'wood_panel' };
   type D = { y: number; draw: Painter };
   const cast = (seed: number, sub = false) => art.appearanceFromSeed(seed, { sub });
 
@@ -146,7 +146,7 @@ function sampleScene(): void {
     // Paredes.
     art.drawWallFace(ctx, 0, 0, 15 * TILE, theme.wall, { doorways: [{ x: 10 * TILE, w: 2 * TILE }] });
     art.drawWallFace(ctx, 15 * TILE, 0, 7 * TILE, lounge);
-    art.drawWallFace(ctx, 22 * TILE, 0, 4 * TILE, { base: '#eceae6', trim: '#9aa2ae', pattern: 'marble' });
+    art.drawWallFace(ctx, 22 * TILE, 0, 4 * TILE, { base: '#8f897d', trim: '#5c574e', pattern: 'marble' });
     // Itens de parede (desenhados junto da parede).
     const wall = (kind: FurnitureKind, tx: number, variant?: string, extra?: (sp: Sprite, x: number, y: number) => void, seed = 0) => {
       const sp = art.furnitureSprites(kind, variant, 0, { seed }).base;
@@ -405,8 +405,8 @@ function socialLife(): void {
   );
   const W = 31 * TILE;
   const H = 12 * TILE;
-  const lounge: WallStyle = { base: '#e6e2ea', trim: '#8f8aa3', pattern: 'plain' };
-  const bath: WallStyle = { base: '#dce8ee', trim: '#8fb0c4', pattern: 'tiles' };
+  const lounge: WallStyle = { base: '#9c968a', trim: '#5c574e', pattern: 'brick' };
+  const bath: WallStyle = { base: '#94968c', trim: '#545a50', pattern: 'tiles' };
   type D = { y: number; draw: Painter };
   const G = ['rock', 'paper', 'scissors'] as const;
   const HAND: Record<(typeof G)[number], IconName> = { rock: 'hand_rock', paper: 'hand_paper', scissors: 'hand_scissors' };
@@ -418,7 +418,7 @@ function socialLife(): void {
     art.drawFloor(ctx, 'tile_white', 26 * TILE, 2 * TILE, 5 * TILE, 10 * TILE, { seed: 9 });
     art.drawRug(ctx, 1 * TILE, 5 * TILE, 15 * TILE, 4 * TILE, '#4f8a5b', 2);
     art.drawWallFace(ctx, 0, 0, 18 * TILE, lounge);
-    art.drawWallFace(ctx, 18 * TILE, 0, 8 * TILE, { base: '#e9e5dc', trim: '#a88e6c', pattern: 'wood_panel' });
+    art.drawWallFace(ctx, 18 * TILE, 0, 8 * TILE, { base: '#8a6239', trim: '#4e3420', pattern: 'wood_panel' });
     art.drawWallFace(ctx, 26 * TILE, 0, 5 * TILE, bath);
     const wall = (kind: FurnitureKind, cx: number, fn?: (sp: Sprite, ox: number, oy: number) => void) => {
       const sp = art.furnitureSprites(kind).base;
@@ -659,7 +659,7 @@ function furniture(): void {
   const cols = 6;
   const cw = 76;
   const ch = 82;
-  const wallStyle: WallStyle = { base: '#eef1f4', trim: '#9fb0c4', pattern: 'plain' };
+  const wallStyle: WallStyle = { base: '#a08a6a', trim: '#5e4630', pattern: 'stripes' };
   canvas(s, cols * cw, Math.ceil(cells.length / cols) * ch, (ctx, t) => {
     cells.forEach((c, i) => {
       const def = FURNITURE[c.kind];
@@ -727,8 +727,8 @@ function walls(): void {
       name: p,
       style: { base: p === 'brick' ? '#c98a6a' : p === 'tiles' ? '#e8eef2' : '#eef1f4', trim: '#9fb0c4', pattern: p },
     })),
-    { name: 'exterior', style: { base: '#b9bcc4', trim: '#6d7583', pattern: 'plain', exterior: true } },
-    { name: 'exterior tijolo', style: { base: '#b5745a', trim: '#5a4a44', pattern: 'brick', exterior: true } },
+    { name: 'exterior', style: { base: '#8a6239', trim: '#4e3420', pattern: 'wood_panel', exterior: true } },
+    { name: 'exterior tijolo', style: { base: '#8f897d', trim: '#4e4a40', pattern: 'brick', exterior: true } },
   ];
   const w = 7 * TILE;
   const cw = w + 10;
@@ -814,7 +814,7 @@ function windows(): void {
       const x = i * cw + cw / 2;
       const y = 36;
       const g = win.base.rects?.glass;
-      art.drawWallFace(ctx, i * cw, y - 32, cw, { base: '#eef1f4', trim: '#9fb0c4' });
+      art.drawWallFace(ctx, i * cw, y - 32, cw, { base: '#a08a6a', trim: '#5e4630' });
       if (g) art.drawWindowView(ctx, { x: x - win.base.ax + g.x, y: y - win.base.ay + g.y, w: g.w, h: g.h }, h, t, 5);
       blit(ctx, win.base, x, y);
       labelCentered(ctx, names[i], i * cw, cw, 42);
@@ -829,7 +829,7 @@ function clockAndIcons(): void {
   s.appendChild(row);
   const clk = art.furnitureSprites('clock');
   canvas(row, 40, 40, (ctx) => {
-    art.drawWallFace(ctx, 0, 4, 40, { base: '#eef1f4', trim: '#9fb0c4' });
+    art.drawWallFace(ctx, 0, 4, 40, { base: '#a08a6a', trim: '#5e4630' });
     blit(ctx, clk.base, 20, 36);
     const r = clk.base.rects?.face;
     if (r) art.drawClock(ctx, { x: 20 - clk.base.ax + r.x, y: 36 - clk.base.ay + r.y, w: r.w, h: r.h }, new Date());

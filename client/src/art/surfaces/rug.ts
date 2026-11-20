@@ -1,11 +1,12 @@
-// Tapetes decorativos (puros): borda escura, filete claro, franjas nas pontas e padrão no campo.
-import { ramp, shade } from '../core/color';
+// Tapetes de lã tecidos à mão (puros): borda escura, filete claro, franjas nas pontas e padrão no campo.
+import { mix, ramp, shade } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
 
 export function renderRug(w: number, h: number, color: string, seed: number): PixelBuf {
   const b = new PixelBuf(w, h);
-  const m = ramp(color, 0.06);
-  const fringe = '#efe6d2';
+  // Tapetes tecidos à mão: a cor pedida é puxada para tons terrosos (lã tingida com plantas).
+  const m = ramp(mix(color, '#7a5a38', 0.55), 0.07);
+  const fringe = '#c9b483';
   // Franjas nas laterais curtas (1px para fora do corpo).
   const x0 = 1;
   const x1 = w - 2;

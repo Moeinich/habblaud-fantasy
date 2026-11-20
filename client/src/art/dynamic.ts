@@ -24,8 +24,35 @@ function fill(ctx: Ctx, x: number, y: number, w: number, h: number, c: string): 
   const x1 = Math.min(x + w, clipX1);
   const y1 = Math.min(y + h, clipY1);
   if (x1 <= x0 || y1 <= y0) return;
-  ctx.fillStyle = c;
+  ctx.fillStyle = runeMode ? runeTint(c) : c;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+}
+
+// ------------------------------------------------------------------ tinta rúnica
+// As "telas" do acampamento são lajes de pedra com runas: todo conteúdo de tela é remapeado para
+// pedra escura → brilho verde → pergaminho, guardando um pouco da cor original (variedade).
+
+let runeMode = false;
+const runeCache = new Map<string, string>();
+
+function parseHex(c: string): [number, number, number] | null {
+  const m = /^#([0-9a-f]{6})$/i.exec(c);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Cor de tela convertida para a tinta rúnica (exportada para os testes). */
+export function runeTint(c: string): string {
+  let v = runeCache.get(c);
+  if (v) return v;
+  const rgb = parseHex(c);
+  if (!rgb) return c;
+  const l = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  const ramp = l < 0.5 ? mix('#1c2620', '#5fbf80', l / 0.5) : mix('#5fbf80', '#efe2bc', (l - 0.5) / 0.5);
+  v = mix(ramp, c, 0.22);
+  runeCache.set(c, v);
+  return v;
 }
 
 /** Hash inteiro rápido e determinístico (sem alocação). */
@@ -46,6 +73,15 @@ const SYNTAX = ['#ff79c6', '#8be9fd', '#f1fa8c', '#50fa7b', '#bd93f9', '#ffb86c'
 // ------------------------------------------------------------------ telas
 
 export function drawScreen(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed: number): void {
+  runeMode = true;
+  try {
+    drawScreenInner(ctx, r, mode, t, seed);
+  } finally {
+    runeMode = false;
+  }
+}
+
+function drawScreenInner(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed: number): void {
   const x = Math.round(r.x);
   const y = Math.round(r.y);
   const w = Math.round(r.w);
@@ -604,11 +640,13 @@ function bounce(v: number, span: number): number {
 
 // ------------------------------------------------------------------ quadro kanban
 
+// Mapa de guerra: bilhetes de pergaminho presos com selos de cera (a cor do selo é o status).
 const NOTE = {
-  pending: ['#ffe27a', '#ffd0a8'],
-  in_progress: ['#8fd0ff', '#a9e0ff'],
-  completed: ['#9be59b', '#b8efb0'],
+  pending: ['#eadcb4', '#e2d2a4'],
+  in_progress: ['#eadcb4', '#e2d2a4'],
+  completed: ['#d8cfa8', '#cfc49a'],
 } as const;
+const SEAL = { pending: '#d48a2c', in_progress: '#9c2f25', completed: '#4f7d3a' } as const;
 
 export function drawBoard(ctx: Ctx, r: Rect, items: readonly { status: 'pending' | 'in_progress' | 'completed' }[], t: number): void {
   const x = Math.round(r.x);
@@ -617,10 +655,10 @@ export function drawBoard(ctx: Ctx, r: Rect, items: readonly { status: 'pending'
   const h = Math.round(r.h);
   clipTo(x, y, w, h);
   const colW = Math.floor(w / 3);
-  const header = ['#f2b33d', '#3f7fd8', '#3fae5c'];
+  const header = ['#d48a2c', '#9c2f25', '#4f7d3a'];
   for (let c = 0; c < 3; c++) {
     fill(ctx, x + c * colW + 1, y, colW - 2, 1, header[c]);
-    if (c > 0) fill(ctx, x + c * colW - 1, y + 2, 1, h - 3, '#e1e6ec');
+    if (c > 0) fill(ctx, x + c * colW - 1, y + 2, 1, h - 3, '#8a6a44');
   }
   const order = ['pending', 'in_progress', 'completed'] as const;
   const per = colW >= 11 ? 2 : 1;
@@ -640,9 +678,9 @@ export function drawBoard(ctx: Ctx, r: Rect, items: readonly { status: 'pending'
     const col = pal[k % 2];
     fill(ctx, nx, ny, 4, 3, col);
     fill(ctx, nx, ny + 2, 4, 1, mix(col, '#7a6a4a', 0.25));
-    fill(ctx, nx + 1, ny + 1, 2, 1, mix(col, '#2b2f3b', 0.35));
-    if (it.status === 'completed') fill(ctx, nx + 3, ny, 1, 1, '#2e8a46');
-    if (it.status === 'in_progress' && Math.floor(t / 600 + k) % 2 === 0) fill(ctx, nx, ny, 4, 1, '#e8f6ff');
+    fill(ctx, nx + 1, ny + 1, 2, 1, mix(col, '#3a2a1a', 0.35));
+    fill(ctx, nx + 3, ny, 1, 1, SEAL[it.status]);
+    if (it.status === 'in_progress' && Math.floor(t / 600 + k) % 2 === 0) fill(ctx, nx + 3, ny, 1, 1, '#f0b040');
   }
 }
 
@@ -726,29 +764,37 @@ export function drawWindowView(ctx: Ctx, r: Rect, hour: number, t: number, seed:
       }
     }
   }
-  // Silhueta da cidade (janelas acesas à noite).
-  const city = mix('#8ea8c6', '#1a2138', Math.max(sky.night, 1 - sky.day) * 0.9);
-  const cityFar = mix('#b3c6dc', '#262f4d', Math.max(sky.night, 1 - sky.day) * 0.9);
+  // Montanhas ao fundo e floresta de pinheiros (fogueiras distantes à noite).
+  const dusk = Math.max(sky.night, 1 - sky.day) * 0.9;
+  const mountain = mix('#9aa8b8', '#232a40', dusk);
+  const snow = mix('#eef2f6', '#5a6480', dusk);
+  const forest = mix('#3f6a3c', '#121c18', dusk);
+  const peaks = 2 + (s % 2);
+  for (let p = 0; p < peaks; p++) {
+    const hh = h32(s, p + 500);
+    const px = x + Math.floor(((p + 0.5) / peaks) * w) + ((hh % 5) - 2);
+    const ph = Math.floor(h * 0.35) + ((hh >>> 3) % Math.max(1, Math.floor(h * 0.2)));
+    for (let i = 0; i < ph; i++) {
+      const half = Math.floor(i * 1.3);
+      const yy = y + h - ph + i;
+      fill(ctx, px - half, yy, half * 2 + 1, 1, i < 2 ? snow : mountain);
+    }
+  }
   let bx = x;
   let k = 0;
   while (bx < x + w) {
     const hh = h32(s, k + 300);
-    const bw = 3 + (hh % 4);
-    const bh = 3 + ((hh >>> 4) % Math.max(2, Math.floor(h * 0.42)));
-    const far = (hh >>> 9) % 3 === 0;
-    const ww = Math.min(bw, x + w - bx);
-    fill(ctx, bx, y + h - bh - (far ? 2 : 0), ww, bh + (far ? 2 : 0), far ? cityFar : city);
-    if (sky.night > 0.2) {
-      for (let wy = y + h - bh + 1; wy < y + h - 1; wy += 2) {
-        for (let wx = bx + 1; wx < bx + ww - 1; wx += 2) {
-          const on = h32(s + wx * 31, wy) % 3 === 0;
-          if (on) fill(ctx, wx, wy, 1, 1, Math.floor(t / 3000 + wx + wy) % 17 === 0 ? '#c99a40' : '#f7d77a');
-        }
-      }
-    } else if (!far && bw > 3) {
-      for (let wy = y + h - bh + 1; wy < y + h - 1; wy += 2) fill(ctx, bx + 1, wy, ww - 2, 1, mix(city, '#e6f0fa', 0.35));
+    const th = 3 + ((hh >>> 4) % Math.max(2, Math.floor(h * 0.3)));
+    // Pinheiro: triângulo de 3px de largura no máximo.
+    for (let i = 0; i < th; i++) {
+      const half = i < 1 ? 0 : 1;
+      fill(ctx, bx + 1 - half, y + h - th + i, half * 2 + 1, 1, forest);
     }
-    bx += bw;
+    if (sky.night > 0.2 && hh % 7 === 0) {
+      const flick = Math.floor(t / 240 + k) % 3 === 0;
+      fill(ctx, bx + 1, y + h - 1, 1, 1, flick ? '#ffd27a' : '#f08a2c');
+    }
+    bx += 2 + (hh % 2);
     k++;
   }
 }
@@ -778,8 +824,8 @@ export function drawClock(ctx: Ctx, r: Rect, date: Date): void {
     }
   };
   const size = Math.min(r.w, r.h);
-  hand((hr / 12) * Math.PI * 2, size * 0.26, '#2b2f3b');
-  hand((min / 60) * Math.PI * 2, size * 0.4, '#3a3f4b');
-  hand((sec / 60) * Math.PI * 2, size * 0.38, 'rgba(224,90,90,0.85)');
-  fill(ctx, Math.floor(cx), Math.floor(cy), 1, 1, '#e05a5a');
+  hand((hr / 12) * Math.PI * 2, size * 0.26, '#2a1d14');
+  hand((min / 60) * Math.PI * 2, size * 0.4, '#3f2c1c');
+  hand((sec / 60) * Math.PI * 2, size * 0.38, 'rgba(212,138,44,0.85)');
+  fill(ctx, Math.floor(cx), Math.floor(cy), 1, 1, '#e0b23c');
 }

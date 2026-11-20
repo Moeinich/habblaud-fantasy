@@ -524,7 +524,7 @@ y el feed sigue mostrando lo que pasa ahora.
 El servidor graba la línea de tiempo **a partir del momento en que está encendido** (no se puede reconstruir el
 pasado): resúmenes de lo que muestra la oficina, sin conversaciones, en `~/.habblaud/timeline/` (en Docker, en el
 volumen de datos), con un límite de tamaño por día y los últimos **7 días** guardados. Para no grabar:
-`HABBLAUD_TIMELINE=0`. Detalles en [`server/README.md`](server/README.md#linha-do-tempo-timelapse).
+`HABBLAUD_TIMELINE=0`. Detalles en [`server/README.md`](server/README.md#timeline-timelapse).
 
 Los personajes caminan más rápido en el replay, pero a velocidades altas quien pasa poco tiempo en la oficina casi no
 llega a su escritorio; saltar a otro punto los muestra a todos ya en su lugar.
@@ -1101,10 +1101,10 @@ HABBLAUD_DATA_DIR=/tmp/habblaud-demo HABBLAUD_TIMELINE=0 HABBLAUD_CLAUDE_DIRS=/t
 `HABBLAUD_TIMELINE=0` evita grabar en esa carpeta; con la grabación activada, se borran los días con más de 7 días.
 
 **Publicar una versión:** cada versión tiene su sección en el [`CHANGELOG.md`](CHANGELOG.md), con lo que entró.
-Durante el trabajo, anota los cambios en "Não lançado" (la sección de lo que aún no se publicó). Para publicar:
+Durante el trabajo, anota los cambios en "Unreleased" (la sección de lo que aún no se publicó). Para publicar:
 
 1. Sube el número con `npm version minor --no-git-tag-version` (o `patch`, en una versión solo de correcciones).
-2. Cambia "Não lançado" por la versión y la fecha (`## [0.3.0] - AAAA-MM-DD`), deja un "Não lançado" vacío arriba y
+2. Cambia "Unreleased" por la versión y la fecha (`## [0.3.0] - AAAA-MM-DD`), deja un "Unreleased" vacío arriba y
    actualiza los enlaces del final. `npm test` falla si la versión del `package.json` no tiene sección.
 3. Haz el merge en `main` y ejecuta `npm run release` (requiere [`gh`](https://cli.github.com/) autenticado;
    `-- --dry-run` solo muestra las notas). El script crea el tag `v0.3.0` y la release con el texto de la sección. A

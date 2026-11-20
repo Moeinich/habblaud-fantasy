@@ -9,14 +9,14 @@ export const RESTROOM_ID = 'core:banheiros';
 export const CAFE_ID = 'core:copa';
 export const LOUNGE_ID = 'core:lounge';
 
-/** Paredes do núcleo: tons claros e neutros (frios), com acabamentos diferentes por ambiente. */
+/** Paredes do núcleo do acampamento: troncos, pedra e pau-a-pique, com acabamentos por ambiente. */
 export const CORE_WALLS = {
-  reception: { base: '#e9e5dc', trim: '#a88e6c', pattern: 'wood_panel' } satisfies WallStyle,
-  restroom: { base: '#dce8ee', trim: '#8fb0c0', pattern: 'tiles' } satisfies WallStyle,
-  cafe: { base: '#eef0ee', trim: '#9aa6ad', pattern: 'plain' } satisfies WallStyle,
-  cafeSplash: { base: '#d9dcdf', trim: '#8d969e', pattern: 'marble' } satisfies WallStyle,
-  lounge: { base: '#e6e2ea', trim: '#8f8aa3', pattern: 'plain' } satisfies WallStyle,
-  glass: { base: '#cfe6f0', trim: '#9fb9c6', pattern: 'glass' } satisfies WallStyle,
+  reception: { base: '#8a6239', trim: '#4e3420', pattern: 'wood_panel' } satisfies WallStyle,
+  restroom: { base: '#94968c', trim: '#545a50', pattern: 'tiles' } satisfies WallStyle,
+  cafe: { base: '#a08a6a', trim: '#5e4630', pattern: 'stripes' } satisfies WallStyle,
+  cafeSplash: { base: '#8f897d', trim: '#5c574e', pattern: 'marble' } satisfies WallStyle,
+  lounge: { base: '#9c968a', trim: '#5c574e', pattern: 'brick' } satisfies WallStyle,
+  glass: { base: '#c4d6be', trim: '#6b4a2b', pattern: 'glass' } satisfies WallStyle,
 };
 
 /** Centros (em tiles locais) dos dois elevadores na face norte da recepção. */

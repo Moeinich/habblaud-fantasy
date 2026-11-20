@@ -1,14 +1,29 @@
-# Novidades
+# Changelog
 
-O que entrou em cada versão do Habblaud. Cada versão tem a sua seção aqui, e o texto dela vira as notas da
-[release no GitHub](https://github.com/marmottajr/habblaud/releases) (`npm run release`), que o Habblaud abre em
-**Configurações › Sobre › Ver o que mudou**.
+What went into each version of Habblaud. Each version has its own section here, and its text becomes the notes of
+the [GitHub release](https://github.com/marmottajr/habblaud/releases) (`npm run release`), which Habblaud opens in
+**Settings › About › See what changed**. New entries are written in English; older entries are kept as they were.
 
-O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e os números seguem o
-[versionamento semântico](https://semver.org/lang/pt-BR/): correção sobe o último número (0.2.**1**), novidade sobe o
-do meio (0.**3**.0).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[semantic versioning](https://semver.org/): a fix bumps the last number (0.2.**1**), a new feature bumps the middle
+one (0.**3**.0).
 
-## [Não lançado]
+## [Unreleased]
+
+### Changed
+
+- **The office is now a fantasy camp.** The whole look was redrawn in an original fantasy-RTS style. Desks are
+  workbenches, monitors are stone slabs with glowing runes, chairs are stumps and hide-covered seats, and the printer
+  is a small forge. The water cooler is a water barrel and the coffee machine is a cauldron. Floors are straw,
+  rough planks, flagstones and cobbles, and walls are logs, rough stone and wattle-and-daub. The window shows
+  mountains and a pine forest, the kanban board is a war map with wax seals, and posters are clan banners. Outside,
+  street lamps are braziers and cars are carts.
+- **Agents are now workers of an orc clan.** They have green skin, tusks, pointed ears, work clothes and tools in
+  hand. Only the drawing changes: character data stays the same.
+- **The city is now a fantasy town.** Buildings are huts, longhouses, watchtowers and keeps, and streets are dirt
+  roads.
+- **The interface uses dark wood, parchment and gold trim**, and the sounds are axe chops, anvil strikes and a low
+  horn when an agent needs you.
 
 ## [1.0.3] - 2026-10-16
 
@@ -576,7 +591,7 @@ Primeira versão publicada.
   Subagentes chegam, trabalham e entregam ao principal. Mostra as duas contas, com o uso de 5 horas e semanal de
   cada uma (tap de statusline), além de feed de atividade, avisos e modo demonstração. Roda no Node ou no Docker local.
 
-[Não lançado]: https://github.com/marmottajr/habblaud/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/marmottajr/habblaud/compare/v1.0.3...HEAD
 [1.0.3]: https://github.com/marmottajr/habblaud/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/marmottajr/habblaud/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/marmottajr/habblaud/compare/v1.0.0...v1.0.1

@@ -19,9 +19,9 @@ export const WALL_FACE_H = TILE * 2;
 export const WALL_CAP_H = 4;
 export const BASEBOARD_H = 3;
 
-/** Cor da tampa (topo da parede), levemente tingida pela cor da parede. */
+/** Cor da tampa (viga/sapê no topo da parede), levemente tingida pela cor da parede. */
 export function capColor(style: WallStyle): string {
-  return mix(style.exterior ? '#4a4f5c' : '#3d4356', style.base, 0.1);
+  return mix(style.exterior ? '#5a4630' : '#4a3a26', style.base, 0.1);
 }
 
 /** Coluna de 16x32 da face da parede norte (tampa + padrão + rodapé). */
@@ -38,9 +38,17 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
   for (let y = 0; y < fh; y++) b.hline(0, TILE - 1, fy + y, shade(base, 0.02 - (y / fh) * 0.035));
   switch (pattern) {
     case 'stripes': {
-      const s = shade(base, -0.035);
-      for (let x = 0; x < TILE; x += 4) b.rect(x, fy, 2, fh, s);
-      for (let x = 1; x < TILE; x += 4) b.vline(x, fy, fy + fh - 1, shade(base, -0.02));
+      // Pau-a-pique: reboco de barro com vigas verticais de madeira a cada 8px.
+      const daub = shade(base, 0.06);
+      b.rect(0, fy, TILE, fh, daub);
+      for (let i = 0; i < 6; i++) b.set(Math.floor(r() * TILE), fy + Math.floor(r() * fh), shade(daub, r() < 0.5 ? -0.05 : 0.04));
+      const beam = ramp('#5e3f27', 0.06);
+      for (const x of [(col * 8) % 16 === 0 ? 0 : 8]) {
+        b.rect(x, fy, 3, fh, beam.base);
+        b.vline(x, fy, fy + fh - 1, beam.lt);
+        b.vline(x + 2, fy, fy + fh - 1, beam.dk);
+      }
+      b.hline(0, TILE - 1, fy + Math.floor(fh / 2), beam.base);
       break;
     }
     case 'tiles': {
@@ -57,42 +65,54 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
       break;
     }
     case 'wood_panel': {
-      // Lambri de madeira na metade de baixo com friso; metade de cima lisa.
-      const w = ramp(mix('#b98a5e', base, 0.15), 0.04);
-      const top = fy + Math.floor(fh * 0.45);
-      b.rect(0, top, TILE, fy + fh - top, w.base);
+      // Paliçada de troncos verticais (4px cada, arredondados: luz à esquerda, sombra à direita),
+      // com amarração de corda na altura do meio.
+      const w = ramp(mix('#8a6239', base, 0.35), 0.06);
       for (let x = 0; x < TILE; x += 4) {
-        b.vline(x, top, fy + fh - 1, w.dk);
-        b.vline(x + 1, top + 1, fy + fh - 1, w.lt);
+        const tone = [w.base, w.lt, w.base, w.dk][((col * 4 + x / 4) * 7) % 4];
+        b.rect(x, fy, 4, fh, tone);
+        b.vline(x, fy, fy + fh - 1, shade(tone, 0.07));
+        b.vline(x + 3, fy, fy + fh - 1, shade(tone, -0.12));
+        // Nós e veios.
+        if (r() < 0.6) b.set(x + 1 + Math.floor(r() * 2), fy + Math.floor(r() * fh), shade(tone, -0.1));
+        b.vline(x + 2, fy + 2 + Math.floor(r() * 4), fy + 6 + Math.floor(r() * 6), shade(tone, -0.05));
       }
-      b.hline(0, TILE - 1, top - 1, w.hi);
-      b.hline(0, TILE - 1, top, w.lt);
-      b.hline(0, TILE - 1, top + 1, w.dk);
+      const rope = fy + Math.floor(fh * 0.55);
+      b.hline(0, TILE - 1, rope, '#c9b483');
+      for (let x = 1; x < TILE; x += 2) b.set(x, rope, '#a89060');
       break;
     }
     case 'brick': {
-      // Tijolos 8x4 (com argamassa) em fileiras desencontradas; tom por tijolo, aresta de cima clara.
-      const brick = ramp(base, 0.035);
-      const mortar = mix(base, '#e9e4dc', 0.5);
-      for (let row = 0; row * 4 < fh; row++) {
-        const y = fy + row * 4;
-        const off = row % 2 ? 4 : 0;
-        for (let bx = -8; bx < TILE; bx += 8) {
-          const x0 = bx + off;
-          const tone = [brick.lt, brick.base, brick.base, brick.dk][Math.floor(r() * 4)];
-          for (let x = Math.max(0, x0); x < Math.min(TILE, x0 + 7); x++) {
-            for (let yy = y; yy < Math.min(fy + fh, y + 3); yy++) b.set(x, yy, yy === y ? shade(tone, 0.03) : tone);
+      // Pedra bruta: blocos irregulares (alturas 4–5) com argamassa escura e tom por pedra.
+      const stone = ramp(base, 0.05);
+      const mortar = shade(base, -0.28);
+      b.rect(0, fy, TILE, fh, mortar);
+      let y = fy;
+      let row = 0;
+      while (y < fy + fh) {
+        const hgt = 4 + ((row * 3 + col) % 2);
+        let x = row % 2 ? -3 : 0;
+        while (x < TILE) {
+          const bw = 5 + Math.floor(r() * 4);
+          const tone = [stone.lt, stone.base, stone.base, stone.dk][Math.floor(r() * 4)];
+          for (let xx = Math.max(0, x); xx < Math.min(TILE, x + bw - 1); xx++) {
+            for (let yy = y; yy < Math.min(fy + fh, y + hgt - 1); yy++) {
+              const edgeTop = yy === y;
+              const edgeBot = yy === y + hgt - 2;
+              b.set(xx, yy, edgeTop ? shade(tone, 0.06) : edgeBot ? shade(tone, -0.07) : tone);
+            }
           }
-          if (x0 + 7 >= 0 && x0 + 7 < TILE) b.vline(x0 + 7, y, Math.min(fy + fh - 1, y + 2), mortar);
+          x += bw;
         }
-        if (y + 3 < fy + fh) b.hline(0, TILE - 1, y + 3, mortar);
+        y += hgt;
+        row++;
       }
       break;
     }
     case 'glass': {
       // Parede de vidro: face translúcida com montantes; o mundo vê através.
       b.clearRect(0, fy, TILE, fh);
-      b.rect(0, fy, TILE, fh, 'rgba(175,215,238,0.38)');
+      b.rect(0, fy, TILE, fh, 'rgba(196,214,190,0.34)');
       b.vline(0, fy, fy + fh - 1, 'rgba(195,202,212,0.95)');
       b.hline(0, TILE - 1, fy, 'rgba(255,255,255,0.45)');
       for (let i = 0; i < fh; i++) {
@@ -104,7 +124,7 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
     }
     case 'marble': {
       // Frontão de mármore cinza (copa): placas com veios.
-      const m = mix('#c9cdd3', base, 0.25);
+      const m = mix('#8f897d', base, 0.25);
       b.rect(0, fy, TILE, fh, m);
       for (let v = 0; v < 2; v++) {
         let x = r() * TILE;
@@ -113,7 +133,7 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
           x += (r() - 0.35) * 1.4;
         }
       }
-      for (let i = 0; i < 8; i++) b.set(Math.floor(r() * TILE), fy + Math.floor(r() * fh), r() < 0.5 ? '#d8dbe0' : '#b8bdc6');
+      for (let i = 0; i < 8; i++) b.set(Math.floor(r() * TILE), fy + Math.floor(r() * fh), r() < 0.5 ? '#a8a296' : '#6a645a');
       b.hline(0, TILE - 1, fy + Math.floor(fh / 2), 'rgba(120,126,138,0.35)');
       if (col % 2 === 1) b.vline(TILE - 1, fy, fy + fh - 1, 'rgba(120,126,138,0.35)');
       break;
@@ -125,9 +145,11 @@ export function wallFaceTile(style: WallStyle, variant: number, col: number): Pi
   // Sombra projetada pela tampa.
   if (pattern !== 'glass') b.hline(0, TILE - 1, fy, shade(base, -0.06));
   // Tampa escura com brilho na aresta.
+  // Viga de topo com fibras (sapê/madeira).
   b.rect(0, 0, TILE, WALL_CAP_H, cap);
-  b.hline(0, TILE - 1, 0, shade(cap, 0.08));
-  b.hline(0, TILE - 1, WALL_CAP_H - 1, shade(cap, -0.06));
+  b.hline(0, TILE - 1, 0, shade(cap, 0.1));
+  for (let x = (col & 1) * 2; x < TILE; x += 4) b.set(x, 1, shade(cap, 0.05));
+  b.hline(0, TILE - 1, WALL_CAP_H - 1, shade(cap, -0.08));
   // Rodapé.
   const by = WALL_FACE_H - BASEBOARD_H;
   b.rect(0, by, TILE, BASEBOARD_H, trim);

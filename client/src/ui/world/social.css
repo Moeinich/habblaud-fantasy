@@ -7,8 +7,8 @@
   margin-left: 2px;
   padding: 1px 5px;
   border-radius: 999px;
-  background: rgba(255, 92, 122, 0.16);
-  color: #ffc7d2;
+  background: rgba(var(--tone-love-rgb), 0.16);
+  color: var(--tone-love-text);
   font-weight: 700;
 }
 
@@ -23,7 +23,7 @@
 @keyframes ui-away-bump {
   30% {
     transform: scale(1.35);
-    background: rgba(255, 92, 122, 0.45);
+    background: rgba(var(--tone-love-rgb), 0.45);
   }
 }
 
@@ -40,17 +40,17 @@
 }
 
 .ui-away {
-  --ink: #ff8fa3;
+  --ink: var(--tone-love);
   display: flex;
   flex-direction: column;
   gap: 9px;
   min-width: 0;
   padding: 10px 12px 11px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 170, 120, 0.32);
+  border: 1px solid rgba(var(--ui-gold-rgb), 0.32);
   background:
-    radial-gradient(circle at 92% 0%, rgba(255, 196, 120, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(255, 214, 160, 0.07), rgba(255, 255, 255, 0.02));
+    radial-gradient(circle at 92% 0%, rgba(var(--ui-gold-rgb), 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(var(--ui-hi-rgb), 0.07), rgba(var(--ui-hi-rgb), 0.02));
 }
 
 .ui-away[hidden] {
@@ -65,8 +65,8 @@
   width: min(340px, calc(100vw - 28px));
   background: var(--ui-bg-solid);
   box-shadow:
-    0 22px 54px rgba(5, 7, 12, 0.55),
-    inset 0 3px 0 rgba(255, 186, 120, 0.4);
+    0 22px 54px rgba(var(--ui-shade-rgb), 0.55),
+    inset 0 3px 0 rgba(var(--ui-gold-rgb), 0.4);
   animation: ui-away-in 0.45s var(--ease);
 }
 
@@ -99,8 +99,8 @@
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: linear-gradient(180deg, #4a3a5c, #2b2236);
-  border: 1px solid rgba(255, 186, 120, 0.4);
+  background: linear-gradient(180deg, var(--ui-wood-light), var(--ui-wood));
+  border: 1px solid rgba(var(--ui-gold-rgb), 0.4);
   font-size: 19px;
   line-height: 1;
 }
@@ -132,7 +132,7 @@
 
 .ui-away__title {
   font: 700 13.5px/1.25 var(--font-ui);
-  color: #ffe2b8;
+  color: var(--tone-warn-text-soft);
 }
 
 .ui-away__since {
@@ -197,11 +197,11 @@
 }
 
 .ui-away__stat.is-likes b {
-  color: #ff9db0;
+  color: var(--tone-love-text);
 }
 
 .ui-away__stat.is-stamps b {
-  color: #ffd27a;
+  color: var(--tone-warn-text);
 }
 
 .ui-away__icon {
@@ -228,20 +228,20 @@
   border-radius: 7px;
   border: 1.5px dashed color-mix(in srgb, var(--ink) 70%, transparent);
   background: color-mix(in srgb, var(--ink) 9%, transparent);
-  color: #ffd9e0;
+  color: var(--tone-love-text);
   font: 700 11px/1.2 var(--font-ui);
   transform: rotate(var(--r, 0deg));
   animation: ui-away-stamp 0.42s cubic-bezier(0.2, 1.4, 0.4, 1) calc(0.18s + var(--i, 0) * 0.12s) both;
 }
 
 .ui-away__stamp:nth-child(3n + 2) {
-  --ink: #8fd0ff;
-  color: #d6efff;
+  --ink: var(--tone-info-text);
+  color: var(--tone-info-text);
 }
 
 .ui-away__stamp:nth-child(3n + 3) {
-  --ink: #ffd27a;
-  color: #ffefcc;
+  --ink: var(--tone-warn-text);
+  color: var(--tone-warn-text-soft);
 }
 
 @keyframes ui-away-stamp {
@@ -297,9 +297,9 @@
 .ui-away__code {
   padding: 2px 7px;
   border-radius: 6px;
-  border: 1px solid rgba(124, 200, 255, 0.35);
-  background: rgba(124, 200, 255, 0.1);
-  color: #cfeaff;
+  border: 1px solid rgba(var(--ui-accent-rgb), 0.35);
+  background: rgba(var(--ui-accent-rgb), 0.1);
+  color: var(--tone-info-text);
   font: 700 12.5px/1.4 var(--font-mono);
   letter-spacing: 0.06em;
 }

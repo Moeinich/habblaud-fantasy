@@ -201,8 +201,8 @@ export function ramp(base: string, step = 0.08): Ramp {
   return r;
 }
 
-/** Cor de contorno: versão bem escura da cor vizinha, puxada para o cinza-azulado padrão. */
-export const OUTLINE = '#272b3b';
+/** Cor de contorno: versão bem escura da cor vizinha, puxada para o marrom-escuro padrão. */
+export const OUTLINE = '#2a1d14';
 const outlineCache = new Map<number, string>();
 
 export function outlineFor(r: number, g: number, b: number): string {

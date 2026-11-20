@@ -5,7 +5,7 @@
 // Legenda do cabelo: o = base, h = claro, H = brilho, d = sombra, D = sombra profunda,
 // z = raspado (cabelo misturado à pele), k = brilho da pele (careca), a = acessório (elástico).
 // Legenda da cabeça: s = pele, S = pele em sombra, L = pele clara, e/E = olho (topo/base),
-// b = blush, m = boca, r = interior da orelha.
+// b = blush, m = boca, r = interior da orelha, B = sobrancelha pesada, T = presa.
 import type { HairStyle } from '../api';
 
 export interface Tpl {
@@ -27,18 +27,20 @@ export type HeadView = 'down' | 'up' | 'side';
 const t = (x: number, y: number, rows: readonly string[]): Tpl => ({ x, y, rows });
 
 export const HEAD_BASE: Readonly<Record<HeadView, Tpl>> = {
+  // Cabeça de trabalhador: sobrancelha pesada (B), mandíbula larga e presas (T) subindo do lábio de
+  // baixo. As orelhas pontudas são desenhadas à parte (drawEars), por cima do cabelo.
   down: t(0, 4, [
     '...ssssssss...',
     '..ssssssssss..',
     '.sssssssssssS.',
     '.sssssssssssS.',
     '.sssssssssssS.',
-    '.sssssssssssS.',
+    '.ssBBBssBBBSS.',
     'ssssessssessSs',
     'SsssEssssEssSS',
-    '.ssbssssssbsS.',
-    '..ssssmmsssS..',
-    '...sssssssS...',
+    '.sssTssssTssS.',
+    '.sssTsmmsTsSS.',
+    '.SssssssssSSS.',
   ]),
   up: t(0, 4, [
     '...ssssssss...',
@@ -50,8 +52,8 @@ export const HEAD_BASE: Readonly<Record<HeadView, Tpl>> = {
     'ssssssssssssSs',
     'SssssssssssSSS',
     '.sssssssssssS.',
-    '..ssssssssSS..',
-    '...sssssssS...',
+    '.ssssssssssSS.',
+    '.SSsssssssSSS.',
   ]),
   side: t(0, 4, [
     '...ssssssss...',
@@ -59,59 +61,59 @@ export const HEAD_BASE: Readonly<Record<HeadView, Tpl>> = {
     '.sssssssssssS.',
     '.sssssssssssS.',
     '.sssssssssssS.',
-    '.sssssssssssS.',
+    '.BBBssssssssS.',
     '.sseSssssrsSS.',
     'sssEsssssrsSS.',
-    '.sssbsssssSS..',
-    '.smssssssSS...',
-    '..sssssssS....',
+    'sssTssssssSS..',
+    'ssmTssssssSS..',
+    '.SsssssssSS...',
   ]),
 };
 
 /** Penteados por direção. 'side' é desenhado virado para a esquerda (direita = espelho). */
 export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLayers>>>> = {
+  // short = coque no alto da cabeça (laterais raspadas).
   short: {
     down: {
-      front: t(0, 2, [
-        '....oooooo....',
-        '..ooohhhhooo..',
-        '.oohhHHhhoood.',
-        'oohhhhhhoooodd',
-        'ohhooooooooddd',
-        'oooooooo...odd',
-        'ood.d.......dd',
-        'od..........dd',
+      front: t(0, 0, [
+        '......oo......',
+        '.....ohHo.....',
+        '.....ohod.....',
+        '......DD......',
+        '...zzohodzz...',
+        '..zzzzoodzzz..',
+        '.zzzzzzzzzzzz.',
+        '.zzzzzzzzzzzz.',
+        '.z..........z.',
       ]),
     },
     up: {
-      front: t(0, 2, [
-        '....oooooo....',
-        '..ooohhhhooo..',
-        '.oohhHHhhoood.',
-        'oohhhhhhoooodd',
-        'ohhooooooooddd',
-        'oooooooooooodd',
-        'oooooooooooodd',
-        'oooooooooooddd',
-        '.oooooooooodd.',
-        '.dooooooooodd.',
-        '..ddoooooddd..',
-        '....dddddd....',
+      front: t(0, 0, [
+        '......oo......',
+        '.....ohHo.....',
+        '.....ohod.....',
+        '......DD......',
+        '...zzzzzzzz...',
+        '..zzzzzzzzzz..',
+        '.zzzzzzzzzzzz.',
+        '.zzzzzzzzzzzz.',
+        '.zzzzzzzzzzzz.',
+        '.zzzzzzzzzzzz.',
+        '.zzzzzzzzzzz..',
       ]),
     },
     side: {
-      front: t(0, 2, [
-        '....oooooo....',
-        '..oohhhhhooo..',
-        '.ohhHHhhhoood.',
-        'oohhhhhhoooodd',
-        'oooooohooooodd',
-        '.o.o.ooooooodd',
-        '.......oooodd.',
-        '.......ooooddd',
-        '.......d.oodd.',
-        '.........oddd.',
-        '..........dd..',
+      front: t(0, 0, [
+        '.......oo.....',
+        '......ohHo....',
+        '......ohod....',
+        '.......DD.....',
+        '...zzzzzzzz...',
+        '..zzzzzzzzzz..',
+        '.....zzzzzzzz.',
+        '.......zzzzzz.',
+        '........zzzzz.',
+        '.........zzz..',
       ]),
     },
   },
@@ -348,6 +350,7 @@ export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLaye
       ]),
     },
   },
+  // bob = duas tranças caindo dos lados do rosto, com amarras.
   bob: {
     down: {
       front: t(0, 2, [
@@ -357,13 +360,15 @@ export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLaye
         'ohhhhhhhoooodd',
         'ohhooooooooodd',
         'oooooooooooodd',
+        'oho........odd',
         'ooo........odd',
-        'ood........odd',
-        'od..........dd',
-        'od..........dd',
-        'od..........dd',
-        'odd........ddd',
-        '.dd........dd.',
+        'oh..........hd',
+        'DD..........DD',
+        'oh..........hd',
+        'od..........od',
+        'DD..........DD',
+        'oh..........hd',
+        '.d..........d.',
       ]),
     },
     up: {

@@ -22,21 +22,22 @@ interface DeskMats {
 }
 
 function deskMats(variant: string | undefined): DeskMats {
+  // Bancadas de trabalho: tampo de tábuas grossas, pernas de tronco e um caixote embaixo.
   switch (variant) {
     case 'white':
-      return { top: M.white, edge: ramp('#d7d6d1', 0.05), legs: M.steel, ped: ramp('#dcdbd6', 0.05) };
+      return { top: M.white, edge: ramp('#b8a67e', 0.06), legs: M.oakDark, ped: M.cardboard };
     case 'dark':
-      return { top: M.walnut, edge: ramp('#5f4535', 0.06), legs: M.graphite, ped: ramp('#5a4334', 0.06) };
+      return { top: M.walnut, edge: ramp('#47301e', 0.06), legs: M.graphite, ped: M.oakDark };
     default:
-      return { top: M.oak, edge: M.oakDark, legs: ramp('#e9e8e4', 0.05), ped: ramp('#e6e4de', 0.05) };
+      return { top: M.oak, edge: M.oakDark, legs: M.walnut, ped: M.cardboard };
   }
 }
 
-const MUG_COLORS = ['#e2604f', '#3f7fd8', '#f2c14e', '#4cae6a', '#f4f2ee', '#8d66cf'] as const;
+const MUG_COLORS = ['#9c2f25', '#2f7a78', '#e0b23c', '#5f8a3a', '#d9cba8', '#6a4a8a'] as const;
 
 /** Sombra de contato da mesa e sombra do vão sob o tampo (compostas por baixo, após o contorno). */
 function deskShadow(b: PixelBuf): void {
-  underRect(b, 3, 8, 26, 7, 'rgba(30,34,52,0.2)');
+  underRect(b, 3, 8, 26, 7, 'rgba(36,24,14,0.22)');
   contact(b, -1, 13, 34, 4, 0.2);
 }
 
@@ -57,12 +58,13 @@ function deskBody(s: BufSprite, m: DeskMats, seed: number, back: boolean): void 
     b.hline(x, x + 2, 15, m.legs.dd);
   }
   if (!back) {
-    // Gaveteiro sob o lado direito.
+    // Caixote de ferramentas sob o lado direito (tábuas com cinta de ferro).
     frontFace(b, 19, 8, 10, 8, m.ped);
-    b.hline(19, 28, 11, m.ped.dk);
-    b.hline(19, 28, 12, m.ped.lt);
-    b.hline(22, 25, 9, m.ped.dd);
-    b.hline(22, 25, 13, m.ped.dd);
+    b.vline(22, 8, 15, m.ped.dk);
+    b.vline(25, 8, 15, m.ped.dk);
+    b.hline(19, 28, 11, '#5a5550');
+    b.set(20, 11, '#8f949a');
+    b.set(27, 11, '#8f949a');
   }
   // Tampo (12 linhas) + espessura da borda (2 linhas).
   topFace(b, 0, -6, 32, 12, m.top);
@@ -92,13 +94,14 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
     }
     case 2: {
       screen = monitorFront(b, 5, -17, 16, 11);
-      // Notebook aberto à direita (tela ligada com conteúdo fixo).
-      b.rect(22, -9, 9, 6, '#3a404d');
-      b.hline(22, 30, -9, '#4d5464');
+      // Tomo aberto de pé à direita (página com runas).
+      b.rect(22, -9, 9, 6, '#5a2a1c');
+      b.hline(22, 30, -9, '#7a3a26');
       screen2 = { x: 23, y: -8, w: 7, h: 4 };
       staticScreen(b, screen2, 'ide', seed);
-      b.rect(21, -3, 11, 2, '#c9ced6');
-      b.hline(21, 31, -2, '#9aa1ad');
+      b.rect(21, -3, 11, 2, '#e2d2a4');
+      b.hline(21, 31, -2, '#b8a272');
+      b.set(26, -3, '#7a3a26');
       b.hline(22, 31, -1, tone === 'onLight' ? 'rgba(40,46,70,0.3)' : 'rgba(60,40,40,0.2)');
       keyboard(b, 8, -1, 10, tone);
       smallSucculent(b, 1, -3);
@@ -106,8 +109,9 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
     }
     case 3: {
       screen = monitorFront(b, 8, -17, 16, 11);
-      b.rect(22, -15, 2, 2, '#f7d154');
-      b.rect(9, -15, 2, 2, '#ff9fb2');
+      // Selos de cera pregados na laje.
+      b.rect(22, -15, 2, 2, '#9c2f25');
+      b.rect(9, -15, 2, 2, '#d48a2c');
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
       photoFrame(b, 2, -5);
@@ -128,12 +132,11 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone): { screen: Box;
       screen = monitorFront(b, 8, -17, 16, 11);
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
-      // Fone de ouvido sobre a mesa.
-      b.hline(2, 6, -4, '#3a3f4b');
-      b.set(1, -3, '#3a3f4b');
-      b.set(7, -3, '#3a3f4b');
-      b.rect(1, -2, 2, 2, '#e2604f');
-      b.rect(6, -2, 2, 2, '#e2604f');
+      // Martelo deitado sobre a bancada.
+      b.hline(1, 6, -2, '#8a6239');
+      b.hline(1, 6, -1, '#6b4a2b');
+      b.rect(6, -4, 3, 4, '#6a645a');
+      b.hline(6, 8, -4, '#8f887c');
       mug(b, 26, -3, mugC);
       pencilCup(b, 28, 2);
       break;
@@ -196,31 +199,30 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
 
 // ------------------------------------------------------------------ cadeiras
 
+// Assentos de pele/couro estendidos numa armação de madeira.
 const CHAIR_COLORS: Readonly<Record<string, string>> = {
-  black: '#41465a',
-  blue: '#3f62a3',
-  red: '#b44a4a',
-  green: '#3f8a62',
-  gray: '#8b929e',
+  black: '#4a3a2c', // couro escuro
+  blue: '#7a6a58', // pele de lobo
+  red: '#8a3a2a', // couro tingido
+  green: '#5a6a3a', // lona de musgo
+  gray: '#a08a6a', // pele clara
 };
 
 function chairRamp(variant: string | undefined): Ramp {
   return ramp(CHAIR_COLORS[variant ?? 'black'] ?? CHAIR_COLORS.black, 0.07);
 }
 
-/** Base estrela com rodízios + pistão. */
+/** Pernas de galho amarradas com corda (três pés + travessa). */
 function starBase(b: BufSprite['buf']): void {
-  const metal = '#565d6b';
-  const caster = '#23262e';
-  b.hline(3, 12, 13, metal);
-  b.hline(5, 10, 14, metal);
-  b.set(3, 13, '#6c7382');
-  for (const [x, y] of [[2, 14], [13, 14], [4, 15], [11, 15]] as const) {
-    b.set(x, y, caster);
-    b.set(x + (x < 8 ? 1 : -1), y, caster);
+  const wood = '#6b4a2b';
+  const lite = '#8a6239';
+  for (const x of [3, 7, 12]) {
+    b.vline(x, 9, 15, wood);
+    b.set(x, 9, lite);
   }
-  b.rect(7, 9, 2, 4, '#a3aab6');
-  b.vline(8, 9, 12, '#7d8592');
+  b.hline(3, 12, 12, lite);
+  b.set(7, 12, '#c9b483');
+  b.set(8, 12, '#c9b483');
 }
 
 export function officeChair(variant: string | undefined): BufFurniture {
@@ -250,7 +252,7 @@ export function officeChair(variant: string | undefined): BufFurniture {
   f.hline(5, 10, 9, c.dk);
   f.hline(5, 10, 10, c.dk);
   f.hline(4, 11, 12, c.dd);
-  f.rect(7, 13, 2, 1, '#4a505c');
+  f.rect(7, 13, 2, 1, '#6b4a2b');
   f.outline();
   return { base, front };
 }
@@ -267,15 +269,15 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
   b.hline(5, 10, -5, c.hi);
   b.vline(12, -6, 3, c.dk);
   b.hline(3, 12, 3, c.dd);
-  b.rect(7, 4, 2, 2, '#4a505c');
+  b.rect(7, 4, 2, 2, '#6b4a2b');
   // Assento.
   b.rect(2, 5, 12, 5, c.lt);
   b.hline(3, 12, 5, c.hi);
   b.hline(2, 13, 9, c.dk);
   b.hline(2, 13, 10, c.dd);
   for (const x of [1, 13]) {
-    b.rect(x, 3, 2, 5, '#3a3f4b');
-    b.set(x, 3, '#5a6070');
+    b.rect(x, 3, 2, 5, '#6b4a2b');
+    b.set(x, 3, '#8a6239');
   }
   b.outline();
   contact(b, 1, 13, 14, 3, 0.22);
@@ -355,11 +357,11 @@ export function bookshelf(seed: number): BufFurniture {
 export function binderShelf(seed: number): BufFurniture {
   const s = floorSheet(1, 1, 22);
   const b = s.buf;
-  const w = ramp('#ecebe6', 0.05);
+  const w = M.oakDark;
   const r = rngOf(seed, 23);
   topFace(b, 0, -21, 16, 3, w);
   b.rect(0, -18, 16, 34, w.dk);
-  b.rect(1, -17, 14, 31, '#7d8592');
+  b.rect(1, -17, 14, 31, '#3a2a1c');
   b.vline(0, -18, 15, w.lt);
   b.vline(15, -18, 15, w.dd);
   const shelves = [-8, 3, 15];
@@ -368,7 +370,9 @@ export function binderShelf(seed: number): BufFurniture {
     b.hline(1, 14, y + 1, w.dk);
   }
   const tops = [-17, -6, 5];
-  const binders = ['#3f7fd8', '#ec8a3c', '#4cae6a', '#3f7fd8', '#ec8a3c', '#e05a5a', '#f2c14e'];
+  // Rolos de pergaminho amarrados com fitas coloridas.
+  const binders = ['#e2d2a4', '#d8c79c', '#eadcb4', '#cfbf90', '#e2d2a4', '#d8c79c', '#eadcb4'];
+  const ribbons = ['#9c2f25', '#2f7a78', '#e0b23c', '#5f8a3a'];
   tops.forEach((top, i) => {
     const bottom = shelves[i] - 1;
     const h = bottom - top + 1;
@@ -376,10 +380,10 @@ export function binderShelf(seed: number): BufFurniture {
       // Caixas de papelão na prateleira de baixo.
       b.rect(2, bottom - 6, 6, 7, M.cardboard.base);
       b.hline(2, 7, bottom - 6, M.cardboard.lt);
-      b.rect(3, bottom - 4, 4, 2, '#f4efe2');
+      b.rect(3, bottom - 4, 4, 1, '#5a5550');
       b.rect(8, bottom - 5, 6, 6, M.cardboard.dk);
       b.hline(8, 13, bottom - 5, M.cardboard.base);
-      b.rect(9, bottom - 3, 4, 2, '#f4efe2');
+      b.rect(9, bottom - 3, 4, 1, '#5a5550');
       return;
     }
     let x = 2;
@@ -388,8 +392,9 @@ export function binderShelf(seed: number): BufFurniture {
       const bh = Math.min(h - 1, 8 + Math.floor(r() * 2));
       b.rect(x, bottom - bh + 1, 2, bh, c);
       b.vline(x, bottom - bh + 1, bottom, shade(c, 0.1));
-      b.set(x, bottom - bh + 3, '#f4f2ee');
-      b.set(x + 1, bottom - bh + 3, '#f4f2ee');
+      const rib = pick(r, ribbons);
+      b.set(x, bottom - bh + 3, rib);
+      b.set(x + 1, bottom - bh + 3, rib);
       b.set(x + 1, bottom - 1, shade(c, -0.2));
       x += 2;
       if (r() < 0.12) x += 1;
@@ -401,22 +406,25 @@ export function binderShelf(seed: number): BufFurniture {
 }
 
 export function filingCabinet(): BufFurniture {
+  // Baú de madeira empilhado (três gavetões com cintas e argolas de ferro).
   const s = floorSheet(1, 1, 8);
   const b = s.buf;
-  const m = ramp('#c3c9d2', 0.06);
+  const m = M.oak;
   topFace(b, 1, -7, 14, 4, m);
   frontFace(b, 1, -3, 14, 19, m);
+  woodGrain(b, 1, -3, 14, 19, m, 3, true);
   for (const y of [3, 9]) {
-    b.hline(1, 14, y, m.dd);
-    b.hline(1, 14, y + 1, m.lt);
+    b.hline(1, 14, y, '#4f5459');
+    b.hline(1, 14, y + 1, m.dk);
   }
   for (const y of [-1, 5, 11]) {
-    b.rect(6, y, 4, 1, '#7d8592');
-    b.rect(6, y + 1, 4, 1, '#eef1f5');
-    b.set(5, y + 1, '#9aa2ae');
+    b.set(7, y, '#8f949a');
+    b.set(8, y, '#8f949a');
+    b.set(7, y + 1, '#4f5459');
+    b.set(8, y + 1, '#4f5459');
   }
-  b.set(2, -3, m.hi);
-  // Planta pequena em cima.
+  b.vline(1, -3, 15, '#4f5459');
+  b.vline(14, -3, 15, '#4f5459');
   smallSucculent(b, 9, -9);
   b.outline();
   contact(b, 0, 13, 16, 4, 0.22);
@@ -424,53 +432,52 @@ export function filingCabinet(): BufFurniture {
 }
 
 export function printer(): BufFurniture {
+  // Pequena forja de pedra: base de pedra, boca com brasas e chaminé curta com fole ao lado.
   const s = floorSheet(1, 1, 14);
   const b = s.buf;
-  const body = ramp('#dfe2e7', 0.05);
-  const dark = ramp('#7b8391', 0.06);
-  // Gabinete com bandejas de papel.
-  frontFace(b, 0, 2, 16, 14, body);
-  for (const y of [6, 10]) {
-    b.hline(1, 14, y, body.dd);
-    b.rect(6, y + 1, 4, 1, dark.base);
-  }
-  // Corpo da impressora.
-  topFace(b, 0, -11, 16, 6, body);
-  b.rect(1, -10, 14, 3, '#f4f5f7');
-  b.hline(1, 14, -8, '#c9ced6');
-  frontFace(b, 0, -5, 16, 7, body);
-  // Painel de controle com tela e LED.
-  b.rect(10, -10, 5, 3, dark.base);
-  b.rect(11, -9, 3, 1, '#7fd0ff');
-  b.set(14, -8, '#5fd07a');
-  // Saída de papel.
-  b.rect(2, -4, 9, 2, '#3d4350');
-  b.rect(3, -5, 7, 2, '#fbfbf8');
-  b.hline(3, 9, -3, '#e3e1da');
-  b.set(13, -2, '#5fd07a');
+  const st = M.stone;
+  frontFace(b, 0, 2, 16, 14, st);
+  for (const y of [5, 9, 13]) b.hline(1, 14, y, st.dk);
+  for (const [x, y] of [[4, 3], [10, 7], [6, 11], [12, 3]] as const) b.vline(x, y, y + 1, st.dk);
+  topFace(b, 0, -11, 16, 6, st);
+  frontFace(b, 0, -5, 16, 7, st);
+  // Boca da forja com brasas.
+  b.rect(3, -4, 10, 5, '#2a1d14');
+  b.hline(4, 11, 0, '#e08a2c');
+  b.hline(5, 10, -1, '#f0b040');
+  b.set(7, -2, '#ffe08a');
+  b.set(9, -1, '#ffd060');
+  // Chaminé.
+  b.rect(10, -16, 4, 6, st.dk);
+  b.hline(10, 13, -16, st.lt);
+  // Fole de couro.
+  b.rect(1, -10, 5, 3, '#7b4f2c');
+  b.hline(1, 5, -10, '#9a6a40');
+  b.set(6, -9, '#4f5459');
   b.outline();
   contact(b, -1, 13, 18, 4, 0.22);
   return { base: s };
 }
 
 export function trashBin(): BufFurniture {
+  // Balde de madeira com aros de ferro e cavacos.
   const s = floorSheet(1, 1, 2);
   const b = s.buf;
-  const m = ramp('#8a96a8', 0.07);
-  // Corpo afunilado.
+  const m = M.oak;
   for (let y = 7; y <= 15; y++) {
     const inset = y > 13 ? 1 : 0;
     b.hline(4 + inset, 11 - inset, y, m.base);
     b.set(4 + inset, y, m.lt);
     b.set(11 - inset, y, m.dk);
   }
-  b.hline(5, 10, 15, m.dk);
-  // Boca (elipse) com papel amassado.
+  for (const x of [6, 9]) b.vline(x, 8, 14, m.dk);
+  b.hline(4, 11, 9, '#4f5459');
+  b.hline(5, 10, 14, '#4f5459');
   b.ellipse(8, 6.5, 4.5, 2, m.lt);
-  b.ellipse(8, 6.6, 3.5, 1.3, '#3b4150');
-  b.rect(6, 5, 3, 2, '#f4f2ee');
-  b.set(8, 5, '#d8d4ca');
-  b.set(9, 6, '#f7d154');
+  b.ellipse(8, 6.6, 3.5, 1.3, '#3a2a1c');
+  b.rect(6, 5, 3, 2, '#d9b88e');
+  b.set(8, 5, '#b98a55');
+  b.set(9, 6, '#e2d2a4');
   b.outline();
   contact(b, 3, 14, 10, 2, 0.22);
   return { base: s };
@@ -591,55 +598,46 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
 // ------------------------------------------------------------------ divisórias de vidro
 
 export function glassPartition(variant: string | undefined): BufFurniture {
+  // Cerca de paliçada: troncos pontudos amarrados (separa áreas do acampamento).
   const v = variant ?? 'h';
   const s = floorSheet(1, 1, 22, 2);
   const b = s.buf;
-  const wall = ramp('#f1f1ee', 0.045);
-  const metal = ramp('#c3cad4', 0.06);
+  const log = M.oak;
   if (v === 'v') {
-    // Corre norte-sul: de cima vemos uma faixa uniforme (topo branco da meia-parede com o vidro e o
-    // trilho no meio). Sem contorno automático para os segmentos emendarem sem costura.
-    const cols = ['#aab2be', '#fbfbf9', '#f0f0ec', '#dce9f3', 'rgba(130,190,230,0.75)', '#e1e1dc', '#d0d0cb', '#9aa2ae'];
+    // Norte-sul: vista de cima é uma faixa de topos de tronco (sem contorno para emendar).
+    const cols = ['#4e3420', '#8a6239', '#b98a55', '#d9b88e', '#b98a55', '#8a6239', '#6b4a2b', '#3f2a18'];
     cols.forEach((c, i) => b.vline(4 + i, -16, 15, c));
-    for (let y = -16; y < 16; y += 7) b.set(8, y, 'rgba(255,255,255,0.8)');
-    underRect(b, 12, -16, 2, 32, 'rgba(30,34,52,0.12)');
+    for (let y = -16; y < 16; y += 4) b.hline(5, 10, y, '#5a3f26');
+    underRect(b, 12, -16, 2, 32, 'rgba(36,24,14,0.14)');
     return { base: s };
   }
   if (v === 'end') {
-    // Ponta: coluna de alumínio sobre a base branca da meia-parede.
-    topFace(b, 4, 3, 8, 4, wall);
-    frontFace(b, 4, 7, 8, 9, wall);
-    b.hline(4, 11, 13, mix(wall.dk, '#9aa2ae', 0.5));
-    b.rect(6, -18, 4, 22, metal.base);
-    b.vline(6, -18, 3, metal.hi);
-    b.vline(9, -18, 3, metal.dk);
-    b.hline(6, 9, -18, metal.hi);
+    // Ponta: poste mais grosso com topo pontudo e amarração.
+    b.rect(5, -16, 6, 32, log.base);
+    b.vline(5, -16, 15, log.lt);
+    b.vline(10, -16, 15, log.dk);
+    b.hline(6, 9, -17, log.lt);
+    b.hline(7, 8, -18, log.hi);
+    b.hline(5, 10, -6, '#c9b483');
+    b.hline(5, 10, 6, '#c9b483');
     b.outline();
     contact(b, 3, 13, 10, 4, 0.2);
     return { base: s };
   }
-  // 'h': corre leste-oeste (meia-parede branca + vidro azulado com reflexo).
-  // A área do vidro fica opaca durante o contorno (máscara) para não ganhar borda por dentro.
-  b.rect(0, -14, 16, 20, '#000000');
-  b.rect(0, -17, 16, 3, metal.lt);
-  b.hline(0, 15, -17, metal.hi);
-  b.hline(0, 15, -15, metal.dk);
-  topFace(b, 0, 6, 16, 3, wall);
-  frontFace(b, 0, 9, 16, 7, wall);
-  b.hline(0, 15, 14, mix(wall.dk, '#9aa2ae', 0.5));
-  b.outline();
-  b.clearRect(0, -14, 16, 20);
-  // Vidro com um reflexo diagonal suave por módulo, brilho no topo e montante.
-  b.rect(0, -14, 16, 20, 'rgba(172,214,238,0.34)');
-  b.rect(0, -14, 16, 3, 'rgba(255,255,255,0.22)');
-  for (let i = 0; i < 20; i++) {
-    const x = 13 - Math.floor(i * 0.6);
-    b.set(x, -14 + i, 'rgba(255,255,255,0.3)');
-    b.set(x - 2, -14 + i, 'rgba(255,255,255,0.14)');
+  // 'h': leste-oeste — 4 troncos de 4px com pontas, amarrados por duas cordas.
+  for (let i = 0; i < 4; i++) {
+    const x = i * 4;
+    const top = -14 - ((i * 5) % 3);
+    b.rect(x, top, 4, 16 - top, log.base);
+    b.vline(x, top, 15, log.lt);
+    b.vline(x + 3, top, 15, log.dk);
+    b.hline(x + 1, x + 2, top - 1, log.lt);
+    b.set(x + 1, top - 2, log.hi);
   }
-  b.vline(0, -14, 5, 'rgba(195,202,212,0.85)');
-  b.hline(0, 15, 5, 'rgba(120,150,175,0.35)');
-  // Remove o contorno lateral para segmentos contínuos.
+  b.hline(0, 15, -4, '#c9b483');
+  b.hline(0, 15, 8, '#c9b483');
+  b.hline(0, 15, 15, log.dd);
+  b.outline();
   for (let y = 0; y < b.h; y++) {
     b.clear(-1, y - b.oy);
     b.clear(16, y - b.oy);
@@ -653,39 +651,44 @@ export function glassPartition(variant: string | undefined): BufFurniture {
 export function meetingTable(seed: number): BufFurniture {
   const s = floorSheet(3, 2, 10);
   const b = s.buf;
-  const m = M.white;
+  // Mesa de guerra: tampo de tábuas com um mapa aberto no meio.
+  const m = M.oak;
   const r = rngOf(seed, 31);
-  // Pernas em painel nas extremidades.
   for (const x of [2, 43]) {
-    b.rect(x, 21, 3, 11, M.steel.base);
-    b.vline(x, 21, 31, M.steel.lt);
-    b.vline(x + 2, 21, 31, M.steel.dk);
+    b.rect(x, 21, 3, 11, M.walnut.base);
+    b.vline(x, 21, 31, M.walnut.lt);
+    b.vline(x + 2, 21, 31, M.walnut.dk);
   }
   topFace(b, 0, -4, 48, 24, m);
   b.hline(0, 47, 20, m.base);
   b.hline(0, 47, 21, m.dk);
-  // Faixa central de madeira.
-  b.rect(4, 2, 40, 10, M.oak.lt);
-  b.hline(4, 43, 2, M.oak.base);
-  b.hline(4, 43, 11, M.oak.hi);
-  woodGrain(b, 4, 3, 40, 8, M.oak, seed);
-  // Caixa de tomadas/viva-voz no centro.
-  b.rect(21, 5, 6, 3, '#3a404d');
-  b.rect(22, 5, 4, 1, '#5a6070');
-  b.set(24, 6, '#5fd07a');
+  woodGrain(b, 1, -3, 46, 22, m, seed);
+  // Mapa de pergaminho no centro, com rio, montanhas e marcadores.
+  b.rect(4, 2, 40, 10, '#e2d2a4');
+  b.hline(4, 43, 2, '#c9b483');
+  b.hline(4, 43, 11, '#b8a272');
+  b.line(6, 9, 40, 4, '#5f8aa8', 1);
+  for (const x of [12, 16, 30]) {
+    b.set(x, 4, '#7a6a58');
+    b.hline(x - 1, x + 1, 5, '#7a6a58');
+  }
+  b.rect(21, 5, 2, 2, '#9c2f25');
+  b.rect(26, 7, 2, 2, '#2f7a78');
+  b.set(24, 6, '#e0b23c');
   // Notebooks e objetos (variam por semente).
   const laptop = (x: number, y: number, facing: 'up' | 'down') => {
+    // Tomos abertos (de pé, virados para a câmera) ou fechados (capa de couro).
     if (facing === 'down') {
-      b.rect(x, y, 9, 5, '#3a404d');
-      b.hline(x, x + 8, y, '#4d5464');
+      b.rect(x, y, 9, 5, '#5a2a1c');
+      b.hline(x, x + 8, y, '#7a3a26');
       staticScreen(b, { x: x + 1, y: y + 1, w: 7, h: 3 }, x < 20 ? 'ide' : 'sheet', seed + x);
-      b.rect(x - 1, y + 5, 11, 2, '#c9ced6');
-      b.hline(x - 1, x + 9, y + 6, '#9aa1ad');
+      b.rect(x - 1, y + 5, 11, 2, '#e2d2a4');
+      b.hline(x - 1, x + 9, y + 6, '#b8a272');
     } else {
-      b.rect(x - 1, y, 11, 2, '#c9ced6');
-      b.rect(x, y + 2, 9, 4, '#aeb5c0');
-      b.hline(x, x + 8, y + 2, '#d6dbe2');
-      b.set(x + 4, y + 4, '#eef1f5');
+      b.rect(x - 1, y, 11, 2, '#7a3a26');
+      b.rect(x, y + 2, 9, 4, '#6a3020');
+      b.hline(x, x + 8, y + 2, '#8a4a30');
+      b.set(x + 4, y + 4, '#e0b23c');
     }
   };
   laptop(6, -3, 'down');
@@ -695,92 +698,92 @@ export function meetingTable(seed: number): BufFurniture {
   papers(b, 8, 14, 6, 4);
   // Copos de água / canecas.
   mug(b, 18, 14, pick(r, MUG_COLORS));
-  b.rect(29, -1, 2, 3, 'rgba(190,225,245,0.9)');
-  b.set(29, -1, '#ffffff');
-  b.rect(16, -2, 2, 3, 'rgba(190,225,245,0.9)');
-  b.set(16, -2, '#ffffff');
+  // Velas.
+  b.rect(29, -1, 2, 3, '#efe6cc');
+  b.set(29, -2, '#f6c04a');
+  b.rect(16, -2, 2, 3, '#efe6cc');
+  b.set(16, -3, '#f6c04a');
   b.outline();
   contact(b, -1, 28, 50, 5, 0.22);
-  underRect(b, 4, 22, 40, 8, 'rgba(30,34,52,0.16)');
+  underRect(b, 4, 22, 40, 8, 'rgba(36,24,14,0.18)');
   return { base: s };
 }
 
 export function stool(): BufFurniture {
+  // Toco de árvore com anéis no topo.
   const s = floorSheet(1, 1, 2);
   const b = s.buf;
-  // Base e haste.
-  b.ellipse(8, 14.5, 4, 1.4, '#5b6272');
-  b.rect(7, 8, 2, 6, '#9aa1ad');
-  b.vline(8, 8, 13, '#737b89');
-  b.hline(5, 10, 11, '#9aa1ad');
-  // Assento redondo.
-  const seat = ramp('#3f7fd8', 0.07);
-  b.ellipse(8, 6, 5.5, 3, seat.dk);
-  b.ellipse(8, 5.4, 5.5, 2.6, seat.lt);
-  b.set(5, 4, seat.hi);
-  b.set(6, 4, seat.hi);
+  const bark = M.walnut;
+  b.rect(4, 6, 8, 9, bark.base);
+  b.vline(4, 6, 14, bark.lt);
+  b.vline(11, 6, 14, bark.dk);
+  b.vline(7, 8, 13, bark.dk);
+  b.set(3, 14, bark.dk);
+  b.set(12, 14, bark.dk);
+  b.ellipse(8, 6, 4.5, 2.2, '#d9b88e');
+  b.ellipse(8, 6, 2.6, 1.2, '#c49a68');
+  b.set(8, 6, '#a87a48');
   b.outline();
   contact(b, 3, 13, 10, 3, 0.22);
   return { base: s };
 }
 
 export function floorLamp(): BufFurniture {
+  // Tocha alta num poste de madeira com braseiro de ferro.
   const s = floorSheet(1, 1, 26);
   const b = s.buf;
-  b.ellipse(8, 14, 4, 1.5, '#3a3f4b');
-  b.hline(6, 9, 13, '#5a6070');
-  b.vline(8, -17, 13, '#4a505c');
-  b.vline(7, -17, 13, '#6b7282');
-  // Cúpula de tecido creme (luz acesa).
-  const sh = ramp('#f3e6c8', 0.05);
-  for (let i = 0; i < 7; i++) {
-    const half = 3 + Math.floor(i / 2);
-    b.hline(8 - half, 7 + half, -24 + i, i === 0 ? sh.hi : sh.lt);
-    b.set(8 - half, -24 + i, sh.hi);
-    b.set(7 + half, -24 + i, sh.dk);
-  }
-  b.hline(3, 12, -17, sh.dk);
-  b.hline(5, 10, -16, '#fff6d8');
+  b.hline(5, 10, 14, '#4f5459');
+  b.hline(6, 9, 13, '#6a645a');
+  b.vline(8, -16, 13, '#6b4a2b');
+  b.vline(7, -16, 13, '#8a6239');
+  b.hline(6, 9, -2, '#c9b483');
+  // Braseiro.
+  b.rect(4, -18, 8, 3, '#4f5459');
+  b.hline(4, 11, -18, '#8f949a');
+  b.set(4, -16, '#3a3630');
+  b.set(11, -16, '#3a3630');
+  // Chamas.
+  b.hline(5, 10, -19, '#e08a2c');
+  b.hline(6, 9, -20, '#f0b040');
+  b.hline(6, 8, -21, '#f6c04a');
+  b.set(7, -22, '#ffe08a');
+  b.set(8, -23, '#fff2b0');
   b.outline();
   contact(b, 3, 13, 10, 3, 0.22);
-  s.rects = { glow: rectAt(s, 4, -20, 8, 6) };
+  s.rects = { glow: rectAt(s, 4, -22, 8, 6) };
   return { base: s };
 }
 
 export function waterCooler(): BufFurniture {
+  // Barril de água num suporte, com torneira de madeira e concha pendurada.
   const s = floorSheet(1, 1, 20);
   const b = s.buf;
-  const body = ramp('#eceef1', 0.05);
-  // Corpo.
-  topFace(b, 3, -5, 10, 3, body);
-  frontFace(b, 3, -2, 10, 18, body);
-  b.vline(3, -2, 15, body.hi);
-  // Torneiras (quente/fria) e bandeja.
-  b.rect(5, 1, 2, 2, '#4a86d8');
-  b.rect(9, 1, 2, 2, '#e05a5a');
-  b.set(5, 1, '#8ab8f0');
-  b.set(9, 1, '#f08a8a');
-  b.rect(4, 5, 8, 2, '#c3c9d2');
-  b.hline(5, 10, 5, '#9aa2ae');
-  // Porta inferior.
-  b.rect(4, 8, 8, 7, body.base);
-  b.hline(4, 11, 8, body.dk);
-  b.rect(10, 11, 1, 2, '#9aa2ae');
-  // Galão azul translúcido.
-  const g = 'rgba(92,170,240,0.78)';
-  b.rect(5, -6, 6, 1, '#5b8fd0');
-  for (let y = -17; y <= -7; y++) {
-    const narrow = y < -15 ? 1 : 0;
-    b.hline(4 + narrow, 11 - narrow, y, g);
+  const st = M.oakDark;
+  // Suporte.
+  b.rect(3, 4, 2, 12, st.base);
+  b.rect(11, 4, 2, 12, st.base);
+  b.hline(3, 12, 10, st.lt);
+  // Balde embaixo.
+  b.rect(6, 11, 4, 4, M.oak.base);
+  b.hline(6, 9, 12, '#4f5459');
+  // Barril deitado de pé.
+  const m = M.oak;
+  for (let y = -14; y <= 3; y++) {
+    const bulge = y > -11 && y < 0 ? 1 : 0;
+    b.hline(3 - bulge, 12 + bulge, y, m.base);
+    b.set(3 - bulge, y, m.lt);
+    b.set(12 + bulge, y, m.dk);
   }
-  b.rect(6, -19, 4, 2, '#3f74c0');
-  b.vline(5, -15, -8, 'rgba(255,255,255,0.65)');
-  b.vline(6, -14, -9, 'rgba(255,255,255,0.3)');
-  b.hline(5, 10, -12, 'rgba(60,120,200,0.6)');
-  b.vline(10, -15, -8, 'rgba(40,90,170,0.55)');
-  // Porta-copos lateral.
-  b.rect(13, -1, 2, 6, '#f4f6f8');
-  b.set(14, -1, '#c9ced6');
+  for (const x of [6, 9]) b.vline(x, -13, 2, m.dk);
+  for (const y of [-12, -5, 2]) b.hline(2, 13, y, '#4f5459');
+  b.ellipse(7.5, -14.5, 4.5, 1.5, m.lt);
+  b.ellipse(7.5, -14.5, 3, 0.8, '#5f8aa8');
+  // Torneira.
+  b.rect(7, 4, 2, 2, '#6b4a2b');
+  b.set(8, 6, '#7fb0d0');
+  // Concha.
+  b.vline(14, -8, -3, '#8a6239');
+  b.rect(13, -3, 3, 2, '#6b4a2b');
   b.outline();
   contact(b, 1, 13, 14, 4, 0.22);
   return { base: s };

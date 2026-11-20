@@ -457,8 +457,8 @@ export class Lighting {
     const n = this.ambient.night;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const cool = glowSprite('#7fb8ff', 48);
-    const warm = glowSprite('#ffcf7a', 64);
+    const cool = glowSprite('#7fe0a0', 48); // brilho das runas
+    const warm = glowSprite('#ffb85a', 64); // fogo de tocha
     const inView = (x: number, y: number, m: number) => x > view.x0 - m && x < view.x1 + m && y > view.y0 - m && y < view.y1 + m;
     for (const vis of scene.areas.values()) {
       const p = vis.px;
@@ -571,7 +571,7 @@ export class Lighting {
   /** Faróis (facho amarelado à frente) e lanternas vermelhas dos carros. */
   private drawHeadlights(ctx: CanvasRenderingContext2D, scene: LightScene, view: View, n: number): void {
     if (!scene.cars.length) return;
-    const beam = glowSprite('#fff1c4', 64);
+    const beam = glowSprite('#ffd27a', 64);
     const tail = glowSprite('#ff4a3a', 16);
     for (const car of scene.cars) {
       if (car.x < view.x0 - 80 || car.x > view.x1 + 80 || car.y < view.y0 - 30 || car.y > view.y1 + 30) continue;
