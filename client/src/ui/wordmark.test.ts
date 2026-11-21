@@ -18,6 +18,13 @@ describe('wordmark', () => {
     expect(rows.join('')).toContain('c');
   });
 
+  it('draws "swift|c" as "swiftc" with only the "c" gold', () => {
+    const rows = wordmarkRows('swift|c');
+    expect(rows[0].length).toBe(wordmarkRows('swiftc')[0].length);
+    const gold = rows.flatMap((r) => [...r].map((ch, x) => (ch === 't' ? x : -1))).filter((x) => x >= 0);
+    expect(Math.min(...gold)).toBe(rows[0].length - 4);
+  });
+
   it('grows two rows for descenders and keeps the shadow under every pixel', () => {
     const rows = wordmarkRows('Agency');
     expect(rows).toHaveLength(10);
@@ -33,6 +40,7 @@ describe('wordmark', () => {
   it('splits parchment and gold at a sensible place', () => {
     expect(wordmarkSplit('Habblaud')).toBe(3);
     expect(wordmarkSplit('SWIFTc')).toBe(5);
+    expect(wordmarkSplit('swift|c')).toBe(5);
     expect(wordmarkSplit('SwiftCode')).toBe(5);
     expect(wordmarkSplit('Acme Labs')).toBe(4);
     expect(wordmarkSplit('X')).toBe(1);

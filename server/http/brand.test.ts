@@ -25,6 +25,18 @@ describe('brand settings', () => {
     expect(parseBrand({ HABBLAUD_BRAND_NAME: 'bad\nname' }).name).toBe('Habblaud');
   });
 
+  it('takes a "|" wordmark split marker in HABBLAUD_BRAND_NAME and keeps it out of the text', () => {
+    expect(parseBrand({ HABBLAUD_BRAND_NAME: 'swift|c' })).toEqual({ name: 'swiftc', short: 'swiftc', wordmark: 'swift|c' });
+    expect(parseBrand({ HABBLAUD_BRAND_NAME: 'swift|c', HABBLAUD_BRAND_SHORT: 's|c' }).short).toBe('sc');
+    expect(parseBrandName('x'.repeat(12) + '|' + 'x'.repeat(12))).toBe('x'.repeat(12) + '|' + 'x'.repeat(12));
+    for (const bad of ['|c', 'swift|', 'a|b|c', 'swift |c']) expect(parseBrandName(bad)).toBeUndefined();
+    const html = readFileSync(join(ROOT, 'client', 'index.html'), 'utf8');
+    const out = brandIndexHtml(html, parseBrand({ HABBLAUD_BRAND_NAME: 'swift|c' }));
+    expect(out).toContain('<title>swiftc</title>');
+    expect(out).toContain('<meta name="habblaud-brand" content="swift|c" />');
+    expect(out).toContain('<meta property="og:title" content="swiftc" />');
+  });
+
   it('rewrites index.html: title, social titles, home-screen title and the brand meta', () => {
     const html = readFileSync(join(ROOT, 'client', 'index.html'), 'utf8');
     expect(brandIndexHtml(html, { name: 'Habblaud', short: 'Habblaud' })).toBe(html);

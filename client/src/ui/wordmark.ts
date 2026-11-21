@@ -100,11 +100,13 @@ export function wordmarkSupports(ch: string): boolean {
 }
 
 /**
- * Where the gold part starts. "Habblaud" keeps its "Hab" + "blaud"; otherwise the first word (two words), a camelCase
+ * Where the gold part starts: at an explicit "|" marker ("swift|c" → "swift" + "c"). Otherwise "Habblaud" keeps its "Hab" + "blaud"; otherwise the first word (two words), a camelCase
  * hump ("SwiftCode" → "Swift" + "Code"), the end of an uppercase run before lowercase ("SWIFTc" → "SWIFT" + "c"),
  * or the first three eighths of the name.
  */
 export function wordmarkSplit(name: string): number {
+  const marker = [...name].indexOf('|');
+  if (marker > 0) return marker;
   const chars = [...name];
   const n = chars.length;
   if (n < 2) return n;
@@ -124,8 +126,8 @@ export function wordmarkSplit(name: string): number {
  * the same length; the height is 8, or 10 when some letter has a descender.
  */
 export function wordmarkRows(name: string): string[] {
-  const chars = [...name];
   const split = wordmarkSplit(name);
+  const chars = [...name].filter((c, i) => !(c === '|' && i === split));
   const glyphs = chars.map(glyph);
   const ink = Math.max(CAP, ...glyphs.map((g) => g.length));
   const height = ink + 1;

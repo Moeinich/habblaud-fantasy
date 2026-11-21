@@ -791,7 +791,7 @@ Everything works without configuring anything. If you need to adjust something, 
 | `HABBLAUD_CODEX_BIN` | `codex` from PATH (on Windows, `codex.exe`) | The Codex binary that delivers the messages (`codex queue`), in Node mode or in `npm run codex:bridge`. |
 | `HABBLAUD_UPDATE_CHECK` | on | `0` turns off the new-version check (a request to the repository's releases on GitHub every 6 h). |
 | `HABBLAUD_LANG` | system language, otherwise `en` | Language of the texts the server builds (activities, notices, logs): `pt-BR`, `en`, `es` or `fr`. The interface follows the browser or the choice in Settings › Language. See [Languages](#languages). |
-| `HABBLAUD_BRAND_NAME` | `Habblaud` | White-labeling: the name shown in the page title, the pixel logo (drawn in the same font and colors, mixed case works, e.g. `SWIFTc`), the home-screen app and the phone login page. 1 to 24 characters; anything else falls back to `Habblaud`. Applied at runtime, so the same Docker image works for any brand. |
+| `HABBLAUD_BRAND_NAME` | `Habblaud` | White-labeling: the name shown in the page title, the pixel logo (drawn in the same font and colors, mixed case works, e.g. `SWIFTc`; a `|` sets where the gold part starts, e.g. `swift|c`, and is shown nowhere else), the home-screen app and the phone login page. 1 to 24 characters; anything else falls back to `Habblaud`. Applied at runtime, so the same Docker image works for any brand. |
 | `HABBLAUD_BRAND_SHORT` | the brand name | Short label under the home-screen icon (manifest `short_name`). |
 | `HABBLAUD_ACCOUNTS` | — | JSON to customize name, letter or color, matched by the account folder name. E.g. `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
 
