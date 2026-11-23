@@ -59,7 +59,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   const narrowMq = typeof matchMedia === 'function' ? matchMedia(NARROW_QUERY) : null;
   const panels: Record<PanelName, boolean> = {
     sidebar: narrowMq?.matches ? false : prefs.sidebarOpen,
-    feed: narrowMq?.matches ? false : prefs.feedOpen,
+    feed: narrowMq?.matches ? false : prefs.activityOpen,
   };
 
   const live = h('div', { class: 'ui-sr', role: 'status', attrs: { 'aria-live': 'polite' } });
@@ -123,7 +123,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
       const next = open ?? !panels[name];
       if (panels[name] === next) return;
       panels[name] = next;
-      if (!ctx.isNarrow()) ctx.updatePrefs(name === 'sidebar' ? { sidebarOpen: next } : { feedOpen: next });
+      if (!ctx.isNarrow()) ctx.updatePrefs(name === 'sidebar' ? { sidebarOpen: next } : { activityOpen: next });
       applyLayout();
       invalidate();
     },
@@ -304,7 +304,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
       panels.feed = false;
     } else {
       panels.sidebar = prefs.sidebarOpen;
-      panels.feed = prefs.feedOpen;
+      panels.feed = prefs.activityOpen;
     }
     applyLayout();
     invalidate();

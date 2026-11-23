@@ -20,7 +20,11 @@ export interface UiPrefs {
   /** Browser Notification for alerts while the tab is hidden. */
   browserNotifications: boolean;
   sidebarOpen: boolean;
-  feedOpen: boolean;
+  /**
+   * The Activity panel (closed by default). Stored under a new name: the old `feedOpen` defaulted to open and was
+   * saved by every screen, so it is left behind and everyone starts closed once.
+   */
+  activityOpen: boolean;
   /** Accounts hidden in the sidebar (AccountInfo.id). */
   hiddenAccounts: string[];
 }
@@ -35,7 +39,7 @@ export const DEFAULT_PREFS: UiPrefs = {
   sounds: DEFAULT_SOUND_SETTINGS,
   browserNotifications: false,
   sidebarOpen: true,
-  feedOpen: true,
+  activityOpen: false,
   hiddenAccounts: [],
 };
 
@@ -60,7 +64,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     sounds: sanitizeSoundSettings(o.sounds),
     browserNotifications: bool(o.browserNotifications, d.browserNotifications),
     sidebarOpen: bool(o.sidebarOpen, d.sidebarOpen),
-    feedOpen: bool(o.feedOpen, d.feedOpen),
+    activityOpen: bool(o.activityOpen, d.activityOpen),
     hiddenAccounts: Array.isArray(o.hiddenAccounts) ? o.hiddenAccounts.filter((x): x is string => typeof x === 'string').slice(0, 20) : [],
   };
 }

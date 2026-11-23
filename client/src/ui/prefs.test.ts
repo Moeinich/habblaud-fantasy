@@ -38,8 +38,8 @@ describe('preferences', () => {
   });
   it('saves and loads back', () => {
     const st = memoryStorage();
-    savePrefs(st, { ...DEFAULT_PREFS, bubbles: 'none', feedOpen: false });
-    expect(loadPrefs(st)).toEqual({ ...DEFAULT_PREFS, bubbles: 'none', feedOpen: false });
+    savePrefs(st, { ...DEFAULT_PREFS, bubbles: 'none', activityOpen: true });
+    expect(loadPrefs(st)).toEqual({ ...DEFAULT_PREFS, bubbles: 'none', activityOpen: true });
   });
   it('does not break when the storage throws', () => {
     const broken = {
@@ -121,5 +121,13 @@ describe('migration from the old name (CodeTown)', () => {
     };
     expect(migrateLegacyKeys(full)).toBe(0);
     expect(Object.fromEntries(full.data)).toEqual({ 'codetown:prefs': '{}' });
+  });
+});
+
+describe('the Activity panel', () => {
+  it('starts closed, even for a screen that saved the old open-by-default setting', () => {
+    expect(DEFAULT_PREFS.activityOpen).toBe(false);
+    expect(sanitizePrefs({ feedOpen: true }).activityOpen).toBe(false);
+    expect(sanitizePrefs({ activityOpen: true }).activityOpen).toBe(true);
   });
 });

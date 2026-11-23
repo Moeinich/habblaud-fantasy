@@ -78,6 +78,8 @@ one (0.**3**.0).
 
 ### Changed
 
+- **The Activity panel starts closed.** Open it from its bar at the bottom. Every screen starts closed once and then
+  remembers its own choice.
 - **Halls that grow out of their yards.** Inside each ring the yard now has the race's own ground: a grassy bailey
   round the human halls, sand in the orc war camp, blighted earth round the crypts. The rooms' stone floor no longer
   stops in a straight line. On every side that faces open ground (the yard, an empty plot or the square) it ends
