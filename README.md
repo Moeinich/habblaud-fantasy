@@ -254,8 +254,8 @@ Everything works without configuration. Adjust with environment variables when n
 | `HABBLAUD_BRAND_SHORT` | the brand name | Short label under the home-screen icon. |
 | `HABBLAUD_ACCOUNTS` | — | JSON to customize an account's name, letter or color, e.g. `[{"id":".claude-work","name":"Work","short":"W","color":"#5cc97b"}]`. |
 
-On a TV or other weak device, open the page with `?lite=1` (TV browsers get it automatically): 30 fps and one canvas
-pixel per screen pixel. `?fps=` sets the frame rate on any device.
+On a TV or other weak device, open the page with `?lite=1` (TV browsers get it automatically): 30 fps at most and no
+blur behind the panels. `?fps=` sets the frame rate on any device.
 
 In Docker, put these in `.env`. `npm run docker:up -- --no-build` starts without rebuilding, `npm run docker:down`
 stops and `npm run docker:logs` follows the logs.

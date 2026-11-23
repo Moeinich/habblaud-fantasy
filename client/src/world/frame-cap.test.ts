@@ -26,10 +26,9 @@ describe('lite mode (a TV on the wall)', () => {
     expect(liteMode('?lite=0', tizen)).toBe(false);
   });
 
-  it('one canvas pixel per CSS pixel in lite mode; the screen ratio (1–3) otherwise', () => {
+  it('the canvas keeps the screen ratio (1–3), lite mode or not: text stays sharp on a 4K TV', () => {
     expect(canvasPixelRatio(2)).toBe(2);
     expect(canvasPixelRatio(4)).toBe(3);
     expect(canvasPixelRatio(0.5)).toBe(1);
-    expect(canvasPixelRatio(2, true)).toBe(1);
   });
 });

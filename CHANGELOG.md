@@ -150,8 +150,7 @@ one (0.**3**.0).
 - **Lighter on small devices.** The trees, stumps and stones outside are painted once into the ground layer instead
   of on every frame, which cuts the world's draw calls by more than half. The world draws at 30 fps while nobody
   touches it and at full rate only right after input. The server sends the office twice a second at most, not five
-  times. A TV browser (or `?lite=1`) gets lite mode: 30 fps and one canvas pixel per screen pixel. `?fps=` sets the
-  frame rate.
+  times. A TV browser (or `?lite=1`) gets lite mode: 30 fps at most. `?fps=` sets the frame rate.
 - **Lighter still.** Each finished room's furniture is now one baked image, and only what stands in front of a
   person is drawn again over them. Screens, window views, kanban boards and clocks repaint a few times a second from
   a small cache instead of pixel by pixel every frame. New character poses no longer read their pixels back from the
