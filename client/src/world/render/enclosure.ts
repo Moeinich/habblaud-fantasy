@@ -216,7 +216,17 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
     }
   }
   cctx.putImageData(img, 0, 0);
-  const s = { canvas, floor, x: wx0, y: wy0 };
+  // Built by reading pixels back, which leaves a canvas in CPU memory: the ring is drawn on every frame, so it goes
+  // into a fresh canvas the GPU can keep as a texture instead of uploading it again each time.
+  const s = { canvas: freshCopy(canvas), floor, x: wx0, y: wy0 };
   cache.set(key, s);
   return s;
+}
+
+function freshCopy(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  c.getContext('2d')?.drawImage(src, 0, 0);
+  return c;
 }

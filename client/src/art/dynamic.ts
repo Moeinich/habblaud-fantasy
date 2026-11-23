@@ -1,5 +1,6 @@
 // Animated drawings called every frame: screens, kanban board, window view and clock.
-// Rules: only fillRect with integer coordinates (cheap), no getImageData and no new canvases.
+// Rules: only fillRect with integer coordinates (cheap) and no getImageData. Screens are cached per position (see
+// cachedPaint): one small canvas each, repainted a few times a second.
 import type { Rect, ScreenMode } from './api';
 import { mix } from './core/color';
 
@@ -73,12 +74,54 @@ const SYNTAX = ['#ff79c6', '#8be9fd', '#f1fa8c', '#50fa7b', '#bd93f9', '#ffb86c'
 // ------------------------------------------------------------------ screens
 
 export function drawScreen(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed: number): void {
-  runeMode = true;
-  try {
-    drawScreenInner(ctx, r, mode, t, seed);
-  } finally {
-    runeMode = false;
+  const paint = (c: Ctx) => {
+    runeMode = true;
+    try {
+      drawScreenInner(c, r, mode, t, seed);
+    } finally {
+      runeMode = false;
+    }
+  };
+  cachedPaint(ctx, r, `${mode}|${seed}`, Math.floor(t / SCREEN_STEP_MS), paint);
+}
+
+// ------------------------------------------------------------------ frame cache
+// A screen is dozens to hundreds of fillRects. Its content only moves a few times a second, so each one is painted
+// into its own small canvas and copied with one drawImage until its time step changes.
+
+/** How often a cached screen repaints (8 times a second: the pixel animations step slower than that anyway). */
+const SCREEN_STEP_MS = 125;
+const MAX_CACHED = 400;
+const paintCache = new Map<string, { canvas: HTMLCanvasElement; ctx: Ctx; step: number }>();
+
+function cachedPaint(ctx: Ctx, r: Rect, key: string, step: number, paint: (c: Ctx) => void): void {
+  const x = Math.round(r.x);
+  const y = Math.round(r.y);
+  const w = Math.round(r.w);
+  const h = Math.round(r.h);
+  if (w <= 0 || h <= 0) return;
+  if (typeof document === 'undefined') return paint(ctx);
+  const k = `${key}|${x},${y},${w},${h}`;
+  let e = paintCache.get(k);
+  if (!e) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const c = canvas.getContext('2d');
+    // no 2D canvas (tests, a browser out of memory): paint straight away
+    if (!c) return paint(ctx);
+    if (paintCache.size >= MAX_CACHED) paintCache.clear();
+    e = { canvas, ctx: c, step: Number.NaN };
+    paintCache.set(k, e);
   }
+  if (e.step !== step) {
+    e.step = step;
+    e.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    e.ctx.clearRect(0, 0, w, h);
+    e.ctx.setTransform(1, 0, 0, 1, -x, -y);
+    paint(e.ctx);
+  }
+  ctx.drawImage(e.canvas, x, y);
 }
 
 function drawScreenInner(ctx: Ctx, r: Rect, mode: ScreenMode, t: number, seed: number): void {
@@ -649,6 +692,11 @@ const NOTE = {
 const SEAL = { pending: '#d48a2c', in_progress: '#9c2f25', completed: '#4f7d3a' } as const;
 
 export function drawBoard(ctx: Ctx, r: Rect, items: readonly { status: 'pending' | 'in_progress' | 'completed' }[], t: number): void {
+  const key = `board|${items.map((i) => i.status[0]).join('')}`;
+  cachedPaint(ctx, r, key, Math.floor(t / SCREEN_STEP_MS), (c) => drawBoardInner(c, r, items, t));
+}
+
+function drawBoardInner(ctx: Ctx, r: Rect, items: readonly { status: 'pending' | 'in_progress' | 'completed' }[], t: number): void {
   const x = Math.round(r.x);
   const y = Math.round(r.y);
   const w = Math.round(r.w);
@@ -714,6 +762,11 @@ function skyAt(hour: number): { top: string; bottom: string; night: number; day:
 }
 
 export function drawWindowView(ctx: Ctx, r: Rect, hour: number, t: number, seed: number): void {
+  // the sky moves slowly: four repaints a second
+  cachedPaint(ctx, r, `window|${seed}`, Math.floor(t / 250), (c) => drawWindowViewInner(c, r, hour, t, seed));
+}
+
+function drawWindowViewInner(ctx: Ctx, r: Rect, hour: number, t: number, seed: number): void {
   const x = Math.round(r.x);
   const y = Math.round(r.y);
   const w = Math.round(r.w);
@@ -802,6 +855,10 @@ export function drawWindowView(ctx: Ctx, r: Rect, hour: number, t: number, seed:
 // ------------------------------------------------------------------ clock
 
 export function drawClock(ctx: Ctx, r: Rect, date: Date): void {
+  cachedPaint(ctx, r, 'clock', Math.floor(date.getTime() / 1000), (c) => drawClockInner(c, r, date));
+}
+
+function drawClockInner(ctx: Ctx, r: Rect, date: Date): void {
   clipTo(Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h));
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;

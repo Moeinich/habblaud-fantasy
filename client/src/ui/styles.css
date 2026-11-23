@@ -9161,3 +9161,15 @@ html.is-replay #world {
     box-shadow: 0 -12px 24px rgba(var(--ui-shade-rgb), 0.35);
   }
 }
+
+/* Lite mode (a TV browser or ?lite=1, see world/index.ts): a backdrop blur makes the GPU blur the world behind every
+   panel again on each frame. The panels are nearly opaque anyway: drop the blur and make them solid. */
+.is-lite .ui-root {
+  --ui-bg: var(--ui-bg-solid);
+}
+
+.is-lite *,
+.is-lite *::backdrop {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

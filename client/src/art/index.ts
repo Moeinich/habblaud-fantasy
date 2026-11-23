@@ -27,6 +27,7 @@ import { appearanceFromSeed as appearanceFromSeedPure, appearanceKey } from './c
 import { CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, renderCharacter } from './character/render';
 import { shade } from './core/color';
 import { PixelBuf } from './core/pixbuf';
+import { opaqueBox, rememberOpaque } from './core/opaque';
 import type { BufSprite } from './core/sprite';
 import { drawBoard, drawClock, drawScreen, drawWindowView, footballLance } from './dynamic';
 import { normalizeFurniture, renderFurniture } from './furniture/index';
@@ -50,8 +51,13 @@ function toCanvas(buf: PixelBuf): HTMLCanvasElement {
   c.height = Math.max(1, buf.h);
   const ctx = c.getContext('2d');
   if (ctx && buf.w > 0 && buf.h > 0) ctx.putImageData(new ImageData(buf.data, buf.w, buf.h), 0, 0);
+  // sprites (not the big floor chunks): the world asks for their visible box (scene.ts opaqueBounds)
+  if (buf.w * buf.h <= SMALL_PX) rememberOpaque(c, opaqueBox(buf.data, buf.w, buf.h));
   return c;
 }
+
+/** Canvases up to this many pixels get their opaque box noted when made. */
+const SMALL_PX = 160 * 160;
 
 function toSprite(s: BufSprite): Sprite {
   return { canvas: toCanvas(s.buf), ax: s.ax, ay: s.ay, rects: s.rects };

@@ -84,6 +84,8 @@ const LITE = liteMode(globalThis.location?.search ?? '', globalThis.navigator?.u
 const pixelRatio = () => canvasPixelRatio(window.devicePixelRatio, LITE);
 
 export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: CreateWorldOptions = {}): WorldApi & { debug: WorldDebug; visit: VisitWorld } {
+  // lite mode also lightens the page around the world (styles.css `.is-lite`: no backdrop blur)
+  if (LITE) globalThis.document?.documentElement.classList.add('is-lite');
   let options: WorldOptions = { ...DEFAULT_WORLD_OPTIONS };
   const visitMode = !!o.visit;
   const camera = new Camera();

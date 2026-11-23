@@ -1,7 +1,7 @@
 // Per-frame world drawing: outdoor layer -> floors -> walls/wall items -> entities
 // sorted by depth -> light/darkness -> icons. The screen-space pass (crisp text)
 // lives in overlay.ts.
-import { TILE, type ArtModule, type CharacterFrameRequest, type IconName, type ScreenMode, type Sprite } from '../../art/api';
+import { TILE, type ArtModule, type CharacterFrameRequest, type IconName, type Rect, type ScreenMode, type Sprite } from '../../art/api';
 import type { SeasonalTheme, WorldOptions } from '../api';
 import type { WorldAssets } from '../assets';
 import type { Camera } from '../camera';
@@ -42,7 +42,41 @@ interface Ent {
   ref: FurnVis | Character | ExteriorProp | Car | null;
   area: AreaVis | null;
   scale: number;
+  /** Drawn only inside this box: a baked piece drawn again over the person standing behind it. */
+  clip: Box | null;
 }
+
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** A room's furniture baked into one canvas (see furnBake). */
+interface FurnBake {
+  key: string;
+  canvas: HTMLCanvasElement | null;
+  x: number;
+  y: number;
+  /** The baked pieces in drawing order, with their place in the world. */
+  items: BakedFurn[];
+  /** Pieces that change on their own (coffee machine, stalls, arcade): drawn every frame as before. */
+  live: FurnVis[];
+  /** Desks: the screen is drawn every frame over the baked desk. */
+  desks: BakedFurn[];
+}
+
+interface BakedFurn extends Box {
+  f: FurnVis;
+  k: K;
+  y: number;
+  sprite: HTMLCanvasElement;
+  screen?: Rect;
+}
+
+/** Furniture whose look changes with the office's state: never baked. */
+const LIVE_FURNITURE = new Set<string>(['coffee_machine', 'toilet_stall', 'arcade']);
 
 interface Car {
   x: number;
@@ -495,25 +529,41 @@ export class Renderer {
     const ents = this.ents;
     ents.length = 0;
     let used = 0;
-    const push = (k: K, y: number, ref: Ent['ref'], area: AreaVis | null, scale: number) => {
+    const push = (k: K, y: number, ref: Ent['ref'], area: AreaVis | null, scale: number, clip: Box | null = null) => {
       let e = this.pool[used];
-      if (!e) this.pool[used] = e = { k, y, ref, area, scale };
+      if (!e) this.pool[used] = e = { k, y, ref, area, scale, clip };
       else {
         e.k = k;
         e.y = y;
         e.ref = ref;
         e.area = area;
         e.scale = scale;
+        e.clip = clip;
       }
       used++;
       ents.push(e);
     };
+    const baked: [AreaVis, FurnBake][] = [];
     for (const vis of this.areas.values()) {
       const p = vis.px;
       if (!visible(p.x - TILE, p.y - 3 * TILE, p.w + 2 * TILE, p.h + 4 * TILE)) continue;
       const anim = vis.room ? buildAnim(vis.room.phase, vis.room.progress(now)) : NO_ANIM;
+      if (anim.mode === 'none') {
+        // a finished room: its furniture is one baked image, plus the screens and the pieces that change
+        const b = this.furnBake(vis);
+        if (b.canvas && visible(b.x, b.y, b.canvas.width, b.canvas.height)) ctx.drawImage(b.canvas, b.x, b.y);
+        for (const d of b.desks) if (visible(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0)) this.drawDeskScreen(d, vis, b, now);
+        for (const f of b.live) {
+          if (!visible(f.ax - 3 * TILE, f.ay - 4 * TILE, 6 * TILE, 4 * TILE + 4)) continue;
+          push(K.FurnBase, f.ay, f, vis, 1);
+          const fs = furnitureSprites(this.art, f, this.furnState(f, now));
+          if (fs?.front) push(K.FurnFront, f.ay + 0.5, f, vis, 1);
+        }
+        if (b.items.length) baked.push([vis, b]);
+        continue;
+      }
       for (const f of vis.furniture) {
-        const s = anim.mode === 'none' ? 1 : furnitureScale(anim, f.order);
+        const s = furnitureScale(anim, f.order);
         if (s <= 0.01) continue;
         if (!visible(f.ax - 3 * TILE, f.ay - 4 * TILE, 6 * TILE, 4 * TILE + 4)) continue;
         push(K.FurnBase, f.ay, f, vis, s);
@@ -532,9 +582,19 @@ export class Renderer {
         head.feetY = ch.y;
         continue;
       }
-      push(K.Char, ch.depth(), ch, null, 1);
-      // the outdoor props are in the base layer: the ones in front of this person are drawn again over them
-      this.occluders(ch.x - 24, ch.y - 48, ch.x + 24, ch.y + 8, ch.depth(), (p) => push(K.Prop, p.y, p, null, 1));
+      const depth = ch.depth();
+      push(K.Char, depth, ch, null, 1);
+      // Outdoor props and room furniture are baked: what stands in front of this person is drawn again over them,
+      // clipped to their sprite (so it never covers anything else out of order).
+      const box: Box = { x0: Math.floor(ch.x - 24), y0: Math.floor(ch.y - 48), x1: Math.ceil(ch.x + 24), y1: Math.ceil(ch.y + 8) };
+      this.occluders(box.x0, box.y0, box.x1, box.y1, depth, (p) => push(K.Prop, p.y, p, null, 1, box));
+      for (const [vis, b] of baked) {
+        if (!b.canvas || b.x >= box.x1 || b.x + b.canvas.width <= box.x0 || b.y >= box.y1 || b.y + b.canvas.height <= box.y0) continue;
+        for (const it of b.items) {
+          if (it.y <= depth || it.x0 >= box.x1 || it.x1 <= box.x0 || it.y0 >= box.y1 || it.y1 <= box.y0) continue;
+          push(it.k, it.y, it.f, vis, 1, box);
+        }
+      }
     }
     for (const sh of this.shells) {
       const room = this.roomInSlot(sh.slot);
@@ -555,6 +615,12 @@ export class Renderer {
 
     this.iconCount = 0;
     for (const e of ents) {
+      if (e.clip) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(e.clip.x0, e.clip.y0, e.clip.x1 - e.clip.x0, e.clip.y1 - e.clip.y0);
+        ctx.clip();
+      }
       switch (e.k) {
         case K.FurnBase:
           this.drawFurniture(e.ref as FurnVis, e.area!, e.scale, false, now);
@@ -572,6 +638,7 @@ export class Renderer {
           this.drawCar(e.ref as Car);
           break;
       }
+      if (e.clip) ctx.restore();
     }
     this.drawPingPong(now);
     // ---- shell wait: spider webs, confetti/popcorn/rain (on top of the entities)
@@ -874,6 +941,79 @@ export class Renderer {
     if (f.kind === 'coffee_machine') return (this.sim.machineUntil.get(f.id) ?? 0) > now ? 1 : 0;
     if (f.kind === 'toilet_stall') return this.sim.stallBusy.has(f.id) ? 1 : 0;
     return 0;
+  }
+
+  private furnBakes = new WeakMap<AreaVis, FurnBake>();
+
+  /**
+   * A finished room's furniture in one canvas, in depth order (rebuilt when the room, the theme or the art changes).
+   * A room has a hundred-odd pieces that never move: one drawImage instead of one per piece, every frame.
+   */
+  private furnBake(vis: AreaVis): FurnBake {
+    const theme = areaTheme(this.theme, vis.room);
+    const key = `${this.assetsVersion}|${theme}`;
+    const hit = this.furnBakes.get(vis);
+    if (hit && hit.key === key) return hit;
+    const items: BakedFurn[] = [];
+    const live: FurnVis[] = [];
+    for (const f of vis.furniture) {
+      if (LIVE_FURNITURE.has(f.kind)) {
+        live.push(f);
+        continue;
+      }
+      const fs = furnitureSprites(this.art, f, 0);
+      if (!fs) continue;
+      const base = seasonalFurniture(theme, f.kind, vis.layout, f.seed) ?? fs.base;
+      const at = (sp: { canvas: HTMLCanvasElement; ax: number; ay: number }, k: K, y: number): BakedFurn => {
+        const x0 = Math.round(f.ax - sp.ax);
+        const y0 = Math.round(f.ay - sp.ay);
+        return { f, k, y, sprite: sp.canvas, x0, y0, x1: x0 + sp.canvas.width, y1: y0 + sp.canvas.height };
+      };
+      if (base) {
+        const it = at(base, K.FurnBase, f.ay);
+        const r = f.kind === 'desk' ? base.rects?.screen : undefined;
+        if (r) it.screen = { x: it.x0 + r.x, y: it.y0 + r.y, w: r.w, h: r.h };
+        items.push(it);
+      }
+      if (fs.front) items.push(at(fs.front, K.FurnFront, f.ay + 0.5));
+    }
+    items.sort((a, b) => a.y - b.y || a.k - b.k);
+    let canvas: HTMLCanvasElement | null = null;
+    let x = 0;
+    let y = 0;
+    if (items.length) {
+      x = Math.min(...items.map((i) => i.x0));
+      y = Math.min(...items.map((i) => i.y0));
+      canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.max(...items.map((i) => i.x1)) - x);
+      canvas.height = Math.max(1, Math.max(...items.map((i) => i.y1)) - y);
+      const c = canvas.getContext('2d')!;
+      c.imageSmoothingEnabled = false;
+      for (const it of items) c.drawImage(it.sprite, it.x0 - x, it.y0 - y);
+    }
+    const bake: FurnBake = { key, canvas, x, y, items, live, desks: items.filter((i) => i.screen) };
+    this.furnBakes.set(vis, bake);
+    return bake;
+  }
+
+  /** A baked desk's screen, then whatever stands in front of it drawn again over the screen (a chair back...). */
+  private drawDeskScreen(d: BakedFurn, vis: AreaVis, b: FurnBake, now: number): void {
+    const r = d.screen!;
+    const { ctx } = this;
+    this.safe(() => this.art.drawScreen(ctx, r, this.deskScreen(d.f, vis), now, d.f.seed));
+    let clipped = false;
+    for (const it of b.items) {
+      if (it.y <= d.y || it.x0 >= r.x + r.w || it.x1 <= r.x || it.y0 >= r.y + r.h || it.y1 <= r.y) continue;
+      if (!clipped) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(r.x, r.y, r.w, r.h);
+        ctx.clip();
+        clipped = true;
+      }
+      ctx.drawImage(it.sprite, it.x0, it.y0);
+    }
+    if (clipped) ctx.restore();
   }
 
   private drawFurniture(f: FurnVis, area: AreaVis, scale: number, front: boolean, now: number): void {

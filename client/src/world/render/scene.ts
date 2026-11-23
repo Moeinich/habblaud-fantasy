@@ -9,6 +9,7 @@ import type { SeasonalTheme } from '../api';
 import { decorateRaceWall } from './race-decor';
 import { raceOfSeed } from '../../../../shared/race';
 import { areaTheme, decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWallStyle } from './seasonal';
+import { knownOpaque, opaqueBox } from '../../art/core/opaque';
 
 /**
  * Room above a room's own rectangle in its cached wall layer (items that stick out above the top of the
@@ -90,29 +91,13 @@ const opaqueCache = new WeakMap<HTMLCanvasElement, { x: number; y: number; w: nu
 
 /** Bounding box of a canvas's opaque pixels (cached per canvas). */
 export function opaqueBounds(c: HTMLCanvasElement): { x: number; y: number; w: number; h: number } {
-  const hit = opaqueCache.get(c);
+  const hit = opaqueCache.get(c) ?? knownOpaque(c);
   if (hit) return hit;
   let box = { x: 0, y: 0, w: c.width, h: c.height };
   try {
+    // (rare: the art notes its sprites' box when it makes them, see art/core/opaque.ts)
     const ctx = c.getContext('2d');
-    if (ctx && c.width > 0 && c.height > 0) {
-      const d = ctx.getImageData(0, 0, c.width, c.height).data;
-      let x0 = c.width;
-      let y0 = c.height;
-      let x1 = -1;
-      let y1 = -1;
-      for (let y = 0; y < c.height; y++) {
-        for (let x = 0; x < c.width; x++) {
-          if (d[(y * c.width + x) * 4 + 3] > 16) {
-            if (x < x0) x0 = x;
-            if (x > x1) x1 = x;
-            if (y < y0) y0 = y;
-            if (y > y1) y1 = y;
-          }
-        }
-      }
-      if (x1 >= 0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-    }
+    if (ctx && c.width > 0 && c.height > 0) box = opaqueBox(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
   } catch {
     // "tainted" or unavailable canvas: use the full size
   }

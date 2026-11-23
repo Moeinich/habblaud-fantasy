@@ -135,6 +135,11 @@ one (0.**3**.0).
   touches it and at full rate only right after input. The server sends the office twice a second at most, not five
   times. A TV browser (or `?lite=1`) gets lite mode: 30 fps and one canvas pixel per screen pixel. `?fps=` sets the
   frame rate.
+- **Lighter still.** Each finished room's furniture is now one baked image, and only what stands in front of a
+  person is drawn again over them. Screens, window views, kanban boards and clocks repaint a few times a second from
+  a small cache instead of pixel by pixel every frame. New character poses no longer read their pixels back from the
+  graphics card. The hall walls stay on the graphics card instead of being uploaded again each frame. In the demo, a
+  frame now takes well under half the work it did. Lite mode also drops the blur behind the panels.
 
 ## [1.0.3] - 2026-10-16
 
