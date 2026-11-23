@@ -5,6 +5,7 @@ import { hash32 } from '../../../../shared/hash';
 import { renderSeasonalProp, type SeasonalProp } from '../../art/seasonal';
 import type { SeasonalTheme } from '../api';
 import type { AreaLayout, WallSegment } from '../layout/types';
+import { WALKWAY_ID } from '../layout/corridor';
 
 const sprites = new Map<SeasonalProp, Sprite>();
 function prop(kind: SeasonalProp): Sprite {
@@ -38,7 +39,8 @@ export function areaTheme(theme: SeasonalTheme, room: { seed: number } | undefin
 }
 
 export function seasonalFurniture(theme: SeasonalTheme, kind: FurnitureKind, area: AreaLayout, seed: number): Sprite | null {
-  if (theme === 'none' || area.kind === 'restroom') return null;
+  // (the elf road's ferns stay ferns: no gifts along a forest path)
+  if (theme === 'none' || area.kind === 'restroom' || area.id === WALKWAY_ID) return null;
   if (kind === 'plant_tall') {
     const first = area.furniture.find((f) => f.kind === 'plant_tall');
     if (!first || hash32(first.id) !== seed) return null;

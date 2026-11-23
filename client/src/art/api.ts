@@ -283,6 +283,7 @@ export type FloorKind =
   | 'jungle' // outside the elf wing: deep, lush undergrowth with ferns and moss
   | 'desert' // outside the orc wing: dry, cracked sand and pebbles
   | 'blight' // outside the undead wing: dead purple-grey earth with withered tufts
+  | 'forest_path' // the elf road: packed earth, fallen leaves, roots and mossy stepping stones
   | 'sidewalk' // outdoor sidewalk
   | 'street'; // outdoor street (lanes drawn by the renderer if it wants)
 

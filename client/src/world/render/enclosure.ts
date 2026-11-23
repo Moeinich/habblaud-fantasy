@@ -9,7 +9,7 @@ import { hash32 } from '../../../../shared/hash';
 import type { Race } from '../../../../shared/race';
 import { TILE } from '../constants';
 import { RING_MARGIN, RING_RADIUS, RING_WIDTH, type HallRing } from '../layout/enclosure';
-import { tintFloor } from './scene';
+import { ringDecor, ringGate, type DecorSpot } from './ring-decor';
 
 export interface RingSprite {
   /** Wall: back face, rim and the race's wall on it (drawn over people and furniture; covers no floor). */
@@ -38,6 +38,12 @@ const STYLE: Record<Exclude<Race, 'elf'>, Style> = {
 };
 
 const cache = new Map<string, RingSprite>();
+
+/** Spacing of the props along the rim (px). */
+const RIM_STEP = { human: 48, orc: 44, undead: 48 } as const;
+
+/** Ground of the yard inside each ring. */
+const YARD = { human: 'grass', orc: 'desert', undead: 'blight' } as const;
 
 /** A room seed whose theme belongs to `race`, for the floor and wall style of its hall. */
 function raceSeed(race: Race): number {
@@ -96,18 +102,28 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
   const seed = raceSeed(race);
   const theme = roomTheme(seed);
 
-  // the floor inside the ring: the rooms' own floor, running out to the wall
+  // the yard inside the ring: the race's own ground (a grassy bailey, a sandy war camp, blighted earth), which the
+  // rooms' floor spreads into (layout/enclosure.ts spreadFloorAt); a little darker in the wall's shadow
   const floor = document.createElement('canvas');
   floor.width = w;
   floor.height = h;
   const fctx = floor.getContext('2d')!;
   fctx.save();
   fctx.translate(-wx0, -wy0);
-  art.drawFloor(fctx, 'marble', wx0, wy0, w, h, { seed });
-  tintFloor(fctx, { x: wx0, y: wy0, w, h }, theme.carpet);
+  art.drawFloor(fctx, YARD[race], wx0, wy0, w, h, { seed });
   fctx.restore();
   const fimg = fctx.getImageData(0, 0, w, h);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (dist(x + 0.5, y + 0.5) > 0 || inRect(x, y)) fimg.data[(y * w + x) * 4 + 3] = 0;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const d = dist(x + 0.5, y + 0.5);
+      if (d > 0) {
+        fimg.data[i + 3] = 0;
+        continue;
+      }
+      const shade = Math.max(0, 1 + d / (0.9 * T)) * 0.28;
+      if (shade > 0) for (let c = 0; c < 3; c++) fimg.data[i + c] = Math.round(fimg.data[i + c] * (1 - shade));
+    }
   fctx.putImageData(fimg, 0, 0);
 
   // the back wall: a wall face along the north of the ring, down to where the rooms' floor begins
@@ -122,6 +138,8 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
       }
     }
     if (yIn < 0 || yIn >= ry0 + 2 * T) continue;
+    // no wall across a way in from the north (the walkway down to the undead wing)
+    if (gaps.some((g) => g.y0 < cy && x >= g.x0 && x < g.x1)) continue;
     art.drawWallFace(cctx, wx0 + x, wy0 + yIn, 1, theme.wall);
   }
   cctx.restore();
@@ -216,6 +234,58 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
     }
   }
   cctx.putImageData(img, 0, 0);
+
+  // the race's dressing: towers/tusks/gargoyles on the corners, props along the rim, hangings on the outer face
+  // and clutter along the yard just inside the wall (render/ring-decor.ts), drawn back to front
+  const decor: { x: number; y: number; spot: DecorSpot; n: number }[] = [];
+  const clear = (x: number, y: number, m: number) => !inGap(x, y) && !inGap(x - m, y) && !inGap(x + m, y) && !inGap(x, y - m) && !inGap(x, y + m);
+  for (const [ox, oy, a0] of corners) {
+    const a = a0 + Math.PI / 4;
+    decor.push({ x: ox + Math.cos(a) * cr, y: oy + Math.sin(a) * cr, spot: 'corner', n: decor.length });
+  }
+  const S = RIM_STEP[race];
+  let n = 0;
+  for (let x = cx - chw + cr + S / 2; x < cx + chw - cr; x += S) {
+    for (const y of [cy - chh, cy + chh]) if (clear(x, y, 10)) decor.push({ x, y, spot: 'rim', n: n++ });
+  }
+  for (let y = cy - chh + cr + S / 2; y < cy + chh - cr; y += S) {
+    for (const x of [cx - chw, cx + chw]) if (clear(x, y, 10)) decor.push({ x, y, spot: 'rim', n: n++ });
+  }
+  // hangings on the outer face in the south (the face the camp looks at)
+  n = 0;
+  for (let x = cx - hw + r + 16; x < cx + hw - r - 8; x += 48) {
+    const y = cy + hh + rw;
+    if (clear(x, y, 8)) decor.push({ x, y, spot: 'face', n: n++ });
+  }
+  // clutter just inside the wall: down both sides (below the back wall) and along the south
+  n = 0;
+  const yardTop = ry0 + 3 * T;
+  for (let y = yardTop; y < cy + hh - r; y += 34) {
+    for (const [side, x] of [[0, cx - hw + 8], [1, cx + hw - 8]] as const) {
+      const jy = y + (hash32(`${race}y${side}${y}`) % 12);
+      if (clear(x, jy, 14)) decor.push({ x, y: jy, spot: 'yard', n: n++ });
+    }
+  }
+  for (let x = cx - hw + r; x < cx + hw - r; x += 38) {
+    const jx = x + (hash32(`${race}x${x}`) % 14);
+    const y = cy + hh - 3;
+    if (clear(jx, y, 14)) decor.push({ x: jx, y, spot: 'yard', n: n++ });
+  }
+  decor.sort((a, b) => a.y - b.y);
+  for (const d of decor) ringDecor(cctx, race, d.spot, Math.round(d.x), Math.round(d.y), d.n, ring.rect.x * 31 + ring.rect.y);
+  // a gate at every way in: posts on the rim either side, with an arch over a way in from the north or south
+  for (const g of gaps) {
+    const gy = (g.y0 + g.y1) / 2;
+    if (gy < cy - hh || gy > cy + hh) {
+      const y = g.y0 < cy ? cy - chh : cy + chh;
+      ringGate(cctx, race, g.x0 - 4, g.x1 + 4, Math.round(y), true);
+    } else {
+      const x = g.x0 < cx ? cx - chw : cx + chw;
+      ringGate(cctx, race, Math.round(x), Math.round(x), Math.round(g.y0 - 3), false);
+      ringGate(cctx, race, Math.round(x), Math.round(x), Math.round(g.y1 + 6), false);
+    }
+  }
+
   // Built by reading pixels back, which leaves a canvas in CPU memory: the ring is drawn on every frame, so it goes
   // into a fresh canvas the GPU can keep as a texture instead of uploading it again each time.
   const s = { canvas: freshCopy(canvas), floor, x: wx0, y: wy0 };

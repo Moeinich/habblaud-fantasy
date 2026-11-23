@@ -2,7 +2,7 @@
 // dynamic furniture/items ready to be drawn each frame.
 import { FURNITURE, TILE, type ArtModule, type FurnitureKind, type FurnitureSprites, type Sprite } from '../../art/api';
 import { hash32 } from '../../../../shared/hash';
-import type { AreaLayout, WallItemPlacement, WallSegment } from '../layout/types';
+import type { AreaLayout, TileRect, WallItemPlacement, WallSegment } from '../layout/types';
 import type { RoomState } from '../sim/room-state';
 import type { WallArtAsset, WorldAssets } from '../assets';
 import type { SeasonalTheme } from '../api';
@@ -10,6 +10,7 @@ import { decorateRaceWall } from './race-decor';
 import { raceOfSeed } from '../../../../shared/race';
 import { areaTheme, decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWallStyle } from './seasonal';
 import { knownOpaque, opaqueBox } from '../../art/core/opaque';
+import { SPREAD_REACH, spreadFloorAt, spreadKey, type Spread } from '../layout/enclosure';
 
 /**
  * Room above a room's own rectangle in its cached wall layer (items that stick out above the top of the
@@ -56,6 +57,10 @@ export interface AreaVis {
   room?: RoomState;
   px: { x: number; y: number; w: number; h: number };
   floor: HTMLCanvasElement;
+  /** Where `floor` is drawn (world px): the room's rect, grown on the sides that spread into a ring's yard. */
+  fpx: { x: number; y: number; w: number; h: number };
+  /** spreadKey() of the sides it was built with. */
+  spread: string;
   walls: HTMLCanvasElement;
   furniture: FurnVis[];
   wallItems: WallVis[];
@@ -201,14 +206,39 @@ export function tintFloor(ctx: CanvasRenderingContext2D, px: { x: number; y: num
   ctx.restore();
 }
 
-export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState | undefined, assets: WorldAssets | null, seasonTheme: SeasonalTheme = 'none'): AreaVis {
+export function buildAreaVis(
+  art: ArtModule,
+  layout: AreaLayout,
+  room: RoomState | undefined,
+  assets: WorldAssets | null,
+  seasonTheme: SeasonalTheme = 'none',
+  spread: Spread | null = null,
+): AreaVis {
   const theme = areaTheme(seasonTheme, room);
   const r = layout.rect;
   const px = { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
+  const reach = SPREAD_REACH * TILE;
+  const fpx = spread
+    ? {
+        x: px.x - (spread.w ? reach : 0),
+        y: px.y,
+        w: px.w + (spread.w ? reach : 0) + (spread.e ? reach : 0),
+        h: px.h + (spread.s ? reach : 0),
+      }
+    : px;
 
   // ---- floor + rugs
-  const [floor, fctx] = makeCanvas(px.w, px.h);
-  fctx.translate(-px.x, -px.y);
+  const [floor, fctx] = makeCanvas(fpx.w, fpx.h);
+  fctx.translate(-fpx.x, -fpx.y);
+  // the floor spilling into the yard: the room's main floor carried on past its edge
+  const main = layout.floors.find((f) => f.kind === 'marble') ?? layout.floors[0];
+  if (spread && main) {
+    try {
+      art.drawFloor(fctx, main.kind, fpx.x, fpx.y, fpx.w, fpx.h, { seed: main.seed, tint: main.tint, tint2: main.tint2 });
+    } catch {
+      // the rect's own floors still go down below
+    }
+  }
   for (const f of layout.floors) {
     try {
       art.drawFloor(fctx, f.kind, f.x, f.y, f.w, f.h, { seed: f.seed, tint: f.tint, tint2: f.tint2, fade: f.fade });
@@ -217,7 +247,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
       fctx.fillRect(f.x, f.y, f.w, f.h);
     }
   }
-  if (layout.floorTint) tintFloor(fctx, px, layout.floorTint);
+  if (layout.floorTint) tintFloor(fctx, fpx, layout.floorTint);
   for (const rug of layout.rugs) {
     const color = seasonalRugColor(theme, rug.color);
     try {
@@ -228,14 +258,19 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
     }
     decorateSeasonalRug(fctx, theme, rug);
   }
+  if (spread) maskSpread(fctx, r, fpx, spread);
 
   // ---- walls + fixed wall items
   const [walls, wctx] = makeCanvas(px.w, px.h + WALL_MARGIN);
   wctx.translate(-px.x, -px.y + WALL_MARGIN);
   const order = { face: 0, south: 1, cap: 2 } as const;
-  for (const w of [...layout.walls].sort((a, b) => order[a.kind] - order[b.kind])) drawWallSegment(art, wctx, { ...w, style: seasonalWallStyle(theme, w.style) });
-  for (const w of layout.walls) decorateSeasonalWall(wctx, theme, w);
-  if (room) for (const w of layout.walls) decorateRaceWall(wctx, raceOfSeed(room.seed), w, room.seed);
+  // on a side that spreads into the yard the room has no side wall: its floor just runs out
+  const sideWall = (w: WallSegment) =>
+    !!spread && w.kind === 'cap' && w.h >= 2 * TILE && ((spread.w && w.x < px.x + TILE) || (spread.e && w.x + w.w > px.x + px.w - TILE));
+  const kept = layout.walls.filter((w) => !sideWall(w));
+  for (const w of [...kept].sort((a, b) => order[a.kind] - order[b.kind])) drawWallSegment(art, wctx, { ...w, style: seasonalWallStyle(theme, w.style) });
+  for (const w of kept) decorateSeasonalWall(wctx, theme, w);
+  if (room) for (const w of kept) decorateRaceWall(wctx, raceOfSeed(room.seed), w, room.seed);
 
   const wallItems: WallVis[] = [];
   let sign: WallVis | undefined;
@@ -277,7 +312,43 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
     };
   });
 
-  return { id: layout.id, layout, room, px, floor, walls, furniture, wallItems, sign, version: room?.version ?? 0 };
+  return { id: layout.id, layout, room, px, fpx, spread: spreadKey(spread), floor, walls, furniture, wallItems, sign, version: room?.version ?? 0 };
+}
+
+/**
+ * Cuts the floor to its spreading edge (layout/enclosure.ts spreadFloorAt), in 2-px blocks: the yard shows where it
+ * bites in, loose slabs stay out in the yard, and the rim is a shade darker with a soft shadow below it. Only the
+ * band along the spreading sides is looked at; the middle of the room is always floor.
+ */
+function maskSpread(ctx: CanvasRenderingContext2D, rect: TileRect, fpx: { x: number; y: number; w: number; h: number }, s: Spread): void {
+  const T = TILE;
+  const band = 2 * T;
+  const rx0 = rect.x * T;
+  const rx1 = (rect.x + rect.w) * T;
+  const ry1 = (rect.y + rect.h) * T;
+  const near = (x: number, y: number) => (s.w && x < rx0 + band) || (s.e && x >= rx1 - band) || (s.s && y >= ry1 - band);
+  const B = 2;
+  const x1 = fpx.x + fpx.w;
+  const y1 = fpx.y + fpx.h;
+  ctx.save();
+  for (let y = fpx.y; y < y1; y += B) {
+    for (let x = fpx.x; x < x1; x += B) {
+      if (!near(x, y)) continue;
+      const at = spreadFloorAt(rect, s, x + B / 2, y + B / 2);
+      if (!at) {
+        ctx.clearRect(x, y, B, B);
+        // a soft shadow just below the floor's lower rim
+        if (spreadFloorAt(rect, s, x + B / 2, y - B / 2) === 'edge') {
+          ctx.fillStyle = 'rgba(0,0,0,0.22)';
+          ctx.fillRect(x, y, B, B);
+        }
+      } else if (at === 'edge' || at === 'slab') {
+        ctx.fillStyle = at === 'edge' ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.12)';
+        ctx.fillRect(x, y, B, B);
+      }
+    }
+  }
+  ctx.restore();
 }
 
 export function toWallVis(it: WallItemPlacement, areaId: string): WallVis {

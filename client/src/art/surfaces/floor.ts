@@ -205,6 +205,46 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
       }
       break;
     }
+    case 'forest_path': {
+      // A forest road: packed earth worn by feet, fallen leaves, a root crossing now and then and flat mossy
+      // stepping stones.
+      const n = noise(tx * TILE, ty * TILE, 36, o.seed + 9);
+      const base = mix('#5e4a34', '#735a3e', n);
+      b.rect(0, 0, TILE, TILE, base);
+      for (let i = 0; i < 12; i++) b.set(Math.floor(r(i) * TILE), Math.floor(r(i + 20) * TILE), r(i + 40) < 0.5 ? shade(base, 0.07) : shade(base, -0.1));
+      if (r(60) < 0.3) {
+        // a stepping stone
+        const sx = 2 + Math.floor(r(61) * 6);
+        const sy = 2 + Math.floor(r(62) * 7);
+        const sw = 5 + Math.floor(r(63) * 3);
+        const sh = 3 + Math.floor(r(64) * 2);
+        const c = mix('#7c8070', '#8e927e', r(65));
+        b.rect(sx + 1, sy, sw - 2, sh, c);
+        b.rect(sx, sy + 1, sw, sh - 2, c);
+        b.hline(sx + 1, sx + sw - 2, sy, shade(c, 0.1));
+        b.hline(sx + 1, sx + sw - 2, sy + sh, shade(base, -0.18));
+        if (r(66) < 0.6) b.rect(sx + 1, sy + 1, 2, 1, '#5f8a4a');
+      }
+      if (r(70) < 0.22) {
+        // a root snaking across
+        let y = 3 + Math.floor(r(71) * 10);
+        for (let x = 0; x < TILE; x++) {
+          if (r(72 + x) < 0.25) y += r(90 + x) < 0.5 ? -1 : 1;
+          b.set(x, y, '#3e2c1e');
+          b.set(x, y - 1, '#6a5038');
+        }
+      }
+      for (let i = 0; i < 5; i++) {
+        // fallen leaves and moss
+        const c = ['#9a6a2a', '#b8862e', '#4f7a3e', '#6a8a3a', '#8a4a26'][Math.floor(r(i + 110) * 5)];
+        const x = Math.floor(r(i + 120) * (TILE - 1));
+        const y = Math.floor(r(i + 130) * (TILE - 1));
+        b.set(x, y, c);
+        if (r(i + 140) < 0.5) b.set(x + 1, y, c);
+      }
+      if (r(150) < 0.06) b.set(Math.floor(r(151) * 14) + 1, Math.floor(r(152) * 14) + 1, '#8ff0e0');
+      break;
+    }
     case 'desert': {
       // Dry badlands: sand in warm ochres, dark cracks, pebbles and dead grass.
       const n = noise(tx * TILE, ty * TILE, 56, o.seed + 7);

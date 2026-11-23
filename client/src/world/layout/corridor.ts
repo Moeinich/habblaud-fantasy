@@ -84,10 +84,9 @@ export function layoutCorridor(shape: Shape): AreaLayout {
   const h = DEPT_CARPET.human;
   const o = DEPT_CARPET.orc;
   if (coreX > 0) b.seamFloor('hall', coreX, 0, SEAM, CORRIDOR_H, 510, { axis: 'x', from: coreX - SEAM / 2, to: coreX + SEAM }, h.pile, h.motif);
-  // the elf carpet spills out of the walkway onto the square's paving
+  // the elf road's earth runs out of the walkway onto the square's paving
   if (shape.north) {
-    const e = DEPT_CARPET.elf;
-    b.seamFloor('hall', plazaX + WALKWAY_LX - 1, 0, WALKWAY_W + 2, SEAM + 0.5, 560, { axis: 'y', from: 0, to: SEAM + 0.5 }, e.pile, e.motif);
+    b.seamFloor('forest_path', plazaX + WALKWAY_LX, 0, WALKWAY_W, SEAM + 0.5, 561, { axis: 'y', from: 0, to: SEAM + 0.5 });
   }
   // and the undead carpet out of the south walkway
   if (shape.south) {
@@ -162,18 +161,22 @@ export function layoutSouthCorridor(shape: Shape): AreaLayout | null {
   return b.build();
 }
 
-/** Covered glass walkway from the square up to the elf corridor, or null. */
+/** The forest road from the square up to the elf corridor, or null. */
 export function layoutWalkway(shape: Shape): AreaLayout | null {
   if (!shape.north) return null;
   const y0 = NCORRIDOR_Y + CORRIDOR_H;
   const h = CORRIDOR_Y - y0;
   const b = new AreaBuilder(WALKWAY_ID, 'corridor', { x: PLAZA_COL * COL_W + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
-  const c = DEPT_CARPET.elf;
-  b.floor('hall', 0, 0, WALKWAY_W, h, 560, c.pile, c.motif);
-  b.rug(1.2, 0.5, WALKWAY_W - 2.4, h - 1.5, c.runner, 561);
-  for (let ly = 0; ly < h; ly++) {
-    b.furn('glass_partition', 0, ly, 'v', { order: 0.1 });
-    b.furn('glass_partition', WALKWAY_W - 1, ly, 'v', { order: 0.1 });
+  // a forest road up to the elves: a mossy verge, the worn earth path down the middle (ragged on both sides) and
+  // ferns and broad leaves along it instead of glass
+  b.floor('jungle', 0, 0, WALKWAY_W, h, 560);
+  const mid = WALKWAY_W / 2;
+  b.seamFloor('forest_path', 0.3, 0, mid - 0.3, h, 561, { axis: 'x', from: mid, to: 0.3 });
+  b.seamFloor('forest_path', mid, 0, mid - 0.3, h, 561, { axis: 'x', from: mid, to: WALKWAY_W - 0.3 });
+  for (let ly = 0; ly < h; ly += 2) {
+    const k = ly / 2;
+    b.furn(k % 3 === 1 ? 'plant_tall' : 'plant_small', 0, ly, k % 3 === 1 ? 'monstera' : 'fern', { order: 0.1 });
+    b.furn((k + 1) % 3 === 1 ? 'plant_tall' : 'plant_small', WALKWAY_W - 1, ly + 1 < h ? ly + 1 : ly, (k + 1) % 3 === 1 ? 'monstera' : 'fern', { order: 0.1 });
   }
   b.walk(1, 0, WALKWAY_W - 2, h);
   return b.build();

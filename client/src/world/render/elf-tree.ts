@@ -272,6 +272,56 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
     if (rnd(x + 702) < 0.35) veil.put(x, top + len, GLOW_HI);
   }
 
+  // ---- elf dressing round the outside of the trunk: moon lanterns hanging from the front of the crown, clusters
+  // of glowing mushrooms at its foot and owls keeping watch on the back of the crown
+  const box = (x: number, y: number, w: number, h: number, c: RGB) => {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) solid.put(Math.round(x) + i, Math.round(y) + j, c);
+  };
+  const lantern = (x: number, y: number) => {
+    box(x, y, 1, 5, [58, 46, 40]);
+    box(x - 2, y + 5, 5, 1, [90, 74, 106]);
+    box(x - 2, y + 6, 5, 5, [191, 232, 255]);
+    box(x - 1, y + 7, 3, 3, GLOW_HI);
+    box(x - 2, y + 6, 1, 5, [90, 74, 106]);
+    box(x + 2, y + 6, 1, 5, [90, 74, 106]);
+    box(x - 1, y + 11, 3, 1, [90, 74, 106]);
+  };
+  const mushrooms = (x: number, y: number, k: number) => {
+    for (const [dx, h, w] of [[-4, 4, 5], [1, 6, 7], [6, 3, 4]] as const) {
+      if (rnd(k + dx) < 0.25) continue;
+      box(x + dx, y - h, 1, h, [232, 224, 208]);
+      box(x + dx - (w >> 1), y - h - 2, w, 2, [160, 112, 224]);
+      box(x + dx - (w >> 1) + 1, y - h - 3, w - 2, 1, [216, 176, 255]);
+      solid.put(x + dx, y - h - 2, GLOW_HI);
+    }
+  };
+  const owl = (x: number, y: number) => {
+    box(x - 2, y - 7, 5, 7, [110, 82, 58]);
+    box(x - 2, y - 7, 1, 1, [70, 52, 38]);
+    box(x + 2, y - 7, 1, 1, [70, 52, 38]);
+    box(x - 1, y - 3, 3, 3, [176, 150, 110]);
+    solid.put(x - 1, y - 5, [255, 214, 90]);
+    solid.put(x + 1, y - 5, [255, 214, 90]);
+    solid.put(x, y - 4, [220, 170, 60]);
+  };
+  for (let a = 0.1; a < Math.PI * 2; a += 0.2) {
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const ex = cx + (A + R) * Math.sign(ca) * Math.abs(ca) ** (2 / N);
+    const ey = cy + (B + R) * Math.sign(sa) * Math.abs(sa) ** (2 / N);
+    const k = Math.round(a * 997);
+    if (sa > 0.15) {
+      if (ex >= walkX0 - 2 * T && ex < walkX1 + 2 * T) continue;
+      // the front: a lantern under the leaves, mushrooms on the ground in front of the trunk
+      if (rnd(k) < 0.6) lantern(ex + (rnd(k + 1) - 0.5) * T, ey - 4);
+      if (rnd(k + 2) < 0.7) mushrooms(ex + (rnd(k + 3) - 0.5) * 2 * T, ey + 1.2 * T, k);
+    } else if (sa < -0.3 && rnd(k + 4) < 0.3) {
+      owl(ex, ey - lift(ex - cx) - CROWN * 0.55);
+    } else if (Math.abs(ca) > 0.8 && rnd(k + 5) < 0.6) {
+      mushrooms(ex + Math.sign(ca) * 0.8 * T, ey + T, k);
+    }
+  }
+
   const s = { solid: solid.canvas(), veil: veil.canvas(), ox: -(cx - W / 2), oy: -top };
   cache.set(key, s);
   return s;

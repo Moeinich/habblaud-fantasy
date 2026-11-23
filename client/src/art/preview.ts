@@ -45,9 +45,9 @@ const SCREEN_PT: Record<ScreenMode, string> = {
   off: 'off', standby: 'standby', idle: 'idle', code: 'code', terminal: 'terminal', browser: 'browser', search: 'search', chat: 'chat', docs: 'document', tasks: 'tasks', alert: 'alert',
   progress: 'progress', show: 'show', game: 'video game',
 };
-const FLOORS: readonly FloorKind[] = ['carpet', 'wood', 'tile_check', 'tile_white', 'concrete', 'hall', 'marble', 'grass', 'jungle', 'desert', 'blight', 'sidewalk', 'street'];
+const FLOORS: readonly FloorKind[] = ['carpet', 'wood', 'tile_check', 'tile_white', 'concrete', 'hall', 'marble', 'grass', 'jungle', 'desert', 'blight', 'forest_path', 'sidewalk', 'street'];
 const FLOOR_PT: Record<FloorKind, string> = {
-  carpet: 'carpet', wood: 'wood', tile_check: 'checkered', tile_white: 'white tile', concrete: 'polished cement', hall: 'hall carpet', marble: 'marble', grass: 'grass', jungle: 'jungle', desert: 'desert', blight: 'dead earth', sidewalk: 'sidewalk', street: 'asphalt',
+  carpet: 'carpet', wood: 'wood', tile_check: 'checkered', tile_white: 'white tile', concrete: 'polished cement', hall: 'hall carpet', marble: 'marble', grass: 'grass', jungle: 'jungle', desert: 'desert', blight: 'dead earth', forest_path: 'forest path', sidewalk: 'sidewalk', street: 'asphalt',
 };
 const ICONS: readonly IconName[] = [
   'alert', 'question', 'zzz', 'check', 'heart', 'coffee', 'music', 'idea', 'sweat', 'star', 'lightning', 'chat', 'box', 'wave',

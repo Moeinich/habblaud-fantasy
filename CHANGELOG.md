@@ -78,6 +78,21 @@ one (0.**3**.0).
 
 ### Changed
 
+- **Halls that grow out of their yards.** Inside each ring the yard now has the race's own ground: a grassy bailey
+  round the human halls, sand in the orc war camp, blighted earth round the crypts. The rooms' stone floor no longer
+  stops in a straight line. On the sides that face the yard it ends in a rounded, uneven edge, with loose slabs
+  scattered beyond it, and the straight side wall there is gone.
+- **Dressed ring walls.** Every ring is decorated for its race. Humans get round towers on the corners, torches
+  on the battlements, blue and gold banners on the outer wall, and barrels, crates, hay and weapon racks in the
+  yard. Orcs get mammoth tusks on the corners, war banners and braziers on the palisade, spiked hide shields
+  outside, and totems, drums, logs and bone piles. The undead get gargoyles, ghost-fire braziers, violet skull
+  banners and chains, and graves, coffins and candles along the fence. The elves' world tree gets moon lanterns
+  in its leaves, glowing mushrooms at its foot and owls in its crown.
+- **Gates.** Every way through a ring has gateposts in the race's style. The walkway down to the undead wing
+  now passes under an iron arch instead of running into the wall.
+- **The elf road.** The walkway up to the elves is now a forest road: worn earth with roots, fallen leaves and
+  mossy stepping stones, lined with ferns and broad leaves instead of glass.
+
 - **No more road.** The dirt road with its carts, the cobbled verges, the street lamps and the hedge along the
   south of the office are gone. The office now sits in open country, with trees, bushes and stones growing densely
   all around it.

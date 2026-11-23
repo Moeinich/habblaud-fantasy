@@ -8,7 +8,7 @@ import type { Camera } from '../camera';
 import { BUILDING_H, COL_W, CORRIDOR_Y, NSTRIP_Y, PLAZA_COL } from '../constants';
 import { layoutExterior, plazaShells, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
 import { cellsOf, mainRect, type Shape } from '../layout/geometry';
-import type { ExteriorProp } from '../layout/types';
+import type { AreaLayout, ExteriorProp } from '../layout/types';
 import { screenModeFor } from '../sim/behavior';
 import type { Character } from '../sim/character';
 import type { RoomState } from '../sim/room-state';
@@ -24,7 +24,7 @@ import { carSprite, propSprite, shadowSprite } from './props';
 import { countBadge, fallbackIcon } from './shell-sprites';
 import { worldTree } from './elf-tree';
 import { ringSprite, type RingSprite } from './enclosure';
-import { hallRings } from '../layout/enclosure';
+import { hallRings, spreadKey, spreadSides, type HallRing, type Spread } from '../layout/enclosure';
 import { areaTheme, decorateElevator, drawSeasonalLights, drawSeasonalWindow, seasonalCostume, seasonalFurniture } from './seasonal';
 import { buildAreaVis, furnitureSprites, opaqueBounds, paintShell, toWallVis, WALL_MARGIN, wallItemOrigin, wallSprites, type AreaVis, type FurnVis, type WallVis } from './scene';
 
@@ -239,7 +239,8 @@ export class Renderer {
       for (const a of [...sim.building.core, sim.building.corridor, ...sim.building.extra]) {
         want.add(a.id);
         const cur = this.areas.get(a.id);
-        if (!cur || cur.layout !== a || assetsChanged) this.areas.set(a.id, buildAreaVis(this.art, a, undefined, this.assets, theme));
+        const spread = this.spreadOf(a);
+        if (!cur || cur.layout !== a || cur.spread !== spreadKey(spread) || assetsChanged) this.areas.set(a.id, buildAreaVis(this.art, a, undefined, this.assets, theme, spread));
       }
       for (const room of sim.rooms.values()) {
         if (!room.present) continue;
@@ -254,8 +255,9 @@ export class Renderer {
       if (!room.present) continue;
       for (let k = 0; k < room.span; k++) this.occupiedSlots.add(room.slot + k * 2);
       const cur = this.areas.get(room.id);
-      if (!cur || cur.layout !== room.layout || cur.version !== room.version || assetsChanged) {
-        this.areas.set(room.id, buildAreaVis(this.art, room.layout, room, this.assets, theme));
+      const spread = this.spreadOf(room.layout);
+      if (!cur || cur.layout !== room.layout || cur.version !== room.version || cur.spread !== spreadKey(spread) || assetsChanged) {
+        this.areas.set(room.id, buildAreaVis(this.art, room.layout, room, this.assets, theme, spread));
       } else cur.room = room;
     }
     for (const [id, vis] of this.areas) if (vis.room && !vis.room.present) this.areas.delete(id);
@@ -510,8 +512,8 @@ export class Renderer {
 
     // ---- areas: floor, walls and wall items
     for (const vis of this.areas.values()) {
-      const p = vis.px;
-      if (!visible(p.x, p.y - WALL_MARGIN, p.w, p.h + WALL_MARGIN)) continue;
+      const p = vis.fpx;
+      if (!visible(p.x, p.y, p.w, p.h)) continue;
       const anim = vis.room ? buildAnim(vis.room.phase, vis.room.progress(now)) : NO_ANIM;
       this.drawFloor(vis, anim);
     }
@@ -731,23 +733,45 @@ export class Renderer {
 
   private drawFloor(vis: AreaVis, anim: BuildAnim): void {
     const { ctx } = this;
-    const p = vis.px;
+    const p = vis.fpx;
     if (anim.floor >= 1) {
       ctx.drawImage(vis.floor, p.x, p.y);
       return;
     }
     if (anim.floor <= 0) return;
-    // sweep: tiles appear diagonally (and vanish in reverse order on disassembly)
+    // sweep: tiles appear diagonally (and vanish in reverse order on disassembly); the spill past the room's edge
+    // goes with the nearest tile inside it
     const w = vis.layout.rect.w;
     const h = vis.layout.rect.h;
+    const ox = (vis.px.x - p.x) / TILE;
     const k = anim.floor * 1.06;
-    for (let j = 0; j < h; j++) {
-      for (let i = 0; i < w; i++) {
-        if (sweepDelay(i, j, w, h) > k) continue;
+    for (let j = 0; j < p.h / TILE; j++) {
+      for (let i = 0; i < p.w / TILE; i++) {
+        const ri = Math.max(0, Math.min(w - 1, i - ox));
+        const rj = Math.min(h - 1, j);
+        if (sweepDelay(ri, rj, w, h) > k) continue;
         ctx.drawImage(vis.floor, i * TILE, j * TILE, TILE, TILE, p.x + i * TILE, p.y + j * TILE, TILE, TILE);
       }
     }
   }
+
+  /** Sides of an area that spread into its ring's yard (none for the corridor and outside the rings). */
+  private spreadOf(a: AreaLayout): Spread | null {
+    if (a.kind === 'corridor') return null;
+    return spreadSides(a.rect, this.ringsOf());
+  }
+
+  private ringsOf(): HallRing[] {
+    const key = this.sim.building.key;
+    if (this.ringKey !== key) {
+      this.ringKey = key;
+      this.ringList = hallRings(this.sim.building.shape);
+    }
+    return this.ringList;
+  }
+
+  private ringKey = '';
+  private ringList: HallRing[] = [];
 
   private drawWalls(vis: AreaVis, anim: BuildAnim, now: number, hour: number): void {
     const { ctx } = this;

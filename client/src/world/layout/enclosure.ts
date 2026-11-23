@@ -55,3 +55,98 @@ export function openToRing(area: AreaLayout, side: 'north' | 'south'): void {
     for (const it of area.wallItems) if (it.on === 'face' && it.baseY === top + 2 * TILE) it.baseY = top;
   } else area.walls = area.walls.filter((w) => !(w.kind === 'south' && w.y === bottom));
 }
+
+// ---------------------------------------------------------------------------------------------------- spread
+// Inside a ring the rooms' floor doesn't stop in a straight line: on the sides that face the yard (west, east and
+// south; the north side runs under the ring's back wall) it ends in a rounded, wobbly edge that bites in and spills
+// out by up to a tile, with loose slabs scattered beyond it, so the halls read as grown rather than boxed.
+
+/** Room sides that spread into the yard (only those on the ring's own edge). */
+export interface Spread {
+  w: boolean;
+  e: boolean;
+  s: boolean;
+  /** Where corridors pass (tiles): the edge stays straight near them. */
+  gaps: TileRect[];
+}
+
+/** How far the floor canvas reaches beyond a spreading side (tiles). */
+export const SPREAD_REACH = RING_MARGIN;
+/** Corner rounding, wobble and the band of loose slabs (tiles). */
+const SPREAD_ROUND = 1.5;
+const SPREAD_WOBBLE = 0.9;
+const SPREAD_SLABS = 0.9;
+
+/** Which sides of `rect` spread, or null when it isn't in a ring (the elf wing, the corridor...). */
+export function spreadSides(rect: TileRect, rings: readonly HallRing[]): Spread | null {
+  const ring = rings.find((r) => rect.x >= r.rect.x && rect.y >= r.rect.y && rect.x + rect.w <= r.rect.x + r.rect.w && rect.y + rect.h <= r.rect.y + r.rect.h);
+  if (!ring) return null;
+  const s: Spread = { w: rect.x === ring.rect.x, e: rect.x + rect.w === ring.rect.x + ring.rect.w, s: rect.y + rect.h === ring.rect.y + ring.rect.h, gaps: ring.gaps };
+  return s.w || s.e || s.s ? s : null;
+}
+
+export function spreadKey(s: Spread | null): string {
+  return s ? `${s.w ? 'w' : ''}${s.e ? 'e' : ''}${s.s ? 's' : ''}` : '';
+}
+
+/** Integer hash of a lattice point → [-1, 1]. */
+function lattice(x: number, y: number, salt: number): number {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(salt, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h ^= h >>> 13;
+  return ((h >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+/** Smooth value noise in [-1, 1] on a `cell`-px lattice (world px, so neighbouring rooms line up). */
+export function valueNoise(x: number, y: number, cell: number, salt: number): number {
+  const gx = Math.floor(x / cell);
+  const gy = Math.floor(y / cell);
+  let fx = x / cell - gx;
+  let fy = y / cell - gy;
+  fx = fx * fx * (3 - 2 * fx);
+  fy = fy * fy * (3 - 2 * fy);
+  const a = lattice(gx, gy, salt);
+  const b = lattice(gx + 1, gy, salt);
+  const c = lattice(gx, gy + 1, salt);
+  const d = lattice(gx + 1, gy + 1, salt);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+
+/**
+ * Is world px (x, y) on the room's floor? 'edge' = on it, at its rim (drawn a shade darker); 'slab' = a loose slab
+ * out in the yard; null = yard. `rect` in tiles.
+ */
+export function spreadFloorAt(rect: TileRect, s: Spread, x: number, y: number): 'in' | 'edge' | 'slab' | null {
+  const T = TILE;
+  const R = SPREAD_ROUND * T;
+  const far = 1e6;
+  const rx0 = rect.x * T;
+  const ry0 = rect.y * T;
+  const rx1 = (rect.x + rect.w) * T;
+  const ry1 = (rect.y + rect.h) * T;
+  // near a corridor gap the edge stays put (the walkway runs straight in)
+  let calm = 1;
+  for (const g of s.gaps) {
+    const dx = Math.max(g.x * T - x, 0, x - (g.x + g.w) * T);
+    const dy = Math.max(g.y * T - y, 0, y - (g.y + g.h) * T);
+    calm = Math.min(calm, Math.max(0, Math.min(1, (Math.hypot(dx, dy) - 0.5 * T) / (1.5 * T))));
+  }
+  const d = (px: number, py: number): number => {
+    const ax0 = s.w ? rx0 + R : rx0 - far;
+    const ax1 = s.e ? rx1 - R : rx1 + far;
+    const ay0 = ry0 - far;
+    const ay1 = s.s ? ry1 - R : ry1 + far;
+    // outside a side that doesn't spread: never floor (the canvas doesn't reach there anyway)
+    if ((!s.w && px < rx0) || (!s.e && px >= rx1) || (!s.s && py >= ry1)) return far;
+    const qx = Math.max(ax0 - px, px - ax1);
+    const qy = Math.max(ay0 - py, py - ay1);
+    const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - R;
+    const wob = (valueNoise(px, py, 2.25 * T, 11) * 0.7 + valueNoise(px, py, 0.8 * T, 12) * 0.3) * SPREAD_WOBBLE * T * calm;
+    return sdf - wob;
+  };
+  const v = d(x, y);
+  if (v < 0) return v > -2.5 ? 'edge' : 'in';
+  // loose slabs: chunky 4-px-ish blocks of floor a little way out
+  if (calm > 0.5 && v < SPREAD_SLABS * T && valueNoise(x, y, 0.45 * T, 13) > 0.42) return 'slab';
+  return null;
+}
