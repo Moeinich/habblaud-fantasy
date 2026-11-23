@@ -3,11 +3,12 @@ import type { WallStyle } from '../../art/api';
 import { COL_W, CORE_COL0, CORE_EAST_COL, NORTH_Y, ROOM_H, SOUTH_Y, TILE } from '../constants';
 
 /** West edge of the core (tiles). */
-const CX = CORE_COL0 * COL_W;
+const CX = colX(CORE_COL0);
 /** The east core column, across the square. */
-const CXE = CORE_EAST_COL * COL_W;
+const CXE = colX(CORE_EAST_COL);
 import { AreaBuilder, SEATED_SORT_BIAS } from './builder';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
+import { colX } from './geometry';
 import type { AreaLayout } from './types';
 
 export const RECEPTION_ID = 'core:recepcao';

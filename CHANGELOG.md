@@ -10,6 +10,11 @@ one (0.**3**.0).
 
 ## [Unreleased]
 
+### Changed
+
+- **Zones closer to the hub.** The open strips between the hub and the race zones are half as wide, so the zones sit
+  right up against the hub's wall.
+
 ## [1.1.1] - 2026-11-23
 
 ### Changed

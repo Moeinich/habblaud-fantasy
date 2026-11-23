@@ -23,6 +23,7 @@ import {
   CORRIDOR_H,
   EAST_COL0,
   EAST_GAP_COL,
+  GAP_W,
   MAIN_Y,
   NSTRIP_Y,
   PLAZA_COL,
@@ -133,10 +134,34 @@ export function stripY(strip: Strip): number {
   return strip === 'north' ? NSTRIP_Y : strip === 'main' ? MAIN_Y : strip === 'south' ? SSTRIP_Y : BSTRIP_Y;
 }
 
+/**
+ * West edge (tiles) of a column. Every column is COL_W wide except the two gap columns either side of the hub, which
+ * are only GAP_W: the columns west of the hub move east and the ones east of it move west to close up.
+ */
+export function colX(col: number): number {
+  const s = COL_W - GAP_W;
+  if (col <= WEST_GAP_COL) return col * COL_W + s;
+  if (col <= EAST_GAP_COL) return col * COL_W;
+  return col * COL_W - s;
+}
+
+/** Width (tiles) of a column. */
+export function colW(col: number): number {
+  return colX(col + 1) - colX(col);
+}
+
+/** Column whose west edge is at x (tiles; x must be a column edge). */
+export function colOf(x: number): number {
+  let c = Math.floor(x / COL_W);
+  while (colX(c) > x) c--;
+  while (colX(c + 1) <= x) c++;
+  return c;
+}
+
 /** Rectangle (tiles) of one cell. */
 export function cellRect(col: number, side: Side, strip: Strip = 'main'): TileRect {
   const y = stripY(strip) + (side === 'north' ? 0 : ROOM_H + CORRIDOR_H);
-  return { x: col * COL_W, y, w: COL_W, h: ROOM_H };
+  return { x: colX(col), y, w: colW(col), h: ROOM_H };
 }
 
 export function slotRect(slot: number): TileRect {
@@ -149,7 +174,8 @@ export const MAX_SPAN = 4;
 /** Rectangle of a room anchored at `slot` that spans `span` columns eastwards on the same side of the corridor. */
 export function roomRect(slot: number, span = 1): TileRect {
   const r = slotRect(slot);
-  return { ...r, w: Math.max(1, span) * COL_W };
+  const c = slotColumn(slot);
+  return { ...r, w: colX(c + Math.max(1, span)) - colX(c) };
 }
 
 /** Slots (cells) covered by a room anchored at `slot` spanning `span` columns: slot, slot+2, slot+4... */
@@ -222,8 +248,8 @@ export function stripCols(s: Shape, strip: Strip): [number, number] {
   for (const race of ['elf', 'orc', 'undead', 'human'] as const)
     for (const r of zoneRects(s, race)) {
       if (r.y >= y0 + BUILDING_H || r.y + r.h <= y0) continue;
-      x0 = Math.min(x0, r.x / COL_W);
-      x1 = Math.max(x1, (r.x + r.w) / COL_W);
+      x0 = Math.min(x0, colOf(r.x));
+      x1 = Math.max(x1, colOf(r.x + r.w));
     }
   void ws;
   void es;
@@ -234,7 +260,7 @@ export function stripCols(s: Shape, strip: Strip): [number, number] {
 export function stripRect(s: Shape, strip: Strip): TileRect | null {
   if (!hasStrip(s, strip)) return null;
   const [x0, x1] = stripCols(s, strip);
-  return { x: x0 * COL_W, y: stripY(strip), w: (x1 - x0) * COL_W, h: BUILDING_H };
+  return { x: colX(x0), y: stripY(strip), w: colX(x1) - colX(x0), h: BUILDING_H };
 }
 
 /** Row 1, with the core (always built). */
@@ -268,7 +294,7 @@ export function bottomCorridorRect(s: Shape): TileRect | null {
 
 /** The hub (tiles): the four core halls and the square's column between them, on row 1. */
 export function hubRect(): TileRect {
-  return { x: CORE_COL0 * COL_W, y: MAIN_Y, w: (CORE_EAST_COL - CORE_COL0 + 1) * COL_W, h: BUILDING_H };
+  return { x: colX(CORE_COL0), y: MAIN_Y, w: colX(CORE_EAST_COL + 1) - colX(CORE_COL0), h: BUILDING_H };
 }
 
 /** A zone's outline in parts (tiles): its outer row, its side of row 1 and the joint filling the corner between. */
@@ -308,7 +334,7 @@ export function zoneParts(s: Shape, race: Race): ZoneParts {
   let outerCols: [number, number] | null = oc && rc ? [Math.min(oc[0], rc[0]), Math.max(oc[1], rc[1])] : (oc ?? rc);
   // with both arms, the outer row reaches out at least to where the side arm starts, so the two meet in a corner
   if (outerCols && sideCols) outerCols = west ? [Math.min(outerCols[0], sideCols[1] - 1), outerCols[1]] : [outerCols[0], Math.max(outerCols[1], sideCols[0] + 1)];
-  const rect = (c: [number, number], y: number, h: number): TileRect => ({ x: c[0] * COL_W, y, w: (c[1] - c[0]) * COL_W, h });
+  const rect = (c: [number, number], y: number, h: number): TileRect => ({ x: colX(c[0]), y, w: colX(c[1]) - colX(c[0]), h });
   const outer = outerCols ? rect(outerCols, rowY, BUILDING_H) : null;
   const side = sideCols ? rect(sideCols, sideY, ROOM_H) : null;
   let joint: TileRect | null = null;
@@ -348,7 +374,7 @@ export function extentRect(s: Shape): TileRect {
 /** Size of the walk grid: always from (0, 0). */
 export function gridSize(s: Shape): { w: number; h: number } {
   const x1 = Math.max(...STRIPS.map((st) => (hasStrip(s, st) ? stripCols(s, st)[1] : 0)));
-  return { w: x1 * COL_W, h: hasBottom(s) ? SSTRIP_BOTTOM : MAIN_BOTTOM };
+  return { w: colX(x1), h: hasBottom(s) ? SSTRIP_BOTTOM : MAIN_BOTTOM };
 }
 
 /** Whether a tile is inside the building of this shape (a row, or a walkway between two). */
@@ -357,7 +383,7 @@ export function insideShape(s: Shape, tx: number, ty: number): boolean {
     const r = stripRect(s, st);
     if (r && inRect(r, tx, ty)) return true;
   }
-  const inPlazaCol = tx >= WALK_COL * COL_W && tx < (WALK_COL + 1) * COL_W;
+  const inPlazaCol = tx >= colX(WALK_COL) && tx < colX(WALK_COL + 1);
   return inPlazaCol && walkways(s).some(([a, b]) => ty >= stripY(a) + BUILDING_H && ty < stripY(b));
 }
 
@@ -385,8 +411,8 @@ export function cellsOf(s: Shape): Cell[] {
   for (const race of ['elf', 'orc', 'undead', 'human'] as const) {
     const west = ARMS[ZONE_ARMS[race][0]].dir < 0;
     for (const r of zoneRects(s, race)) {
-      const c0 = r.x / COL_W;
-      const c1 = c0 + r.w / COL_W;
+      const c0 = colOf(r.x);
+      const c1 = colOf(r.x + r.w);
       for (const strip of STRIPS)
         for (const sd of ['north', 'south'] as const)
           for (let col = c0; col < c1; col++) {

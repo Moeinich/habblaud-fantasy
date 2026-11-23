@@ -8,7 +8,7 @@ import { TILE } from '../../art/api';
 import type { WorldOptions } from '../api';
 import type { Camera } from '../camera';
 import { BUILDING_H, COL_W, CORRIDOR_H, ROOM_H, STRIP_GAP } from '../constants';
-import { ARMS, stripY, ZONE_ARMS } from '../layout/geometry';
+import { ARMS, colX, stripY, ZONE_ARMS } from '../layout/geometry';
 import type { Character } from '../sim/character';
 import { shellAgeKey, shellBubbleAlpha, shellBubbleText, STORM_LIFT, unitHash } from '../sim/shell';
 import type { Sim } from '../sim/sim';
@@ -601,7 +601,7 @@ export class Overlay {
       if (!arm) continue;
       const { start, dir, strip } = ARMS[arm];
       const west = dir < 0;
-      labels.push({ race, x: west ? (start + 1) * COL_W - 1 : start * COL_W + 1, y: stripY(strip) + ROOM_H + 1, right: west });
+      labels.push({ race, x: west ? colX(start + 1) - 1 : colX(start) + 1, y: stripY(strip) + ROOM_H + 1, right: west });
     }
     for (const l of labels) {
       const x = this.sx(l.x * TILE);

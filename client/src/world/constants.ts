@@ -33,6 +33,8 @@ export const WEST_GAP_COL = CORE_COL0 - 1;
 export const EAST_GAP_COL = CORE_EAST_COL + 1;
 /** First column of the arms east of the hub. */
 export const EAST_COL0 = EAST_GAP_COL + 1;
+/** Width (tiles) of the two gap columns: just room for a zone's wall and the hub's side by side. */
+export const GAP_W = 8;
 /** Columns the west side arms can take (the outer rows can take two more). */
 export const WEST_COLS = WEST_GAP_COL;
 /** Lawn between two rows (tiles): none, the rows sit flush so a zone's two rows form one block. */

@@ -7,7 +7,7 @@
 import type { Race } from '../../../../shared/race';
 import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, MAIN_Y, ROOM_H, WALK_COL } from '../constants';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
-import { ARMS, armIndex, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneParts, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
+import { ARMS, armIndex, colX, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneParts, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
 import { TILE } from '../constants';
 import type { AreaLayout, TileRect } from './types';
 
@@ -59,9 +59,9 @@ export function hallRings(shape: Shape): HallRing[] {
   // the hub: the four core halls, open to both sides and to the walkways above and below
   const hub = hubRect();
   const gaps: TileRect[] = [];
-  gaps.push(sideGap('main', CORE_COL0 * COL_W, -1));
-  gaps.push(sideGap('main', (CORE_EAST_COL + 1) * COL_W, 1));
-  const wx = WALK_COL * COL_W + WALKWAY_LX - 1;
+  gaps.push(sideGap('main', colX(CORE_COL0), -1));
+  gaps.push(sideGap('main', colX(CORE_EAST_COL + 1), 1));
+  const wx = colX(WALK_COL) + WALKWAY_LX - 1;
   if (hasNorth(shape)) gaps.push({ x: wx, y: MAIN_Y - reach, w: WALKWAY_W + 2, h: reach });
   if (hasBottom(shape)) gaps.push({ x: wx, y: MAIN_Y + BUILDING_H, w: WALKWAY_W + 2, h: reach });
   out.push({ race: 'human', hub: true, rects: [hub], gaps });

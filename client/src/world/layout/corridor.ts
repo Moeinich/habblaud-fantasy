@@ -6,7 +6,7 @@
 import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, EAST_GAP_COL, PLAZA_COL, ROOM_H, WALK_COL, WEST_GAP_COL } from '../constants';
 import { AreaBuilder } from './builder';
 import { CORE_CARPET, DEPT_CARPET, WING_RACE } from './departments';
-import { ARMS, armCol, corridorRect, stripArms, stripIndex, stripY, walkways, type Shape, type Strip, type Wing } from './geometry';
+import { ARMS, armCol, colX, corridorRect, stripArms, stripIndex, stripY, walkways, type Shape, type Strip, type Wing } from './geometry';
 import type { AreaLayout } from './types';
 
 export const CORRIDOR_ID = 'core:corredor';
@@ -105,7 +105,7 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   const r = corridorRect(shape, strip);
   if (!r) return null;
   const b = new AreaBuilder(ROW_CORRIDOR[strip], 'corridor', r);
-  const lx = (col: number) => col * COL_W - r.x;
+  const lx = (col: number) => colX(col) - r.x;
   const [west, east] = stripArms(strip);
   const middle = strip === 'main';
   // stone paving only where the hub is (the core halls and the square's column): from its edge outwards every road
@@ -142,7 +142,7 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   for (const w of [...west, ...east]) {
     for (let k = 0; k < shape[w]; k++) {
       const col = armCol(w, k);
-      if (dressed.has(col) || col * COL_W < r.x || (col + 1) * COL_W > r.x + r.w) continue;
+      if (dressed.has(col) || colX(col) < r.x || colX(col + 1) > r.x + r.w) continue;
       dressed.add(col);
       wingColumn(b, lx(col), Math.abs(col - PLAZA_COL), `talk:${ROW_CORRIDOR[strip]}:${col}`, false, false);
     }
@@ -209,7 +209,7 @@ export function layoutWalkways(shape: Shape): AreaLayout[] {
     const y0 = hi === 'main' ? stripY('main') + BUILDING_H : stripY(hi) + ROOM_H + CORRIDOR_H;
     const y1 = lo === 'main' ? stripY('main') : stripY(lo) + ROOM_H;
     const h = y1 - y0;
-    const b = new AreaBuilder(WALKWAY_FROM[hi], 'corridor', { x: WALK_COL * COL_W + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
+    const b = new AreaBuilder(WALKWAY_FROM[hi], 'corridor', { x: colX(WALK_COL) + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
     {
       b.floor('grass', 0, 0, WALKWAY_W, h, 580 + stripIndex(hi));
       b.floor('tile_check', 0.6, 0, WALKWAY_W - 1.2, h, 582 + stripIndex(hi));

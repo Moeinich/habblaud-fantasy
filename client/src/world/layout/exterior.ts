@@ -6,7 +6,7 @@ import { COL_W, CORRIDOR_H, CORRIDOR_Y, CORE_COL0, CORE_EAST_COL, EAST_GAP_COL, 
 import { biomeMap, biomeProp, cellRace } from './biome';
 import { hallRings, ringBounds, RING_REACH } from './enclosure';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
-import { cellRect, cellSlot, cellsOf, extentRect, hasStrip, mainRect, stripCols, stripRect, STRIPS, stripY, walkways, WINGS, type Cell, type Shape, type Side, type Strip } from './geometry';
+import { cellRect, cellSlot, cellsOf, colX, extentRect, hasStrip, mainRect, stripCols, stripRect, STRIPS, stripY, walkways, WINGS, type Cell, type Shape, type Side, type Strip } from './geometry';
 import type { ExteriorProp, FloorPatch, TileRect, WallItemPlacement, WallSegment } from './types';
 
 /** A rectangle grown by `x` on both sides, `top` above and `bottom` below (tiles). */
@@ -76,7 +76,7 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
   for (const ring of hallRings(shape)) keepClear.push(grow(ringBounds(ring), 1, 1, 1));
   // the elves' world tree: its roots spread round the zone and its crown rises far above it
   for (const r of hallRings(shape).find((h) => h.race === 'elf')?.rects ?? []) keepClear.push({ x: r.x - 9, y: r.y - ELF_TREE_UP - 1, w: r.w + 18, h: r.h + ELF_TREE_UP + 7 });
-  keepClear.push({ x: WALK_COL * COL_W + 3, y: ext.y, w: COL_W - 6, h: ext.h });
+  keepClear.push({ x: colX(WALK_COL) + 3, y: ext.y, w: COL_W - 6, h: ext.h });
   keepClear.push({ x: wx - 6, y: CORRIDOR_Y - 2, w: 6, h: CORRIDOR_H + 4 });
   const clear = (tx: number, ty: number) => !keepClear.some((r) => tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h);
   for (let y = bounds.y + 1; y < bounds.y + bounds.h - 1; y += 3) {
@@ -117,7 +117,7 @@ export function slotShell(cell: Cell): SlotShell {
   const windows: WallItemPlacement[] = [];
   const floors: FloorPatch[] = [];
   const props: ExteriorProp[] = [];
-  const W = COL_W * TILE;
+  const W = rect.w * TILE;
   const T = (n: number) => n * TILE;
   const seed = () => Math.floor(rng() * 1e9);
 
@@ -173,7 +173,8 @@ export function plazaShells(shape: Shape): SlotShell[] {
     sh.windows = [];
     sh.props = sh.props.filter((p) => p.kind === 'flowers' || p.kind === 'bush');
     // keep the plants in the middle of the cell (the rings' walls run down its edges)
-    sh.props = sh.props.filter((p) => p.x - rx > 5 * TILE && p.x - rx < 11 * TILE && p.y - ry >= 0);
+    const cw = sh.rect.w * TILE;
+    sh.props = sh.props.filter((p) => p.x - rx > cw * 0.3 && p.x - rx < cw * 0.7 && p.y - ry >= 0);
     out.push(sh);
   };
   /** The square's column where a walkway leaves the row through this side's wall. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FURNITURE, TILE, type FurnitureKind, type RoomTheme } from '../../art/api';
 import { BUILDING_H, COL_W, CORRIDOR_H, CORRIDOR_Y, EAST_COL0, MAIN_BOTTOM, NORTH_Y, PLAZA_COL, ROOM_H, SOUTH_Y, WEST_GAP_COL } from '../constants';
 import { assembleBuilding, coreAreas } from './building';
-import { ARMS, armCol, armIndex, cellSlot, cellsOf, coveredSlots, emptyShape, hasBottom, hasNorth, mainRect, shapeOf, slotColumn, slotRect, slotSide, slotStrip, slotWing, STRIPS, stripY, WINGS, zoneParts, zoneRects } from './geometry';
+import { ARMS, armCol, armIndex, cellSlot, cellsOf, colX, coveredSlots, emptyShape, hasBottom, hasNorth, mainRect, shapeOf, slotColumn, slotRect, slotSide, slotStrip, slotWing, STRIPS, stripY, WINGS, zoneParts, zoneRects } from './geometry';
 import { WING_RACE } from './departments';
 import { layoutProjectRoom, roomVariant } from './room';
 import { layoutExterior, plazaShells, slotShell } from './exterior';
@@ -55,7 +55,7 @@ describe('slot mapping', () => {
   it('room rectangles respect the corridor of their row', () => {
     const a = slotRect(cellSlot(EAST_COL0, 'north'));
     const b = slotRect(cellSlot(EAST_COL0, 'south'));
-    expect(a).toEqual({ x: EAST_COL0 * COL_W, y: NORTH_Y, w: COL_W, h: 12 });
+    expect(a).toEqual({ x: colX(EAST_COL0), y: NORTH_Y, w: COL_W, h: 12 });
     expect(b.y).toBe(SOUTH_Y);
     expect(a.y + a.h).toBe(CORRIDOR_Y);
     expect(b.y + b.h).toBe(MAIN_BOTTOM);
@@ -76,15 +76,15 @@ describe('slot mapping', () => {
   it('a zone is an L only where it has rooms: its outer row, its side of row 1 and the corner joining them', () => {
     // rooms only beside the hub: just that strip of row 1, no outer row, nothing over the hub
     const beside = { ...emptyShape(), me: 1 };
-    expect(zoneRects(beside, 'orc')).toEqual([{ x: EAST_COL0 * COL_W, y: stripY('main'), w: COL_W, h: ROOM_H }]);
+    expect(zoneRects(beside, 'orc')).toEqual([{ x: colX(EAST_COL0), y: stripY('main'), w: COL_W, h: ROOM_H }]);
     expect(hasNorth(beside)).toBe(false);
     expect(cellsOf(beside)).toHaveLength(1);
     // both arms: the outer row from over the hub out to its last room, row 1's strip, and the corner between
     const s = { ...emptyShape(), ne: 4, me: 1 };
     const p = zoneParts(s, 'orc');
-    expect(p.outer).toEqual({ x: EAST_COL0 * COL_W, y: stripY('north'), w: 4 * COL_W, h: BUILDING_H });
-    expect(p.side).toEqual({ x: EAST_COL0 * COL_W, y: stripY('main'), w: COL_W, h: ROOM_H });
-    expect(p.joint).toEqual({ x: EAST_COL0 * COL_W, y: stripY('north'), w: COL_W, h: stripY('main') + ROOM_H - stripY('north') });
+    expect(p.outer).toEqual({ x: colX(EAST_COL0), y: stripY('north'), w: 4 * COL_W, h: BUILDING_H });
+    expect(p.side).toEqual({ x: colX(EAST_COL0), y: stripY('main'), w: COL_W, h: ROOM_H });
+    expect(p.joint).toEqual({ x: colX(EAST_COL0), y: stripY('north'), w: COL_W, h: stripY('main') + ROOM_H - stripY('north') });
     // every cell of the outline gets a room or a patio; on row 1 only its own (north) side
     const cells = cellsOf(s);
     expect(cells.filter((c) => c.strip === 'north')).toHaveLength(8);
