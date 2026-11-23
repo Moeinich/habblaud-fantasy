@@ -235,6 +235,8 @@ Everything works without configuration. Adjust with environment variables when n
 | `HABBLAUD_TIMELINE` | on | `0` turns off timeline recording for the timelapse. |
 | `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` | Where the mod writes usage. |
 | `HABBLAUD_DEMO` | off | `1` starts in demo mode. |
+| `HABBLAUD_STALE_MINUTES` | `10` | A session quiet this long leaves the office (30 min if it reports busy). `0` = never. |
+| `HABBLAUD_ACCOUNT_IDLE_HOURS` | `24` | An account unused this long is hidden from the top bar and filters. `0` = always show. |
 | `HABBLAUD_ALLOWED_HOSTS` | — | Extra host names accepted in the address, besides `localhost` and IPs. |
 | `HABBLAUD_TERMINAL` | on (local only) | `0` turns off the terminal, answering and messages from the camp, and the character editor. |
 | `HABBLAUD_PTY` | off | `1` turns on the interactive terminal (open, take over and end sessions) and **New agent**. Local access only. |
@@ -251,6 +253,9 @@ Everything works without configuration. Adjust with environment variables when n
 | `HABBLAUD_BRAND_NAME` | `Habblaud` | White-labeling: the name in the page title, the pixel logo, the home-screen app and the login page (1–24 characters; a `|` sets where the gold part of the logo starts, e.g. `swift|c`). |
 | `HABBLAUD_BRAND_SHORT` | the brand name | Short label under the home-screen icon. |
 | `HABBLAUD_ACCOUNTS` | — | JSON to customize an account's name, letter or color, e.g. `[{"id":".claude-work","name":"Work","short":"W","color":"#5cc97b"}]`. |
+
+On a TV or other weak device, open the page with `?lite=1` (TV browsers get it automatically): 30 fps and one canvas
+pixel per screen pixel. `?fps=` sets the frame rate on any device.
 
 In Docker, put these in `.env`. `npm run docker:up -- --no-build` starts without rebuilding, `npm run docker:down`
 stops and `npm run docker:logs` follows the logs.

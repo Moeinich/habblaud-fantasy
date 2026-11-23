@@ -346,6 +346,8 @@ export interface AccountInfo {
   usageStatus: 'ok' | 'stale' | 'disabled';
   /** The account lives on another machine (see AgentInfo.machine). */
   machine?: MachineRef;
+  /** No open session and no sign of use for a long while (HABBLAUD_ACCOUNT_IDLE_HOURS): the UI hides it. */
+  inactive?: true;
 }
 
 export interface OfficeSnapshot {

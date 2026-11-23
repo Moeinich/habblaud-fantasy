@@ -23,7 +23,7 @@ import { Particles } from './particles';
 import { carSprite, propSprite, shadowSprite } from './props';
 import { countBadge, fallbackIcon } from './shell-sprites';
 import { worldTree } from './elf-tree';
-import { ringSprite } from './enclosure';
+import { ringSprite, type RingSprite } from './enclosure';
 import { hallRings } from '../layout/enclosure';
 import { areaTheme, decorateElevator, drawSeasonalLights, drawSeasonalWindow, seasonalCostume, seasonalFurniture } from './seasonal';
 import { buildAreaVis, furnitureSprites, opaqueBounds, paintShell, toWallVis, WALL_MARGIN, wallItemOrigin, wallSprites, type AreaVis, type FurnVis, type WallVis } from './scene';
@@ -117,6 +117,19 @@ function roomRace(roomId: string): Race {
     raceMemo.set(roomId, r);
   }
   return r;
+}
+
+/** Grid cell (px) of the baked-prop lookup. */
+const PROP_CELL = 64;
+
+interface BakedProp {
+  prop: ExteriorProp;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Last occluders() pass that returned it (no duplicates when it spans several cells). */
+  stamp: number;
 }
 
 export class Renderer {
@@ -231,10 +244,8 @@ export class Renderer {
     ctx.translate(-this.baseX, -this.baseY);
     paintShell(this.art, ctx, this.exterior.floors, []);
     // the halls' floors running out to their rings (layout/enclosure.ts)
-    for (const ring of hallRings(shape)) {
-      const sp = ringSprite(ring, this.art);
-      ctx.drawImage(sp.floor, sp.x, sp.y);
-    }
+    this.rings = hallRings(shape).map((ring) => ringSprite(ring, this.art));
+    for (const sp of this.rings) ctx.drawImage(sp.floor, sp.x, sp.y);
     if (this.exterior.streetH) paintRoadRuts(ctx, this.baseX, c.width, this.exterior.streetY, this.exterior.streetH);
     this.shells = [];
     this.shellWindows = [];
@@ -290,7 +301,50 @@ export class Renderer {
       this.clearColor = '#6f9a5a';
     }
     this.finishBase(ctx, shape);
+    this.bakeProps(ctx);
     this.base = c;
+  }
+
+  /**
+   * Outdoor props (trees, stumps, rocks...) never change between rebuilds: they go into the base layer once instead of
+   * thousands of drawImage calls per frame. Someone walking behind one gets it drawn again on top (see occluders).
+   */
+  private bakeProps(ctx: CanvasRenderingContext2D): void {
+    this.propGrid.clear();
+    const props = [...this.exterior.props].sort((a, b) => a.y - b.y);
+    for (const prop of props) {
+      if (prop.kind === 'paving') {
+        ctx.drawImage(this.pavingCanvas(prop), prop.x, prop.y);
+        continue;
+      }
+      const s = propSprite(prop);
+      const x = Math.round(prop.x - s.ax);
+      const y = Math.round(prop.y - s.ay);
+      ctx.drawImage(s.canvas, x, y);
+      const box: BakedProp = { prop, x, y, w: s.canvas.width, h: s.canvas.height, stamp: 0 };
+      for (let gy = Math.floor(y / PROP_CELL); gy <= Math.floor((y + box.h) / PROP_CELL); gy++)
+        for (let gx = Math.floor(x / PROP_CELL); gx <= Math.floor((x + box.w) / PROP_CELL); gx++) {
+          const k = gx * 65536 + gy;
+          let cell = this.propGrid.get(k);
+          if (!cell) this.propGrid.set(k, (cell = []));
+          cell.push(box);
+        }
+    }
+  }
+
+  /** Baked props drawn over a person's sprite that stand in front of them (their foot line lower down). */
+  private occluders(x0: number, y0: number, x1: number, y1: number, depth: number, out: (p: ExteriorProp) => void): void {
+    const stamp = ++this.propStamp;
+    for (let gy = Math.floor(y0 / PROP_CELL); gy <= Math.floor(y1 / PROP_CELL); gy++)
+      for (let gx = Math.floor(x0 / PROP_CELL); gx <= Math.floor(x1 / PROP_CELL); gx++) {
+        const cell = this.propGrid.get(gx * 65536 + gy);
+        if (!cell) continue;
+        for (const b of cell) {
+          if (b.stamp === stamp || b.prop.y <= depth) continue;
+          b.stamp = stamp;
+          if (b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0) out(b.prop);
+        }
+      }
   }
 
   /** Grass ~15% less saturated: the lawn does not compete with the office. */
@@ -479,21 +533,8 @@ export class Renderer {
         continue;
       }
       push(K.Char, ch.depth(), ch, null, 1);
-    }
-    for (const prop of this.exterior.props) {
-      if (!visible(prop.x - 24, prop.y - 56, 48, 60)) continue;
-      let alpha = 1;
-      if (prop.whenRoom !== undefined) {
-        // e.g. hedge in front of the garden path — appears together with the room
-        const room = this.roomInSlot(prop.whenRoom);
-        if (!room) continue;
-        if (room.phase === 'building' || room.phase === 'dismantling') {
-          const pr = room.progress(now);
-          alpha = room.phase === 'building' ? Math.min(1, pr * 3) : 1 - Math.min(1, Math.max(0, (pr - 0.75) * 4));
-          if (alpha <= 0.02) continue;
-        }
-      }
-      push(K.Prop, prop.y, prop, null, alpha);
+      // the outdoor props are in the base layer: the ones in front of this person are drawn again over them
+      this.occluders(ch.x - 24, ch.y - 48, ch.x + 24, ch.y + 8, ch.depth(), (p) => push(K.Prop, p.y, p, null, 1));
     }
     for (const sh of this.shells) {
       const room = this.roomInSlot(sh.slot);
@@ -541,10 +582,7 @@ export class Renderer {
     this.particles.draw(ctx, vx0, vy0, vx1, vy1, now);
     // the rounded walls round the halls, and the elf wing's world tree (neither covers a floor; the tree's vines
     // over the offices are see-through)
-    for (const ring of hallRings(this.sim.building.shape)) {
-      const sp = ringSprite(ring, this.art);
-      if (visible(sp.x, sp.y, sp.canvas.width, sp.canvas.height)) this.ctx.drawImage(sp.canvas, sp.x, sp.y);
-    }
+    for (const sp of this.rings) if (visible(sp.x, sp.y, sp.canvas.width, sp.canvas.height)) this.ctx.drawImage(sp.canvas, sp.x, sp.y);
     this.drawElfTree(visible);
 
     // ---- light: night, unlit rooms, glows
@@ -1199,6 +1237,11 @@ export class Renderer {
   }
 
   private pavings = new Map<string, HTMLCanvasElement>();
+  /** Baked outdoor props by PROP_CELL cell (key gx*65536+gy), for occluders(). */
+  private propGrid = new Map<number, BakedProp[]>();
+  private propStamp = 0;
+  /** The halls' ring walls of the current building (made in buildBase). */
+  private rings: RingSprite[] = [];
 
   /** Sidewalk stretch (2x2 tiles) with the same pattern as the neighboring sidewalk (world coordinates). */
   private pavingCanvas(prop: ExteriorProp): HTMLCanvasElement {

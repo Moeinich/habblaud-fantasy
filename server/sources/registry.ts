@@ -23,6 +23,8 @@ export interface RegistryEntry {
   agent?: string;
   updatedAt?: number;
   statusUpdatedAt?: number;
+  /** When the registry file was last written (set by RegistryReader, not part of the file). */
+  fileMtimeMs?: number;
 }
 
 function str(v: unknown): string | undefined {
@@ -166,7 +168,7 @@ export class RegistryReader {
       const e = cached.entry;
       if (!e) continue;
       if (this.opts.checkPid && !this.isAlive(e.pid)) continue;
-      entries.push(e);
+      entries.push({ ...e, fileMtimeMs: cached.mtimeMs });
     }
     for (const file of [...this.cache.keys()]) if (!seen.has(file)) this.cache.delete(file);
     return { entries, ok: true };

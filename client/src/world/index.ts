@@ -52,6 +52,37 @@ export interface CreateWorldOptions {
   visit?: boolean;
 }
 
+/** Frame rate with nobody interacting. */
+const IDLE_FPS = 30;
+/** How long after the last input the world draws at full rate. */
+const ACTIVE_MS = 2000;
+/** `?fps=` (10–144), otherwise 60. */
+export function fpsFromUrl(search: string): number {
+  const n = Number(new URLSearchParams(search).get('fps'));
+  return Number.isFinite(n) && n >= 10 ? Math.min(144, Math.round(n)) : 60;
+}
+
+/** Smart-TV and streaming-stick browsers: weak CPUs and GPUs behind big screens. */
+const TV_UA = /\b(SMART-?TV|SmartTV|Tizen|Web0S|webOS|NetCast|BRAVIA|AFT\w+|CrKey|Android TV|GoogleTV|HbbTV|VIDAA|Roku|AppleTV|PhilipsTV)\b/i;
+
+/**
+ * Lite mode, for a TV on the wall: the canvas at one pixel per CSS pixel (a 4K panel would otherwise fill four times
+ * as many, which pixel art doesn't need) and 30 fps at most. On with `?lite=1` or a TV browser; `?lite=0` turns it off.
+ */
+export function liteMode(search: string, userAgent: string): boolean {
+  const v = new URLSearchParams(search).get('lite');
+  if (v !== null) return v !== '0' && v !== 'false';
+  return TV_UA.test(userAgent);
+}
+
+/** Device pixel ratio of the world canvas: the screen's (1–3), or 1 in lite mode. */
+export function canvasPixelRatio(dpr: number, lite = false): number {
+  return lite ? 1 : Math.max(1, Math.min(3, dpr || 1));
+}
+
+const LITE = liteMode(globalThis.location?.search ?? '', globalThis.navigator?.userAgent ?? '');
+const pixelRatio = () => canvasPixelRatio(window.devicePixelRatio, LITE);
+
 export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: CreateWorldOptions = {}): WorldApi & { debug: WorldDebug; visit: VisitWorld } {
   let options: WorldOptions = { ...DEFAULT_WORLD_OPTIONS };
   const visitMode = !!o.visit;
@@ -87,9 +118,9 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
   // ------------------------------------------------------------------ size/DPR
 
   const resize = () => {
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
+    const dpr = pixelRatio();
     const pw = Math.floor(w * dpr);
     const ph = Math.floor(h * dpr);
     if (canvas.width !== pw || canvas.height !== ph) {
@@ -278,8 +309,20 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
 
   // ------------------------------------------------------------------ loop
 
+  // Frame cap: full rate (`?fps=`, default 60; 30 in lite mode) for a moment after any input, 30 fps when nobody
+  // touches it (a TV on the wall): pixel-art animation looks the same and the device does half the work.
+  const fpsMax = Math.min(LITE ? IDLE_FPS : 144, fpsFromUrl(globalThis.location?.search ?? ''));
+  const fpsIdle = Math.min(fpsMax, IDLE_FPS);
+  let lastInput = 0;
+  const onInput = () => (lastInput = performance.now());
+  for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown', 'touchmove'])
+    window.addEventListener(ev, onInput, { passive: true, capture: true, signal: abort.signal });
+
   const loop = (ts: number) => {
     raf = requestAnimationFrame(loop);
+    const cap = ts - lastInput < ACTIVE_MS ? fpsMax : fpsIdle;
+    // (1 ms of slack: rAF timestamps jitter around the display's own interval)
+    if (lastTs && ts - lastTs < 1000 / cap - 1) return;
     const real = Date.now();
     const realDt = lastTs ? Math.min(0.1, Math.max(0, (ts - lastTs) / 1000)) : 1 / 60;
     lastTs = ts;
@@ -289,7 +332,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     if (playback) worldNow += dt * 1000;
     const now = playback ? worldNow : real;
     try {
-      const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+      const dpr = pixelRatio();
       if (canvas.clientWidth !== camera.viewW || canvas.clientHeight !== camera.viewH || dpr !== camera.dpr) resize();
       sim.update(dt, now);
       // settled matches and bets go to the feed (timelapse ones are a replay of the past: left out)

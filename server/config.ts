@@ -44,6 +44,10 @@ export interface ServerConfig {
   messages: boolean;
   /** Records the office timeline for the timelapse (<dataDir>/timeline); HABBLAUD_TIMELINE=0 turns it off. */
   timeline: boolean;
+  /** Sessions quiet for this long leave the office (HABBLAUD_STALE_MINUTES, default 10; 0 = never). */
+  staleSessionMs: number;
+  /** Accounts unused for this long are hidden (HABBLAUD_ACCOUNT_IDLE_HOURS, default 24; 0 = never). */
+  accountIdleMs: number;
   /** Project root (where package.json lives); dist/client is served from here. */
   rootDir: string;
   version: string;
@@ -195,6 +199,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     terminal: terminalOffReason(env, host, inDocker) === undefined,
     messages: messagesOffReason(env, host, inDocker) === undefined,
     timeline: !env.HABBLAUD_TIMELINE?.trim() || isTruthy(env.HABBLAUD_TIMELINE),
+    staleSessionMs: minutesEnv(env.HABBLAUD_STALE_MINUTES, 10),
+    accountIdleMs: minutesEnv(env.HABBLAUD_ACCOUNT_IDLE_HOURS, 24) * 60,
     rootDir,
     version: pkg.version,
     repo: pkg.repo,
@@ -206,4 +212,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     ingestWarning: ingestOff && ingestOff !== 'off' ? ingestOff : undefined,
     brand: parseBrand(env),
   };
+}
+
+/** A number of minutes from the environment, in ms (`fallback` minutes when unset or invalid; 0 is allowed). */
+function minutesEnv(raw: string | undefined, fallback: number): number {
+  const n = Number(raw?.trim());
+  return (raw?.trim() && Number.isFinite(n) && n >= 0 ? n : fallback) * 60_000;
 }

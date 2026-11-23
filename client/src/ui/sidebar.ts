@@ -9,6 +9,7 @@ import { plural, shortPath } from './format';
 import { ICONS } from './icons';
 import { groupRooms, type AgentNode, type RoomGroup } from './model';
 import { officeIsEmpty } from './overlays';
+import { activeAccounts } from './provider';
 import { createAgentRow, updateAgentRow } from './rows';
 import { createAccountChip, createProgress, updateAccountChip, updateProgress } from './widgets';
 import { tr } from '../../../shared/i18n';
@@ -144,7 +145,7 @@ export class Sidebar implements UiComponent {
 
   render(): void {
     const snap = this.ctx.store.snapshot;
-    const accounts = snap?.accounts ?? [];
+    const accounts = activeAccounts(snap?.accounts ?? []);
     const hidden = new Set(this.ctx.prefs.hiddenAccounts);
     this.filterList.sync(accounts.length > 1 ? accounts : []);
     setHidden(this.filters, accounts.length <= 1);

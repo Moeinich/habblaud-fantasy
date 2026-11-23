@@ -4,6 +4,7 @@ import {
   accountChipLabel,
   accountProvider,
   codexApprovalLabel,
+  activeAccounts,
   emptyOfficeHint,
   fallbackShort,
   hasCodexPermission,
@@ -86,5 +87,16 @@ describe('tool (Claude Code or Codex)', () => {
     expect(codexApprovalLabel('never')).toBe('Never asks');
     expect(codexApprovalLabel('outra')).toBe('outra');
     expect(codexApprovalLabel(undefined)).toBe('—');
+  });
+});
+
+describe('inactive accounts', () => {
+  it('hidden unless they have an open session', () => {
+    const list = [
+      { id: 'a', sessions: 0 },
+      { id: 'b', sessions: 0, inactive: true as const },
+      { id: 'c', sessions: 1, inactive: true as const },
+    ];
+    expect(activeAccounts(list).map((a) => a.id)).toEqual(['a', 'c']);
   });
 });

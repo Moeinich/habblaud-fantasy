@@ -124,6 +124,17 @@ one (0.**3**.0).
   Portuguese. An English system language is no longer ignored. `HABBLAUD_LANG` and **Settings › Language** still pin
   a language. The last log and script messages that were still in Portuguese are now in English, and
   `npm run i18n:check` fails on Portuguese text outside `tr()`.
+- **Quiet sessions leave the office.** A session that has written nothing for 10 minutes (30 while it says it is
+  busy) is treated as gone, even when its registry file stays behind, as it does in Docker or after a crash. Its
+  room empties and closes like any other. It comes back the moment it writes again. `HABBLAUD_STALE_MINUTES` sets
+  the limit (`0` = never).
+- **Unused accounts drop out of the top bar and the filters.** An account with no open session and no sign of use
+  for a day is hidden until it is used again. `HABBLAUD_ACCOUNT_IDLE_HOURS` sets the limit (`0` = always show).
+- **Lighter on small devices.** The trees, stumps and stones outside are painted once into the ground layer instead
+  of on every frame, which cuts the world's draw calls by more than half. The world draws at 30 fps while nobody
+  touches it and at full rate only right after input. The server sends the office twice a second at most, not five
+  times. A TV browser (or `?lite=1`) gets lite mode: 30 fps and one canvas pixel per screen pixel. `?fps=` sets the
+  frame rate.
 
 ## [1.0.3] - 2026-10-16
 

@@ -4,7 +4,8 @@
 // Claude Code accounts come from the config dirs (detectAccounts). Those of other tools (Codex) come from outside,
 // discovered by their source (setProviderAccounts), with ids unique across all accounts; their usage is also pushed
 // by the source (setUsage), alongside the statusline and Claude Code's /usage cache.
-import { basename, resolve } from 'node:path';
+import { statSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import type { AccountInfo, AccountUsage, Provider } from '../../shared/types';
 import { log } from '../log';
 import { detectAccounts, type DetectedAccount } from './detect';
@@ -44,7 +45,18 @@ export interface AccountsServiceOptions {
   usageDir?: string;
   /** Re-read interval for the statusline folder (default 5 s). */
   statuslineMs?: number;
+  /**
+   * An account with no open session and no sign of use for this long is marked `inactive` (the UI hides it).
+   * Default 24 h; 0 = never.
+   */
+  idleMs?: number;
 }
+
+export const ACCOUNT_IDLE_MS = 24 * 60 * 60_000;
+/** How long a folder's activity (file mtimes) is trusted before it is read again. */
+const DIR_ACTIVITY_TTL_MS = 60_000;
+/** Files the tools touch while in use: the session registry, the prompt history, the transcripts. */
+const ACTIVITY_PATHS = ['sessions', 'history.jsonl', 'projects', '.claude.json'];
 
 export class AccountsService {
   readonly usage = new UsageStore();
@@ -58,6 +70,13 @@ export class AccountsService {
   /** Signature of the displayed usage (the status changes on its own over time: ok -> stale, windows reset). */
   private usageSig = '';
   private readonly now: () => number;
+  /** Last time each account was seen in use (an open session). */
+  private lastActive = new Map<string, number>();
+  /** Cached file activity per folder (see dirActivity). */
+  private dirCache = new Map<string, { at: number; mtime: number }>();
+  /** Open sessions per account from the last list(), so the periodic refresh can notice an account going quiet. */
+  private lastSessions: ReadonlyMap<string, number> = new Map();
+  private inactiveSig = '';
 
   constructor(private readonly opts: AccountsServiceOptions) {
     this.now = opts.now ?? Date.now;
@@ -85,6 +104,7 @@ export class AccountsService {
       else changed = this.usage.clear(e.id, 'cache') || changed;
     }
     if (this.usageViewChanged()) changed = true;
+    if (this.inactiveChanged()) changed = true;
     if (changed) this.opts.onChange();
   }
 
@@ -226,6 +246,9 @@ export class AccountsService {
   /** Accounts (of all tools) in the protocol format; `sessions` = open sessions per account. */
   list(sessions: ReadonlyMap<string, number>): AccountInfo[] {
     const now = this.now();
+    this.lastSessions = sessions;
+    const inactive = this.inactiveIds(sessions, now);
+    this.inactiveSig = [...inactive].join('|');
     return this.allEntries().map((e) => {
       const d = e.detected;
       const view = this.usage.view(e.id, now);
@@ -244,7 +267,49 @@ export class AccountsService {
       if (d.organization) info.organization = d.organization;
       if (d.plan) info.plan = d.plan;
       if (view.usage) info.usage = view.usage;
+      if (inactive.has(e.id)) info.inactive = true;
       return info;
     });
+  }
+
+  /** Accounts with no open session and no sign of use within idleMs. */
+  private inactiveIds(sessions: ReadonlyMap<string, number>, now: number): Set<string> {
+    const out = new Set<string>();
+    const limit = this.opts.idleMs ?? ACCOUNT_IDLE_MS;
+    for (const e of this.allEntries()) {
+      if ((sessions.get(e.id) ?? 0) > 0) {
+        this.lastActive.set(e.id, now);
+        continue;
+      }
+      if (!limit) continue;
+      const last = Math.max(this.lastActive.get(e.id) ?? 0, this.usage.view(e.id, now).usage?.fetchedAt ?? 0, this.dirActivity(e.dir, now));
+      // Nothing known at all (e.g. an unreadable folder): leave it visible rather than guess.
+      if (last && now - last > limit) out.add(e.id);
+    }
+    return out;
+  }
+
+  /** Newest mtime among the files a tool touches while in use (cached for a minute: list() runs on every snapshot). */
+  private dirActivity(dir: string, now: number): number {
+    const hit = this.dirCache.get(dir);
+    if (hit && now - hit.at < DIR_ACTIVITY_TTL_MS) return hit.mtime;
+    let mtime = 0;
+    for (const p of ACTIVITY_PATHS) {
+      try {
+        mtime = Math.max(mtime, statSync(join(dir, p)).mtimeMs);
+      } catch {
+        // missing: not used by this tool
+      }
+    }
+    this.dirCache.set(dir, { at: now, mtime });
+    return mtime;
+  }
+
+  /** Did an account become (in)active since the last list()? (Being idle changes on its own, over time.) */
+  private inactiveChanged(): boolean {
+    const sig = [...this.inactiveIds(this.lastSessions, this.now())].join('|');
+    if (sig === this.inactiveSig) return false;
+    this.inactiveSig = sig;
+    return true;
   }
 }

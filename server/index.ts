@@ -91,6 +91,7 @@ const accounts = new AccountsService({
   home: config.home,
   env: process.env,
   usageDir: config.usageDir,
+  idleMs: config.accountIdleMs,
   onChange: () => late.office?.markDirty(),
 });
 // Sessions of other machines (HABBLAUD_INGEST=1, server/ingest/): their accounts go next to the local ones.
@@ -117,7 +118,7 @@ const office = new Office({
 // Agent sources, one per tool (sources/source.ts): Claude Code's and, after it, Codex's (when there are Codex
 // folders; HABBLAUD_CODEX=0 turns it off), with its history in the HistorySet below and its accounts registered by
 // the source itself (accounts.setProviderAccounts). `codex` also receives the Codex hook events (CodexLive).
-const claude = new ClaudeWatcher({ accounts, office, inDocker: config.inDocker });
+const claude = new ClaudeWatcher({ accounts, office, inDocker: config.inDocker, staleMs: config.staleSessionMs });
 const agents = new SourceSet([claude]);
 const codexDirs = config.codex ? discoverCodexDirs(process.env, config.home) : [];
 const codex = codexDirs.length ? new CodexSource({ accounts, office, dirs: codexDirs, env: process.env, home: config.home }) : undefined;

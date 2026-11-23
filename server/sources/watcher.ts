@@ -56,7 +56,18 @@ export interface WatcherOptions {
   isAlive?: (pid: number) => boolean;
   /** Turns fs.watch off (tests). */
   watch?: boolean;
+  /**
+   * A session nothing has been written to for this long (registry, transcript, subagents) counts as inactive: its
+   * agent leaves the office until the session writes again. Covers processes that died without cleaning up their
+   * registry file, which can't be detected by pid in Docker. 0 = never (default: STALE_SESSION_MS).
+   */
+  staleMs?: number;
 }
+
+/** Default for WatcherOptions.staleMs: 10 minutes. */
+export const STALE_SESSION_MS = 10 * 60_000;
+/** A session the registry says is busy gets this many times longer (a long, quiet foreground command). */
+const STALE_BUSY_FACTOR = 3;
 
 /** cwd -> folder name in projects/ (every non-alphanumeric character becomes "-"). */
 export function encodeCwd(cwd: string): string {
@@ -278,6 +289,7 @@ export class ClaudeWatcher implements AgentSource {
       this.sourceInfo.set(acc.dir, info);
       for (const entry of res.entries) {
         const key = `${acc.id}:${entry.pid}`;
+        if (this.isStale(key, entry)) continue;
         seen.add(key);
         try {
           this.syncSession(key, acc.id, acc.dir, entry, boot);
@@ -299,6 +311,20 @@ export class ClaudeWatcher implements AgentSource {
       this.sessions.delete(key);
       this.opts.office.closeMain(key);
     }
+  }
+
+  /** Nothing written for a long time: the session counts as inactive (see WatcherOptions.staleMs). */
+  private isStale(key: string, entry: RegistryEntry): boolean {
+    const limit = this.opts.staleMs ?? STALE_SESSION_MS;
+    if (!limit) return false;
+    const t = this.sessions.get(key);
+    let last = Math.max(entry.fileMtimeMs ?? 0, entry.updatedAt ?? 0, entry.statusUpdatedAt ?? 0, entry.startedAt ?? 0);
+    if (t) {
+      last = Math.max(last, t.tail?.mtimeMs ?? 0);
+      for (const sub of t.subs.values()) last = Math.max(last, sub.tail?.mtimeMs ?? 0);
+    }
+    if (!last) return false;
+    return this.now() - last > (entry.status === 'busy' ? limit * STALE_BUSY_FACTOR : limit);
   }
 
   private syncSession(key: string, accountId: string, dir: string, entry: RegistryEntry, boot: boolean): void {

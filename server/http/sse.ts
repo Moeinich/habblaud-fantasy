@@ -1,6 +1,6 @@
 // Real-time stream (Server-Sent Events) at GET /api/stream.
 // Named events: snapshot | feed | notice (the `data` is the protocol JSON in shared/types.ts).
-// Snapshots are throttled (~200 ms); feed items and notices go in a batch right after the snapshot.
+// Snapshots are throttled (~500 ms); feed items and notices go in a batch right after the snapshot.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OfficeSnapshot } from '../../shared/types';
 import type { Office } from '../model/office';
@@ -27,7 +27,9 @@ export class Hub {
     private readonly office: Office,
     opts: { throttleMs?: number; pingMs?: number; canAnswer?: (req: IncomingMessage) => boolean } = {},
   ) {
-    this.throttleMs = opts.throttleMs ?? 200;
+    // Each snapshot is a full office the page parses and redraws its panels for: twice a second is live enough and
+    // keeps a small device (a Raspberry Pi serving, a TV browsing) from doing it five times.
+    this.throttleMs = opts.throttleMs ?? 500;
     this.pingMs = opts.pingMs ?? 15_000;
     this.canAnswer = opts.canAnswer ?? ((req) => isLoopbackHost(req.headers.host));
   }

@@ -437,6 +437,39 @@ describe('ClaudeWatcher', () => {
     expect(c.agent(id)!.status).toBe('offline');
   });
 
+  it('a session quiet for 10 minutes leaves the office (a crashed process in Docker) and comes back when it writes again', () => {
+    const id = bootWithSession();
+    // idle, and nothing written to the registry or the transcript since
+    c.openSession(100, 'sess-a', { status: 'idle' });
+    c.poll();
+    expect(c.agent(id)!.status).toBe('idle');
+    c.advance(9 * 60_000);
+    c.poll();
+    expect(c.agent(id)!.status).toBe('idle');
+    c.advance(2 * 60_000);
+    c.poll();
+    c.advance(2_000);
+    c.poll();
+    expect(c.agent(id)!.status).toBe('offline');
+    c.advance(21_000);
+    c.poll();
+    expect(c.office.commit().snapshot.rooms).toEqual([]);
+    // still quiet: it stays away
+    c.poll();
+    expect(c.agent(id)).toBeUndefined();
+    // the session writes again (the registry file changes): it is back
+    c.openSession(100, 'sess-a', { status: 'busy', updatedAt: c.now() });
+    c.poll();
+    expect(c.agent(id)?.status).toBe('working');
+  });
+
+  it('a busy session gets longer before it counts as quiet (a long command in the foreground)', () => {
+    const id = bootWithSession();
+    c.advance(20 * 60_000);
+    c.poll();
+    expect(c.agent(id)!.status).not.toBe('offline');
+  });
+
   it('/clear: same process, new session — same character, tasks reset', () => {
     writeLines(c.transcript('sess-a'), [L.assistant([L.tool('t', 'TodoWrite', { todos: [{ content: 'A', status: 'pending' }] })])]);
     c.openSession(100, 'sess-a');

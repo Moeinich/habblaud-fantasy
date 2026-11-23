@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setQuiet } from '../log';
@@ -294,6 +294,48 @@ describe('usage (5h and weekly)', () => {
       const info = svc.list(new Map([['.claude-conta2', 3]]))[0];
       expect(info).toMatchObject({ id: '.claude-conta2', sessions: 3, usageStatus: 'ok', usage: { source: 'cache', fiveHour: { utilization: 42.5 } } });
       expect(changes).toBeGreaterThan(0);
+    } finally {
+      tmp.cleanup();
+    }
+  });
+});
+
+describe('inactive accounts', () => {
+  it('an account unused for a day is marked inactive; an open session or new activity brings it back', () => {
+    const tmp = tempDir();
+    try {
+      const dir = join(tmp.dir, '.claude');
+      mkdirSync(join(dir, 'sessions'), { recursive: true });
+      const DAY = 24 * 60 * 60_000;
+      let now = Date.now() + 2 * DAY;
+      const old = (now - 2 * DAY) / 1000;
+      utimesSync(join(dir, 'sessions'), old, old);
+      let changes = 0;
+      const svc = new AccountsService({ dirs: [dir], home: tmp.dir, env: {}, onChange: () => changes++, now: () => now });
+      const id = svc.entries()[0].id;
+      expect(svc.list(new Map())[0].inactive).toBe(true);
+      // An open session: active, and stays so for a day after it closes.
+      expect(svc.list(new Map([[id, 1]]))[0].inactive).toBeUndefined();
+      now += DAY - 60_000;
+      expect(svc.list(new Map())[0].inactive).toBeUndefined();
+      // The periodic refresh notices it going quiet on its own.
+      now += 2 * 60_000;
+      changes = 0;
+      svc.refresh();
+      expect(changes).toBe(1);
+      expect(svc.list(new Map())[0].inactive).toBe(true);
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it('idleMs 0 never hides an account', () => {
+    const tmp = tempDir();
+    try {
+      const dir = join(tmp.dir, '.claude');
+      mkdirSync(join(dir, 'sessions'), { recursive: true });
+      const svc = new AccountsService({ dirs: [dir], home: tmp.dir, env: {}, onChange: () => {}, now: () => Date.now() + 10 * 24 * 60 * 60_000, idleMs: 0 });
+      expect(svc.list(new Map())[0].inactive).toBeUndefined();
     } finally {
       tmp.cleanup();
     }

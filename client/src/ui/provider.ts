@@ -65,6 +65,11 @@ export function accountChipLabel(account: Pick<AccountInfo, 'name' | 'email' | '
  * Empty-office text. The shortcuts ("shortcuts c or d") are only for Claude Code accounts, which come from shell
  * aliases (a Codex account's letter is not a shortcut); Codex only shows up when there is a Codex account.
  */
+/** The accounts worth showing: those in use or used lately (the server marks the long-unused ones inactive). */
+export function activeAccounts<T extends Pick<AccountInfo, 'inactive' | 'sessions'>>(accounts: readonly T[]): T[] {
+  return accounts.filter((a) => !a.inactive || a.sessions > 0);
+}
+
 export function emptyOfficeHint(accounts: readonly Pick<AccountInfo, 'short' | 'provider'>[]): string {
   const keys = shortcutHint(accounts.filter((a) => !isCodex(a)));
   if (!accounts.some(isCodex)) return tr('Open Claude Code in any project{0} and watch your agent arrive.', [keys ? ` (${keys})` : '']);
