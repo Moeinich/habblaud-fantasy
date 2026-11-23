@@ -10,6 +10,8 @@ one (0.**3**.0).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-23
+
 ### Added
 
 - **Undead.** A fourth race: Forsaken crypts with cold slate floors glowing violet in the seams, grave-cloth runners
@@ -753,7 +755,8 @@ First published version.
   Subagents arrive, work and deliver to the main one. It shows both accounts, with the 5-hour and weekly usage of each
   (statusline tap), plus an activity feed, notices and demo mode. Runs on Node or on local Docker.
 
-[Unreleased]: https://github.com/marmottajr/habblaud/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/marmottajr/habblaud/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/marmottajr/habblaud/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/marmottajr/habblaud/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/marmottajr/habblaud/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/marmottajr/habblaud/compare/v1.0.0...v1.0.1

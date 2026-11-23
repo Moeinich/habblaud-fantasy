@@ -1,6 +1,6 @@
 {
   "name": "habblaud",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "private": true,
   "description": "A high-fantasy pixel-art camp that shows, in real time, what your Claude Code and Codex agents are doing.",
   "license": "MIT",
