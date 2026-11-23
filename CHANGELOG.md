@@ -81,8 +81,9 @@ one (0.**3**.0).
 - **The camp wraps round the hub.** The hub is now just the four core halls (Great Hall, Bathhouse, Mess Hall and
   Tavern), and each race has its own corner round it: night elves top left, orcs top right, undead bottom left and
   humans bottom right. Each zone is an L: one row reaches in over (or under) the hub, and the other sits beside it on
-  the hub's own row, sharing that row's corridor with the zone below or above. New rooms fill both arms side by side,
-  so the camp grows outwards across the screen instead of downwards, and a busy camp fills a widescreen TV.
+  the hub's own row, sharing that row's corridor with the zone below or above. A zone's first rooms stand to the
+  left and right of the hub on its own row, then it wraps up (or down) round the hub, so the camp grows outwards
+  across the screen instead of downwards, and a busy camp fills a widescreen TV.
 - **Ground to the edge of the screen.** Each race's land (jungle, badlands, blight and green park) now runs all the
   way to the edge of a widescreen view instead of stopping at a plain backdrop. Inside the elves' world tree the
   jungle floor runs on, with roots along the foot of the trunk instead of a carved wooden floor.

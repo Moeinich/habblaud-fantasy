@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAZA_COL } from '../constants';
+import { EAST_COL0, PLAZA_COL, WEST_GAP_COL } from '../constants';
 import { packDepartments, type DeptRoom } from './departments';
 import { ARMS, armCol, armIndex, armLimit, coveredSlots, slotColumn, slotSide, slotStrip, slotWing } from './geometry';
 
@@ -12,22 +12,24 @@ describe('race departments', () => {
       const t = plan.targets.get(id)!;
       return [slotWing(t.slot), slotColumn(t.slot), slotSide(t.slot)];
     };
-    // the first room of a zone takes the outer row, right next to the square's column
-    expect(at('e1')).toEqual(['nw', PLAZA_COL - 1, 'north']);
-    expect(at('o1')).toEqual(['ne', PLAZA_COL + 1, 'north']);
-    expect(at('u1')).toEqual(['bw', PLAZA_COL - 1, 'north']);
-    expect(at('h1')).toEqual(['be', PLAZA_COL + 1, 'north']);
-    expect(plan.shape).toEqual({ nw: 1, ne: 1, mw: 0, me: 0, sw: 0, se: 0, bw: 1, be: 1 });
+    // the first room of a zone stands beside the hub on its own row, past the open gap column: the top zones on the
+    // north side of the corridor, the bottom zones on the south side
+    expect(at('e1')).toEqual(['mw', WEST_GAP_COL - 1, 'north']);
+    expect(at('o1')).toEqual(['me', EAST_COL0, 'north']);
+    expect(at('u1')).toEqual(['sw', WEST_GAP_COL - 1, 'south']);
+    expect(at('h1')).toEqual(['se', EAST_COL0, 'south']);
+    expect(plan.shape).toEqual({ nw: 0, ne: 0, mw: 1, me: 1, sw: 1, se: 1, bw: 0, be: 0 });
   });
 
-  it('a zone wraps round the hub at once: both sides of its outer row and its side of row 1, then grows outwards evenly', () => {
+  it('a zone starts beside the hub, then wraps up over it and grows outwards on both arms', () => {
     const plan = packDepartments(Array.from({ length: 12 }, (_, i) => r(`o${i}`, 'orc', i)));
-    const first = Array.from({ length: 3 }, (_, i) => plan.targets.get(`o${i}`)!.slot);
-    expect(first.map(slotWing)).toEqual(['ne', 'ne', 'me']);
-    expect(first.map((s) => armIndex(slotWing(s), slotColumn(s)))).toEqual([0, 0, 0]);
-    // both arms grow outwards side by side (the outer row has two sides, row 1 one), so the zone stays an L
-    expect(plan.shape.ne).toBe(4);
-    expect(plan.shape.me).toBe(4);
+    const first = Array.from({ length: 4 }, (_, i) => plan.targets.get(`o${i}`)!.slot);
+    // two rooms out along the hub's row, then both sides of the outer row right over the hub
+    expect(first.map(slotWing)).toEqual(['me', 'me', 'ne', 'ne']);
+    expect(first.map((s) => armIndex(slotWing(s), slotColumn(s)))).toEqual([0, 1, 0, 0]);
+    // the side arm leads, the outer row (two sides per column) follows: the zone stays an L
+    expect(plan.shape.me).toBeGreaterThanOrEqual(plan.shape.ne);
+    expect(plan.shape.ne).toBeGreaterThan(0);
   });
 
   it('wide rooms take several cells on their side and never overlap', () => {

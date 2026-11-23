@@ -485,11 +485,11 @@ describe('rooms grow and gather in departments', () => {
     const rooms = [raceRoom('/elf', 0, 'elf'), raceRoom('/hum', 1, 'human'), raceRoom('/orc', 2, 'orc'), raceRoom('/und', 3, 'undead')];
     const people = [agent('ana', '/elf', 'working'), agent('bia', '/hum', 'working'), agent('caio', '/orc', 'working'), agent('edu', '/und', 'working')];
     sim.applySnapshot(snap(rooms, people), clock.now);
-    expect(slotWing(sim.rooms.get('/hum')!.slot)).toBe('be');
-    expect(slotWing(sim.rooms.get('/orc')!.slot)).toBe('ne');
-    expect(slotWing(sim.rooms.get('/elf')!.slot)).toBe('nw');
-    expect(slotWing(sim.rooms.get('/und')!.slot)).toBe('bw');
-    expect(sim.building.shape).toEqual({ ...emptyShape(), nw: 1, ne: 1, bw: 1, be: 1 });
+    expect(slotWing(sim.rooms.get('/hum')!.slot)).toBe('se');
+    expect(slotWing(sim.rooms.get('/orc')!.slot)).toBe('me');
+    expect(slotWing(sim.rooms.get('/elf')!.slot)).toBe('mw');
+    expect(slotWing(sim.rooms.get('/und')!.slot)).toBe('sw');
+    expect(sim.building.shape).toEqual({ ...emptyShape(), mw: 1, me: 1, sw: 1, se: 1 });
     // everyone walks from the elevators to their own desk, across the walkways
     run(sim, clock, 90, () => [...sim.chars.values()].every((c) => c.atSpot && c.atSpot === c.homeSpot));
     for (const id of ['ana', 'bia', 'caio', 'edu']) {
@@ -497,9 +497,9 @@ describe('rooms grow and gather in departments', () => {
       expect(c.atSpot, id).toBe(c.homeSpot);
       expect(inRect(sim.rooms.get(c.roomId)!.layout.rect, c.tx, c.ty), id).toBe(true);
     }
-    // a second human room fills the other side of the same cell, right under the hub
+    // a second human room carries on outwards along the hub's row
     sim.applySnapshot(snap([...rooms, raceRoom('/hum2', 3, 'human')], [...people, agent('davi', '/hum2', 'working')], 2), clock.now);
-    expect(sim.rooms.get('/hum2')!.slot).toBe(cellSlot(slotColumn(sim.rooms.get('/hum')!.slot), 'south', 'south'));
+    expect(sim.rooms.get('/hum2')!.slot).toBe(cellSlot(slotColumn(sim.rooms.get('/hum')!.slot) + 1, 'south', 'main'));
   });
 });
 

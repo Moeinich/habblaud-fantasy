@@ -58,14 +58,14 @@ export interface Arm {
 }
 
 export const ARMS: Readonly<Record<Wing, Arm>> = {
-  nw: { strip: 'north', dir: -1, start: PLAZA_COL - 1, race: 'elf', outer: true, dist: 1 },
-  mw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'elf', outer: false, dist: 1, side: 'north' },
-  ne: { strip: 'north', dir: 1, start: PLAZA_COL + 1, race: 'orc', outer: true, dist: 1 },
-  me: { strip: 'main', dir: 1, start: EAST_COL0, race: 'orc', outer: false, dist: 1, side: 'north' },
-  sw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'undead', outer: false, dist: 1, side: 'south' },
-  bw: { strip: 'south', dir: -1, start: PLAZA_COL - 1, race: 'undead', outer: true, dist: 1 },
-  se: { strip: 'main', dir: 1, start: EAST_COL0, race: 'human', outer: false, dist: 1, side: 'south' },
-  be: { strip: 'south', dir: 1, start: PLAZA_COL + 1, race: 'human', outer: true, dist: 1 },
+  nw: { strip: 'north', dir: -1, start: PLAZA_COL - 1, race: 'elf', outer: true, dist: 2 },
+  mw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'elf', outer: false, dist: 0, side: 'north' },
+  ne: { strip: 'north', dir: 1, start: PLAZA_COL + 1, race: 'orc', outer: true, dist: 2 },
+  me: { strip: 'main', dir: 1, start: EAST_COL0, race: 'orc', outer: false, dist: 0, side: 'north' },
+  sw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'undead', outer: false, dist: 0, side: 'south' },
+  bw: { strip: 'south', dir: -1, start: PLAZA_COL - 1, race: 'undead', outer: true, dist: 2 },
+  se: { strip: 'main', dir: 1, start: EAST_COL0, race: 'human', outer: false, dist: 0, side: 'south' },
+  be: { strip: 'south', dir: 1, start: PLAZA_COL + 1, race: 'human', outer: true, dist: 2 },
 };
 export const WINGS = Object.keys(ARMS) as Wing[];
 
