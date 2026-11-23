@@ -10,6 +10,8 @@ one (0.**3**.0).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-23
+
 ### Changed
 
 - **A tighter hub.** The Great Hall, Mess Hall, Bathhouse and Tavern now stand right next to each other, without the
@@ -18,7 +20,7 @@ one (0.**3**.0).
 
 ### Fixed
 
-- **Plugin versions.** The Claude Code plugins and their marketplace now carry the app's version (1.1.0) again.
+- **Plugin versions.** The Claude Code plugins and their marketplace now carry the app's version again.
 
 ## [1.1.0] - 2026-11-23
 
@@ -765,7 +767,8 @@ First published version.
   Subagents arrive, work and deliver to the main one. It shows both accounts, with the 5-hour and weekly usage of each
   (statusline tap), plus an activity feed, notices and demo mode. Runs on Node or on local Docker.
 
-[Unreleased]: https://github.com/marmottajr/habblaud/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/marmottajr/habblaud/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/marmottajr/habblaud/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/marmottajr/habblaud/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/marmottajr/habblaud/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/marmottajr/habblaud/compare/v1.0.1...v1.0.2

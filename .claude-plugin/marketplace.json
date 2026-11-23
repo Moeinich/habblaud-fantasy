@@ -5,7 +5,7 @@
     "url": "https://github.com/marmottajr"
   },
   "description": "Plugins of Habblaud, the pixel-art virtual office of your Claude Code sessions.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "plugins": [
     {
       "name": "habblaud",

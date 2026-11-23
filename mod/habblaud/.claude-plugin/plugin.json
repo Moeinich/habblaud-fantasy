@@ -1,7 +1,7 @@
 {
   "name": "habblaud",
   "displayName": "Habblaud",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Connects the session to Habblaud: records the plan usage (5h and weekly) for the office, shows a notice under the prompt when another session needs you and adds the /habblaud command.",
   "author": { "name": "Márcio Junior", "url": "https://github.com/marmottajr" },
   "homepage": "https://github.com/marmottajr/habblaud#readme",
