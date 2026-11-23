@@ -6,6 +6,7 @@ import { clamp01, luminance, mix, ramp, shade, type Ramp } from '../core/color';
 import { PixelBuf, type Palette } from '../core/pixbuf';
 import type { BufSprite } from '../core/sprite';
 import { HAIR, HEAD_BASE, TEXTURED, type HeadView, type Tpl } from './hair';
+import type { HairStyle } from '../api';
 import type { Race } from '../../../../shared/race';
 
 export const CHAR_W = 24;
@@ -64,14 +65,14 @@ interface CharPal {
 }
 
 /** Palettes per race (the race only changes how the stored appearance is drawn). */
-const palCache: Record<Race, Map<Appearance, CharPal>> = { human: new Map(), elf: new Map(), orc: new Map() };
+const palCache: Record<Race, Map<Appearance, CharPal>> = { human: new Map(), elf: new Map(), orc: new Map(), undead: new Map() };
 
 /**
  * Rampa de pele dos trabalhadores (verde-oliva claro -> verde-acinzentado escuro). Os tons da
  * semente (SKINS, do claro ao escuro) são mapeados pela luminância na hora de desenhar: a ordem e a
  * variedade continuam, só o matiz muda. A aparência (e o que vai ao servidor) não é alterada.
  */
-const ORC_SKIN = ['#bcc47e', '#a3b66a', '#8aa65a', '#73934b', '#617f46', '#526e43', '#445b3b', '#374934'] as const;
+const ORC_SKIN = ['#9ec45c', '#8ab84e', '#76a844', '#64963c', '#558436', '#487230', '#3c5f2a', '#314d24'] as const;
 /** Luminância do tom mais claro e do mais escuro de SKINS (#ffe2cc e #5a3623). */
 const SKIN_LUM_HI = 0.904;
 const SKIN_LUM_LO = 0.236;
@@ -86,7 +87,7 @@ export function orcSkin(skin: string): string {
  * Night-elf skin ramp (pale lavender -> deep blue-violet), mapped from the SKINS tones by luminance just like
  * ORC_SKIN: the light-to-dark order and the variety stay, only the hue changes.
  */
-const ELF_SKIN = ['#e0d2f2', '#cbb8ea', '#b39edd', '#9b85cd', '#8570bb', '#705ea8', '#5c4c90', '#483c74'] as const;
+const ELF_SKIN = ['#d8c4f4', '#c2a8ec', '#aa8ee0', '#9478d2', '#7e64c2', '#6a52ae', '#574496', '#45367a'] as const;
 const elfCache = new Map<string, string>();
 
 function remapSkin(skin: string, target: readonly string[], cache: Map<string, string>): string {
@@ -106,8 +107,13 @@ export function elfSkin(skin: string): string {
   return remapSkin(skin, ELF_SKIN, elfCache);
 }
 
-/** Skin tone drawn for a race: humans keep the appearance tone, orcs turn green, elves violet. */
+/** Undead: bare bone, from fresh ivory to old yellowed bone (same light -> dark order). */
+const UNDEAD_SKIN = ['#efe9d6', '#e6dfc8', '#dcd4ba', '#d1c8ac', '#c6bc9f', '#bab092', '#ada386', '#a0967a'] as const;
+const undeadCache = new Map<string, string>();
+
+/** Skin tone drawn for a race: humans keep the appearance tone, orcs turn green, elves violet, undead bone. */
 export function raceSkin(skin: string, race: Race): string {
+  if (race === 'undead') return remapSkin(skin, UNDEAD_SKIN, undeadCache);
   return race === 'orc' ? orcSkin(skin) : race === 'elf' ? elfSkin(skin) : skin;
 }
 
@@ -128,8 +134,32 @@ const ELF_HAIR: Readonly<Record<string, string>> = {
   '#d9dbe0': '#eef2fa', // white -> white
 };
 
+/**
+ * Orc hair is dark: black, dark brown or a deep rust; light natural colours are drawn in those (fun colours stay,
+ * like dyed war-hair).
+ */
+const ORC_HAIR: Readonly<Record<string, string>> = {
+  '#87593a': '#3a2a20', // light brown -> dark brown
+  '#b0703c': '#6a2e1e', // copper -> deep rust
+  '#d6ae68': '#2e2622', // blond -> near-black
+  '#ebdcb0': '#4a4440', // platinum -> iron grey
+  '#8f929b': '#3e3c3e', // grey -> charcoal
+  '#d9dbe0': '#5a5654', // white -> ash
+};
+
 function raceHair(hair: string, race: Race): string {
+  // undead: what is left of the hair is lank, dull and grave-grey
+  if (race === 'undead') return mix(hair, '#4a4a42', 0.7);
+  if (race === 'orc') return ORC_HAIR[hair.toLowerCase()] ?? hair;
   return race === 'elf' ? (ELF_HAIR[hair.toLowerCase()] ?? hair) : hair;
+}
+
+/** Clothes per race: Horde leather, grave cloth for the undead, a dusk tint for elves; humans keep theirs. */
+function raceCloth(c: string, race: Race): string {
+  if (race === 'undead') return mix(c, '#3a3444', 0.5);
+  if (race === 'orc') return mix(c, '#5a3e2a', 0.28);
+  if (race === 'elf') return mix(c, '#3a2c52', 0.18);
+  return c;
 }
 
 /** Bone of tusks and orc trinkets. */
@@ -143,6 +173,40 @@ const MOON_SH = '#a8b4cc';
 /** Glowing night-elf eyes (silver-cyan). */
 const ELF_EYE = '#f0feff';
 const ELF_EYE_LO = '#8fe6f2';
+/** Undead: empty sockets with a pale yellow glow deep inside. */
+const SOCKET = '#1a1420';
+const SOCKET_GLOW = '#ffd84a';
+/** Alliance tabard and steel. */
+const TABARD = ramp('#2f4f9c', 0.08);
+const STEEL = ramp('#b8bec8', 0.1);
+
+/**
+ * Hairstyles per race and look, so a race reads by its silhouette and not only by its colours: orc women wear
+ * war braids, a warrior's tail or a topknot and orc men a mohawk, a topknot or a shaved scalp; night elves wear
+ * their hair long (flowing, wavy, a long tail or a high bun); the undead are mostly bare skulls, and what hair is
+ * left hangs in lank strands (see stampTpl); humans keep the style of their appearance. The pick is stable for an
+ * appearance (hashed from its stored style and colour).
+ */
+const RACE_HAIR: Readonly<Record<Exclude<Race, 'human'>, { f: readonly HairStyle[]; m: readonly HairStyle[] }>> = {
+  orc: { f: ['pigtails', 'ponytail', 'short', 'pigtails'], m: ['mohawk', 'short', 'bald', 'mohawk', 'buzz'] },
+  elf: { f: ['long', 'wavy', 'ponytail', 'long'], m: ['long', 'ponytail', 'bun', 'long'] },
+  undead: { f: ['long', 'bald', 'bob', 'bald'], m: ['bald', 'bald', 'mohawk', 'bald'] },
+};
+const raceLookCache: Record<Race, WeakMap<Appearance, Appearance>> = { human: new WeakMap(), elf: new WeakMap(), orc: new WeakMap(), undead: new WeakMap() };
+
+/** The appearance as the race wears it (only the hairstyle changes; the stored appearance stays the same). */
+function raceLook(a: Appearance, race: Race): Appearance {
+  if (race === 'human') return a;
+  const cache = raceLookCache[race];
+  let out = cache.get(a);
+  if (out) return out;
+  const opts = RACE_HAIR[race][a.look === 'f' ? 'f' : 'm'];
+  let h = 0;
+  for (const ch of `${a.hairStyle}|${a.hair}|${a.top}`) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0;
+  out = { ...a, hairStyle: opts[Math.abs(h) % opts.length] };
+  cache.set(a, out);
+  return out;
+}
 
 function paletteOf(a: Appearance, race: Race): CharPal {
   const cache = palCache[race];
@@ -154,22 +218,23 @@ function paletteOf(a: Appearance, race: Race): CharPal {
   const hairCol = raceHair(a.hair, race);
   const hair = ramp(hairCol, 0.09);
   const elf = race === 'elf';
+  const undead = race === 'undead';
   p = {
     skin,
     hair,
-    top: ramp(a.top, 0.08),
-    acc: ramp(a.topAccent, 0.08),
-    bottom: ramp(a.bottom, 0.07),
+    top: ramp(raceCloth(a.top, race), 0.08),
+    acc: ramp(raceCloth(a.topAccent, race), 0.08),
+    bottom: ramp(raceCloth(a.bottom, race), 0.07),
     shoes: ramp(a.shoes, 0.08),
     item: ramp(a.accessoryColor, 0.1),
-    eyeTop: elf ? ELF_EYE : dark ? '#ece8f2' : '#1d1826',
-    eyeBot: elf ? ELF_EYE_LO : dark ? mix(a.eyes, '#0c0910', 0.55) : mix(a.eyes, '#1d1826', 0.25),
-    blush: shade(sk, -0.1),
-    mouth: shade(sk, -0.24),
+    eyeTop: undead ? SOCKET : elf ? ELF_EYE : dark ? '#ece8f2' : '#1d1826',
+    eyeBot: undead ? SOCKET_GLOW : elf ? ELF_EYE_LO : dark ? mix(a.eyes, '#0c0910', 0.55) : mix(a.eyes, '#1d1826', 0.25),
+    blush: undead ? shade(sk, -0.14) : shade(sk, -0.1),
+    mouth: undead ? SOCKET : shade(sk, -0.24),
     mouthOpen: '#7a2e35',
     shaved: mix(sk, hairCol, 0.42),
     stubble: mix(sk, hairCol, 0.3),
-    brow: race === 'orc' ? skin.dd : elf ? mix(hair.dk, skin.dd, 0.25) : mix(hair.dk, skin.dk, 0.35),
+    brow: race === 'orc' ? skin.dd : undead ? skin.dk : elf ? mix(hair.dk, skin.dd, 0.25) : mix(hair.dk, skin.dk, 0.35),
     bone: race === 'orc' ? TUSK : elf ? MOON : GOLD,
     boneSh: race === 'orc' ? TUSK_SH : elf ? MOON_SH : GOLD_SH,
   };
@@ -701,6 +766,20 @@ function stampTpl(dc: Dc, tpl: Tpl, pal: Palette, dy: number, textured = false):
   const { b } = dc;
   const ox = HX + tpl.x + dc.r.lean;
   const oy = HY + tpl.y + dy;
+  if (dc.race === 'undead') {
+    // lank, thinning strands: gaps run down the hair in columns, the skull shows through on top
+    for (let r = 0; r < tpl.rows.length; r++) {
+      const row = tpl.rows[r];
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '.' || ch === ' ') continue;
+        const col = i + tpl.x;
+        if ((col % 3 === 1 && r > 1) || (tpl.y + r < 6 && (col + r) % 2 === 0)) continue;
+        b.set(ox + i, oy + r, pal[ch === 'H' || ch === 'h' ? 'o' : ch]);
+      }
+    }
+    return;
+  }
   if (!textured) {
     b.stamp(tpl.rows, ox, oy, pal);
     return;
@@ -779,11 +858,108 @@ function drawHead(dc: Dc): void {
   }
   // Brilho na testa (luz de cima/esquerda).
   if (r.view !== 'up') dc.b.set(HX + 3 + r.lean, HY + 7 + dy, p.skin.lt);
+  drawRaceFace(dc);
+}
+
+/**
+ * What makes a face read as its race at a glance (drawn over the base head, under the hair):
+ * - orc: a broad, heavy jaw flaring past the cheeks and a dark underbite line (the tusks come later, on top);
+ * - undead: a bare skull — deep sockets with a yellow glow, a nose hole, a row of teeth, hollow cheeks and a
+ *   cracked crown;
+ * - elf: night-elf markings on every face (the 'glasses' accessory already draws them) and a moon-silver circlet;
+ * - human: the plain face (their look comes from the tabard and steel, see drawRaceBody).
+ */
+function drawRaceFace(dc: Dc): void {
+  const { b, p, r } = dc;
+  const ox = HX + r.lean;
+  const oy = HY + r.ub + r.hd;
+  const put = (cx: number, cy: number, col: string) => b.set(ox + cx, oy + cy, col);
+  const v = r.view;
+  const sk = p.skin;
+  if (dc.race === 'orc') {
+    if (v === 'down') {
+      for (const cx of [0, 13]) {
+        put(cx, 12, cx ? sk.dk : sk.base);
+        put(cx, 13, cx ? sk.dd : sk.dk);
+      }
+      for (let cx = 1; cx <= 12; cx++) put(cx, 14, cx > 9 ? sk.dd : sk.dk);
+      for (let cx = 5; cx <= 8; cx++) put(cx, 12, sk.dd);
+      put(1, 9, sk.dd);
+      put(12, 9, sk.dd);
+    } else if (v === 'side') {
+      put(0, 12, sk.base);
+      put(0, 13, sk.dk);
+      for (let cx = 1; cx <= 7; cx++) put(cx, 14, sk.dk);
+      put(1, 12, sk.dd);
+      put(2, 12, sk.dd);
+    }
+    return;
+  }
+  if (dc.race === 'undead') {
+    if (v === 'up') {
+      // back of the skull: a crack and the knobs of the neck vertebrae
+      put(5, 6, sk.dd);
+      put(6, 7, sk.dd);
+      put(6, 8, sk.dk);
+      put(6, 14, sk.dd);
+      put(7, 14, sk.dk);
+      return;
+    }
+    const closed = r.eyes === 'closed' || r.eyes === 'happy';
+    if (v === 'down') {
+      for (const cx of [3, 4, 9, 10]) for (const cy of [10, 11]) put(cx, cy, SOCKET);
+      put(3, 9, sk.dd);
+      put(4, 9, sk.dd);
+      put(9, 9, sk.dd);
+      put(10, 9, sk.dd);
+      if (!closed) {
+        put(4, 11, SOCKET_GLOW);
+        put(9, 11, SOCKET_GLOW);
+      }
+      put(6, 12, SOCKET);
+      put(7, 12, SOCKET);
+      for (let cx = 4; cx <= 9; cx++) put(cx, 13, cx % 2 ? sk.hi : SOCKET);
+      for (let cx = 4; cx <= 9; cx++) put(cx, 14, cx % 2 ? sk.lt : sk.dd);
+      put(2, 12, sk.dd);
+      put(11, 12, sk.dd);
+      // a crack across the crown
+      put(8, 5, sk.dd);
+      put(9, 6, sk.dd);
+      put(9, 7, sk.dk);
+    } else {
+      put(2, 10, SOCKET);
+      put(3, 10, SOCKET);
+      put(2, 11, SOCKET);
+      put(3, 11, SOCKET);
+      if (!closed) put(2, 11, SOCKET_GLOW);
+      put(0, 12, SOCKET);
+      for (let cx = 0; cx <= 4; cx++) put(cx, 13, cx % 2 ? SOCKET : sk.hi);
+      for (let cx = 1; cx <= 5; cx++) put(cx, 14, cx % 2 ? sk.dd : sk.lt);
+      put(5, 12, sk.dd);
+      put(7, 5, sk.dd);
+      put(8, 6, sk.dd);
+    }
+    return;
+  }
+  if (dc.race === 'elf') {
+    if (dc.a.accessory !== 'glasses') drawElfMarkings(dc, put);
+    if (v === 'down') {
+      for (let cx = 2; cx <= 11; cx++) put(cx, 7, cx < 6 ? MOON : MOON_SH);
+      put(6, 7, '#6ff0e0');
+      put(7, 7, '#3fc8c0');
+    } else if (v === 'side') {
+      for (let cx = 1; cx <= 9; cx++) put(cx, 7, cx < 4 ? MOON : MOON_SH);
+      put(2, 7, '#6ff0e0');
+    } else {
+      for (let cx = 2; cx <= 11; cx++) put(cx, 7, MOON_SH);
+    }
+  }
 }
 
 function drawFacialHair(dc: Dc): void {
   const style = dc.a.facialHair ?? 'none';
-  if (style === 'none' || dc.r.view === 'up') return;
+  // a skull grows no beard
+  if (style === 'none' || dc.r.view === 'up' || dc.race === 'undead') return;
   const { b, p, r } = dc;
   const ox = HX + r.lean;
   const oy = HY + r.ub + r.hd;
@@ -825,16 +1001,28 @@ function drawFacialHair(dc: Dc): void {
   }
 }
 
-/** Presas por cima da barba (a barba cobre o queixo, as presas continuam aparecendo). */
+/**
+ * Orc tusks, over the beard and the lip: big lower tusks curving up and out of the underbite, past the corners
+ * of the mouth, ivory with a shaded base. Every orc has them.
+ */
 function drawTusks(dc: Dc): void {
   const { b, r } = dc;
-  if (dc.race !== 'orc' || r.view === 'up' || (dc.a.facialHair ?? 'none') === 'none') return;
+  if (dc.race !== 'orc' || r.view === 'up') return;
   const ox = HX + r.lean;
   const oy = HY + r.ub + r.hd;
-  const cols = r.view === 'down' ? [4, 9] : [3];
-  for (const cx of cols) {
-    b.set(ox + cx, oy + 12, TUSK);
-    b.set(ox + cx, oy + 13, TUSK_SH);
+  const put = (cx: number, cy: number, col: string) => b.set(ox + cx, oy + cy, col);
+  if (r.view === 'down') {
+    for (const [cx, out] of [[4, -1], [9, 1]] as const) {
+      put(cx, 13, TUSK_SH);
+      put(cx, 12, TUSK);
+      put(cx + out, 11, TUSK);
+      put(cx + out, 12, TUSK_SH);
+    }
+  } else {
+    put(3, 13, TUSK_SH);
+    put(3, 12, TUSK);
+    put(2, 11, TUSK);
+    put(2, 12, TUSK_SH);
   }
 }
 
@@ -846,6 +1034,8 @@ function drawTusks(dc: Dc): void {
  *   avatar crop), with a pale rim on top and the shadow underneath.
  */
 function drawEars(dc: Dc): void {
+  // a skull has no ears
+  if (dc.race === 'undead') return;
   const { b, p, r } = dc;
   const ox = HX + r.lean;
   const oy = HY + r.ub + r.hd;
@@ -949,6 +1139,42 @@ function drawHair(dc: Dc, layer: 'front' | 'back'): void {
   const pal = hairPalette(dc.p, style === 'buzz');
   const pal2: Palette = { ...pal, a: dc.a.accessory === 'bow' ? dc.p.item.base : shade(dc.a.top, 0.05) };
   stampTpl(dc, tpl, pal2, dc.r.ub + dc.r.hd, TEXTURED.has(style));
+  if (layer === 'front') drawHairDeco(dc);
+}
+
+/**
+ * Hair ornaments by race: orcs thread bone rings onto their braids and tail and tie their topknot with one, and
+ * paint a red stripe up a mohawk; night elves pin a leaf and a moon-silver bead into their hair.
+ */
+function drawHairDeco(dc: Dc): void {
+  const { b, r, a } = dc;
+  const ox = HX + r.lean;
+  const oy = HY + r.ub + r.hd;
+  const put = (cx: number, cy: number, col: string) => b.set(ox + cx, oy + cy, col);
+  const v = r.view;
+  if (dc.race === 'orc') {
+    if (a.hairStyle === 'pigtails' || a.hairStyle === 'ponytail') {
+      const cols = v === 'side' ? [10] : a.hairStyle === 'pigtails' ? [0, 13] : [6];
+      const cy = a.hairStyle === 'ponytail' && v !== 'up' ? 3 : 14;
+      for (const cx of cols) {
+        put(cx, cy, TUSK);
+        put(cx, cy + 1, TUSK_SH);
+      }
+    } else if (a.hairStyle === 'short') {
+      put(6, 2, TUSK);
+      put(7, 2, TUSK_SH);
+    } else if (a.hairStyle === 'mohawk' && v !== 'side') {
+      for (let cy = 1; cy <= 5; cy++) put(v === 'down' ? 6 : 7, cy, '#a8322a');
+    }
+    return;
+  }
+  if (dc.race === 'elf' && v !== 'up') {
+    const leaf = v === 'down' ? 11 : 8;
+    put(leaf, 5, '#5fc89a');
+    put(leaf + 1, 4, '#3fa08a');
+    put(leaf, 4, '#8ff0c0');
+    put(leaf - 1, 6, MOON);
+  }
 }
 
 /**
@@ -1551,6 +1777,11 @@ function furRamp(acc: string): Ramp {
  * blouse = avental de ferreiro; polo = arreio de guerra (peito nu, alça e cinturão).
  */
 function drawTorso(dc: Dc): void {
+  drawTorsoBase(dc);
+  drawRaceBody(dc);
+}
+
+function drawTorsoBase(dc: Dc): void {
   const { b, p, r, a } = dc;
   const y = 18 + r.ub;
   const t = p.top;
@@ -2114,6 +2345,145 @@ function drawCostume(dc: Dc, costume: CharacterFrameRequest['costume']): void {
   }
 }
 
+/**
+ * Over the clothes, before the arms: the Alliance tabard of humans (royal blue with gold edges and a gold
+ * emblem), the exposed ribcage of the undead (the shirt hangs open over the bones, the spine shows at the back)
+ * and a wide leather war belt with a bone buckle on orcs. Elves keep their clothes (shoulders, see below).
+ */
+function drawRaceBody(dc: Dc): void {
+  const { b, r } = dc;
+  const y = 18 + r.ub;
+  const lx = r.lean;
+  const front = r.view === 'down';
+  if (dc.race === 'human') {
+    const gold = dc.p.bone;
+    if (r.view === 'side') {
+      b.rect(8 + lx, y + 1, 3, 6, TABARD.base);
+      b.vline(8 + lx, y + 1, y + 6, TABARD.lt);
+      b.vline(11 + lx, y + 1, y + 6, gold);
+      b.set(9 + lx, y + 3, gold);
+      return;
+    }
+    b.rect(10, y, 4, 7, TABARD.base);
+    b.vline(10, y, y + 6, gold);
+    b.vline(13, y, y + 6, dc.p.boneSh);
+    b.hline(11, 12, y + 6, TABARD.dk);
+    if (front) {
+      b.set(11, y + 2, gold);
+      b.set(12, y + 2, gold);
+      b.set(11, y + 3, dc.p.boneSh);
+      b.set(12, y + 1, gold);
+    }
+    return;
+  }
+  if (dc.race === 'undead') {
+    const bone = dc.p.skin;
+    if (r.view === 'side') {
+      b.rect(8 + lx, y + 1, 2, 4, SOCKET);
+      b.set(8 + lx, y + 1, bone.lt);
+      b.set(8 + lx, y + 3, bone.base);
+      b.set(9 + lx, y + 2, bone.dk);
+      // ragged hem
+      for (let x = 8; x <= 14; x += 2) b.set(x + lx, y + 5, SOCKET);
+      return;
+    }
+    if (front) {
+      b.rect(10, y, 4, 5, SOCKET);
+      for (const ry of [y + 1, y + 3]) {
+        b.hline(10, 13, ry, bone.base);
+        b.set(10, ry, bone.lt);
+        b.set(13, ry, bone.dk);
+      }
+      b.vline(11, y, y + 4, bone.lt);
+      b.set(12, y + 2, bone.dk);
+    } else {
+      for (let yy = y; yy <= y + 4; yy++) b.set(11, yy, yy % 2 ? bone.dk : bone.base);
+      b.set(12, y + 1, bone.dk);
+      b.set(12, y + 3, bone.dk);
+    }
+    for (let x = 8; x <= 15; x += 2) b.set(x, y + 5, SOCKET);
+    return;
+  }
+  if (dc.race === 'orc') {
+    const belt = ramp('#4a3020', 0.08);
+    if (r.view === 'side') {
+      b.rect(8 + lx, y + 4, 7, 2, belt.base);
+      b.hline(8 + lx, 14 + lx, y + 4, belt.lt);
+      b.set(8 + lx, y + 5, TUSK);
+      return;
+    }
+    b.rect(7, y + 4, 10, 2, belt.base);
+    b.hline(7, 16, y + 4, belt.lt);
+    b.hline(7, 16, y + 5, belt.dk);
+    if (front) {
+      b.rect(11, y + 3, 2, 3, TUSK);
+      b.set(12, y + 5, TUSK_SH);
+      b.set(11, y + 4, SOCKET);
+    }
+  }
+}
+
+/**
+ * Shoulders, on top of everything (they change the silhouette, which is what tells the races apart at a glance):
+ * - orc: black iron spaulders with a tall bone spike on each;
+ * - human: rounded steel caps with a gold rim;
+ * - elf: curling leaf blades in moonlit teal;
+ * - undead: jagged bone shards poking out of a tattered collar.
+ * The 'headphones' pauldron (one shoulder) still sits on top.
+ */
+function drawRaceShoulders(dc: Dc): void {
+  const { b, r } = dc;
+  const y = 17 + r.ub;
+  const side = r.view === 'side';
+  const xs = side ? [10 + r.lean] : [6, 16];
+  for (const [i, x0] of xs.entries()) {
+    const right = !side && i === 1;
+    const put = (dx: number, dy: number, col: string) => b.set(right ? x0 + 1 - dx : x0 + dx, y + dy, col);
+    if (dc.race === 'orc') {
+      const iron = ramp('#4a4448', 0.1);
+      put(0, 1, iron.lt);
+      put(1, 1, iron.base);
+      put(2, 1, iron.dk);
+      put(0, 2, iron.base);
+      put(1, 2, iron.dk);
+      put(2, 2, iron.dd);
+      put(1, 0, TUSK_SH);
+      put(1, -1, TUSK);
+      put(1, -2, TUSK);
+      put(0, -2, TUSK_SH);
+    } else if (dc.race === 'human') {
+      put(0, 1, STEEL.lt);
+      put(1, 0, STEEL.hi);
+      put(2, 0, STEEL.lt);
+      put(1, 1, STEEL.base);
+      put(2, 1, STEEL.base);
+      put(0, 2, dc.p.bone);
+      put(1, 2, dc.p.bone);
+      put(2, 2, dc.p.boneSh);
+    } else if (dc.race === 'elf') {
+      const leaf = ramp('#3fa08a', 0.1);
+      put(0, 1, leaf.base);
+      put(1, 1, leaf.lt);
+      put(2, 1, leaf.base);
+      put(1, 0, leaf.lt);
+      put(0, 0, leaf.hi);
+      put(-1, -1, leaf.lt);
+      put(2, 2, leaf.dk);
+      put(1, 2, MOON_SH);
+    } else {
+      const bone = dc.p.skin;
+      put(0, 1, SOCKET);
+      put(1, 1, SOCKET);
+      put(2, 1, SOCKET);
+      put(0, 0, bone.lt);
+      put(0, -1, bone.base);
+      put(2, 0, bone.base);
+      put(2, -1, bone.lt);
+      put(2, -2, bone.dk);
+    }
+  }
+}
+
 export function renderCharacter(req: CharacterFrameRequest): BufSprite {
   if (req.dir === 'right') {
     const left = renderCharacter({ ...req, dir: 'left' });
@@ -2121,10 +2491,15 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
   }
   const view: HeadView = req.dir === 'up' ? 'up' : req.dir === 'down' ? 'down' : 'side';
   const b = new PixelBuf(CHAR_W, CHAR_H);
-  const a = req.appearance;
   const race: Race = req.race ?? 'human';
+  const a = raceLook(req.appearance, race);
   const dc: Dc = { b, a, p: paletteOf(a, race), r: makeRig(req, view), race };
   const r = dc.r;
+  // the undead stoop: the skull hangs a pixel lower on the neck, pushed forward in profile
+  if (race === 'undead') {
+    r.hd += 1;
+    if (view === 'side') r.lean -= 1;
+  }
   const sleeve = sleeveLength(a);
   const sr = sleeve === 0 ? dc.p.skin : dc.p.top;
   const ip = itemPos(dc);
@@ -2226,6 +2601,7 @@ export function renderCharacter(req: CharacterFrameRequest): BufSprite {
     b.set(kx + 1 + r.lean, ky + r.ub, POPCORN_PAL.y);
   }
 
+  if (r.view !== 'up' || !r.seated) drawRaceShoulders(dc);
   if (r.crossFront === null) drawPauldron(dc);
   b.outline();
   if (!r.seated) b.shadow(CHAR_AX, CHAR_AY - 0.5, 6, 2, '#1c2034', 0.2);

@@ -1,18 +1,25 @@
 // Montagem do prédio: núcleo + corredor + salas de projeto -> grade de caminhabilidade e spots.
 import { FURNITURE } from '../../art/api';
-import { BUILDING_H, COL_W } from '../constants';
 import { BLOCKED, FREE, SEAT, WalkGrid } from '../path/grid';
 import { furnitureBlocks, furnitureIsSeat } from './builder';
+import { MAIN_Y } from '../constants';
+import { openToRing } from './enclosure';
 import { layoutCafe, layoutLounge, layoutReception, layoutRestroom } from './core';
-import { layoutCorridor } from './corridor';
-import { buildingRect } from './geometry';
+import { layoutCorridor, layoutNorthCorridor, layoutSouthCorridor, layoutSouthWalkway, layoutWalkway } from './corridor';
+import { extentRect, gridSize, shapeKey, type Shape } from './geometry';
 import type { AreaLayout, SpotDef, TileRect } from './types';
 
 export interface BuildingLayout {
-  cols: number;
+  /** How far each wing reaches (layout/geometry.ts). */
+  shape: Shape;
+  /** shapeKey(shape): changes whenever the outline of the building changes. */
+  key: string;
+  /** Everything that is built, in tiles (both strips and the walkway). */
   rect: TileRect;
   core: AreaLayout[];
   corridor: AreaLayout;
+  /** The elf and undead wings' corridors and the walkways to them (only while those wings exist). */
+  extra: AreaLayout[];
   rooms: AreaLayout[];
   grid: WalkGrid;
   spots: SpotDef[];
@@ -22,7 +29,12 @@ let coreCache: AreaLayout[] | null = null;
 
 /** Áreas fixas do núcleo (calculadas uma vez). */
 export function coreAreas(): AreaLayout[] {
-  return (coreCache ??= [layoutReception(), layoutRestroom(), layoutCafe(), layoutLounge()]);
+  if (!coreCache) {
+    coreCache = [layoutReception(), layoutRestroom(), layoutCafe(), layoutLounge()];
+    // the core stands inside the human wing's ring (layout/enclosure.ts) too
+    for (const a of coreCache) openToRing(a, a.rect.y === MAIN_Y ? 'north' : 'south');
+  }
+  return coreCache;
 }
 
 /** Marca na grade as células caminháveis de uma área, os bloqueios e os assentos. */
@@ -40,18 +52,20 @@ export function paintArea(grid: WalkGrid, area: AreaLayout): void {
   }
 }
 
-export function buildWalkGrid(cols: number, areas: readonly AreaLayout[], version = 0): WalkGrid {
-  const grid = new WalkGrid(cols * COL_W, BUILDING_H, version);
+export function buildWalkGrid(shape: Shape, areas: readonly AreaLayout[], version = 0): WalkGrid {
+  const { w, h } = gridSize(shape);
+  const grid = new WalkGrid(w, h, version);
   for (const a of areas) paintArea(grid, a);
   return grid;
 }
 
-export function assembleBuilding(cols: number, rooms: readonly AreaLayout[], version = 0): BuildingLayout {
+export function assembleBuilding(shape: Shape, rooms: readonly AreaLayout[], version = 0): BuildingLayout {
   const core = coreAreas();
-  const corridor = layoutCorridor(cols);
-  const all = [...core, corridor, ...rooms];
-  const grid = buildWalkGrid(cols, all, version);
+  const corridor = layoutCorridor(shape);
+  const extra = [layoutNorthCorridor(shape), layoutWalkway(shape), layoutSouthCorridor(shape), layoutSouthWalkway(shape)].filter((a): a is AreaLayout => !!a);
+  const all = [...core, corridor, ...extra, ...rooms];
+  const grid = buildWalkGrid(shape, all, version);
   const spots: SpotDef[] = [];
   for (const a of all) spots.push(...a.spots);
-  return { cols, rect: buildingRect(cols), core, corridor, rooms: [...rooms], grid, spots };
+  return { shape, key: shapeKey(shape), rect: extentRect(shape), core, corridor, extra, rooms: [...rooms], grid, spots };
 }

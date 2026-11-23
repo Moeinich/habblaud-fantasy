@@ -893,6 +893,10 @@ export const FR: Readonly<Record<string, string>> = {
   "Banheiros": "Toilettes",
   "Copa": "Cuisine",
   "Lounge": "Salon",
+  "Ala humana": "Aile humaine",
+  "Ala orc": "Aile orque",
+  "Ala dos elfos noturnos": "Aile des elfes de la nuit",
+  "Ala dos mortos-vivos": "Aile des morts-vivants",
 
   // client/src/world/sim/shell.ts
   "Monitorando um processo": "Surveille un processus",

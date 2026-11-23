@@ -1,6 +1,9 @@
 // Núcleo do prédio (colunas 0 e 1): recepção com elevadores, banheiros, copa e lounge.
 import type { WallStyle } from '../../art/api';
-import { COL_W, NORTH_Y, ROOM_H, SOUTH_Y, TILE } from '../constants';
+import { COL_W, CORE_COL0, NORTH_Y, ROOM_H, SOUTH_Y, TILE } from '../constants';
+
+/** West edge of the core (tiles). */
+const CX = CORE_COL0 * COL_W;
 import { AreaBuilder, SEATED_SORT_BIAS } from './builder';
 import type { AreaLayout } from './types';
 
@@ -23,9 +26,9 @@ export const CORE_WALLS = {
 export const ELEVATOR_CX = [3, 6.5] as const;
 
 export function layoutReception(): AreaLayout {
-  const b = new AreaBuilder(RECEPTION_ID, 'reception', { x: 0, y: NORTH_Y, w: COL_W, h: ROOM_H });
+  const b = new AreaBuilder(RECEPTION_ID, 'reception', { x: CX, y: NORTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.reception;
-  b.floor('marble', 0, 0, 16, 12, 101);
+  b.floor('marble', 0, 0, 16, 12, 110);
   b.rug(1.5, 2.2, 6.5, 2.6, '#8c2f25', 102);
   b.rug(8.6, 6.4, 5.2, 3.2, '#b65f3a', 103);
   b.face(0.5, 15, wall);
@@ -72,7 +75,7 @@ export function layoutReception(): AreaLayout {
 }
 
 export function layoutRestroom(): AreaLayout {
-  const b = new AreaBuilder(RESTROOM_ID, 'restroom', { x: 0, y: SOUTH_Y, w: COL_W, h: ROOM_H });
+  const b = new AreaBuilder(RESTROOM_ID, 'restroom', { x: CX, y: SOUTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.restroom;
   b.floor('tile_white', 0, 0, 16, 12, 201);
   // tapetinho só na frente das pias (nada de tapete grande no meio do banheiro)
@@ -84,7 +87,7 @@ export function layoutRestroom(): AreaLayout {
   b.cap(15.5, 0, 0.5, 12, wall);
   b.walk(1, 2, 14, 9);
   b.walk(7, 0, 2, 2);
-  b.area.door = { x: 7, y: SOUTH_Y, w: 2, h: 2 };
+  b.area.door = { x: CX + 7, y: SOUTH_Y, w: 2, h: 2 };
 
   // pias com espelho
   for (let i = 0; i < 3; i++) {
@@ -116,7 +119,7 @@ export function layoutRestroom(): AreaLayout {
 }
 
 export function layoutCafe(): AreaLayout {
-  const b = new AreaBuilder(CAFE_ID, 'cafe', { x: COL_W, y: NORTH_Y, w: COL_W, h: ROOM_H });
+  const b = new AreaBuilder(CAFE_ID, 'cafe', { x: CX + COL_W, y: NORTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.cafe;
   b.floor('tile_check', 0, 0, 16, 12, 301);
   // frontão de mármore atrás da bancada + parede clara com janelas
@@ -187,7 +190,7 @@ export function layoutCafe(): AreaLayout {
 }
 
 export function layoutLounge(): AreaLayout {
-  const b = new AreaBuilder(LOUNGE_ID, 'lounge', { x: COL_W, y: SOUTH_Y, w: COL_W, h: ROOM_H });
+  const b = new AreaBuilder(LOUNGE_ID, 'lounge', { x: CX + COL_W, y: SOUTH_Y, w: COL_W, h: ROOM_H });
   const wall = CORE_WALLS.lounge;
   b.floor('wood', 0, 0, 16, 12, 401);
   b.rug(1.5, 3.2, 7, 5.2, '#4f8a5b', 402);
@@ -200,7 +203,7 @@ export function layoutLounge(): AreaLayout {
   b.cap(15.5, 0, 0.5, 12, wall);
   b.walk(1, 2, 14, 9);
   b.walk(7, 0, 3, 2);
-  b.area.door = { x: COL_W + 7, y: SOUTH_Y, w: 3, h: 2 };
+  b.area.door = { x: CX + COL_W + 7, y: SOUTH_Y, w: 3, h: 2 };
 
   b.wall('tv', 4.5, undefined, { order: 0.4 });
   b.wall('painting', 1.75, undefined, { order: 0.5 });

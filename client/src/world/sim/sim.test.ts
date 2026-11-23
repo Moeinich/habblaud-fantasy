@@ -1,11 +1,13 @@
 // Integração da simulação sem DOM: snapshots -> personagens andando, sentando, apagando a luz e indo embora.
 import { describe, expect, it } from 'vitest';
+import { COL_W } from '../constants';
 import type { AppearanceParts } from '../../../../shared/appearance';
 import type { AgentInfo, OfficeSnapshot, RoomInfo, ShellJob } from '../../../../shared/types';
 import type { Appearance, ArtModule, RoomTheme } from '../../art/api';
 import { DEFAULT_WORLD_OPTIONS } from '../api';
 import type { Character } from './character';
 import { SHELL_DONE_TOOL, Sim } from './sim';
+import { cellSlot, inRect, slotColumn, slotWing } from '../layout/geometry';
 
 const theme: RoomTheme = {
   carpet: '#4f6d8f',
@@ -40,7 +42,8 @@ const art = {
 const T0 = 1_700_000_000_000;
 
 function room(id: string, slot: number): RoomInfo {
-  return { id, name: id.replace('/', ''), path: id, slot, seed: slot * 99 + 7, createdAt: T0 };
+  // seed % 9 = 2: an orc room, so the rooms line up in the east wing (slots 0, 1, 2...)
+  return { id, name: id.replace('/', ''), path: id, slot, seed: slot * 120 + 2, createdAt: T0 };
 }
 
 function agent(id: string, roomId: string, status: AgentInfo['status'], extra: Partial<AgentInfo> = {}): AgentInfo {
@@ -315,7 +318,8 @@ describe('simulação do escritório', () => {
     const sim = newSim();
     const clock = { now: T0 };
     const agents: AgentInfo[] = [];
-    for (let i = 0; i < 26; i++) agents.push(agent(`ag-${i}-${'y'.repeat(i)}`, '/a', 'working'));
+    // more people than even the widest room (4 columns) has desks
+    for (let i = 0; i < 46; i++) agents.push(agent(`ag-${i}-${'y'.repeat(i)}`, '/a', 'working'));
     sim.applySnapshot(snap([room('/a', 0)], agents), clock.now);
     run(sim, clock, 25);
     const r = sim.rooms.get('/a')!.layout.rect;
@@ -437,6 +441,57 @@ describe('simulação do escritório', () => {
   });
 });
 
+describe('rooms grow and gather in departments', () => {
+  /** A room of a given race (theme index = seed % 9, race = index % 3: 0 human, 1 elf, 2 orc). */
+  const raceRoom = (id: string, slot: number, race: 'human' | 'elf' | 'orc' | 'undead'): RoomInfo => ({ ...room(id, slot), seed: 1200 + { human: 0, elf: 1, orc: 2, undead: 3 }[race] + slot * 12 });
+
+  it('a room with more people than desks grows, everyone sits, and it shrinks back later', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const four = Array.from({ length: 4 }, (_, i) => agent(`p${i}-${'x'.repeat(i)}`, '/a', 'working'));
+    sim.applySnapshot(snap([room('/a', 0)], four), clock.now);
+    run(sim, clock, 1);
+    const a = sim.rooms.get('/a')!;
+    expect(a.span).toBe(1);
+    const nine = [...four, ...Array.from({ length: 5 }, (_, i) => agent(`q${i}-${'z'.repeat(i)}`, '/a', 'working'))];
+    sim.applySnapshot(snap([room('/a', 0)], nine, 2), clock.now);
+    run(sim, clock, 20, () => a.span === 2);
+    expect(a.span).toBe(2);
+    expect(a.layout.rect.w).toBe(2 * COL_W);
+    run(sim, clock, 60, () => [...sim.chars.values()].every((c) => c.homeSpot && a.layout.spots.find((s) => s.id === c.homeSpot)?.kind === 'desk'));
+    for (const c of sim.chars.values()) expect(a.layout.spots.find((s) => s.id === c.homeSpot)?.kind, c.id).toBe('desk');
+    // the crowd leaves: the room stays wide for a while, then shrinks back
+    sim.applySnapshot(snap([room('/a', 0)], [...four, ...nine.slice(4).map((x) => ({ ...x, status: 'offline' as const }))], 3), clock.now);
+    run(sim, clock, 20);
+    expect(a.span).toBe(2);
+    run(sim, clock, 120, () => a.span === 1);
+    expect(a.span).toBe(1);
+  });
+
+  it('rooms branch into wings: human west, orc east, elf and undead up north across the walkway', () => {
+    const sim = newSim();
+    const clock = { now: T0 };
+    const rooms = [raceRoom('/elf', 0, 'elf'), raceRoom('/hum', 1, 'human'), raceRoom('/orc', 2, 'orc'), raceRoom('/und', 3, 'undead')];
+    const people = [agent('ana', '/elf', 'working'), agent('bia', '/hum', 'working'), agent('caio', '/orc', 'working'), agent('edu', '/und', 'working')];
+    sim.applySnapshot(snap(rooms, people), clock.now);
+    expect(slotWing(sim.rooms.get('/hum')!.slot)).toBe('west');
+    expect(slotWing(sim.rooms.get('/orc')!.slot)).toBe('east');
+    expect(slotWing(sim.rooms.get('/elf')!.slot)).toBe('north');
+    expect(slotWing(sim.rooms.get('/und')!.slot)).toBe('south');
+    expect(sim.building.shape).toEqual({ west: 1, east: 1, north: 1, south: 1 });
+    // everyone walks from the elevators to their own desk, the elf across the walkway
+    run(sim, clock, 90, () => [...sim.chars.values()].every((c) => c.atSpot && c.atSpot === c.homeSpot));
+    for (const id of ['ana', 'bia', 'caio', 'edu']) {
+      const c = sim.chars.get(id)!;
+      expect(c.atSpot, id).toBe(c.homeSpot);
+      expect(inRect(sim.rooms.get(c.roomId)!.layout.rect, c.tx, c.ty), id).toBe(true);
+    }
+    // a second human room fills the other side of the west wing, next to the core
+    sim.applySnapshot(snap([...rooms, raceRoom('/hum2', 3, 'human')], [...people, agent('davi', '/hum2', 'working')], 2), clock.now);
+    expect(sim.rooms.get('/hum2')!.slot).toBe(cellSlot(slotColumn(sim.rooms.get('/hum')!.slot), 'south'));
+  });
+});
+
 describe('salas sem buracos', () => {
   const inside = (r: { layout: { rect: { x: number; y: number; w: number; h: number } } }, c: { tx: number; ty: number }) =>
     c.tx >= r.layout.rect.x && c.tx < r.layout.rect.x + r.layout.rect.w && c.ty >= r.layout.rect.y && c.ty < r.layout.rect.y + r.layout.rect.h;
@@ -446,7 +501,7 @@ describe('salas sem buracos', () => {
     const clock = { now: T0 };
     sim.applySnapshot(snap([room('/c', 8), room('/a', 0), room('/b', 3)], [agent('ana', '/a', 'working'), agent('bia', '/b', 'working'), agent('caio', '/c', 'working')]), clock.now);
     expect(['/a', '/b', '/c'].map((id) => sim.rooms.get(id)!.slot)).toEqual([0, 1, 2]);
-    expect(sim.building.cols).toBe(4);
+    expect(sim.building.shape.east).toBe(2);
   });
 
   it('terminal fechou: a sala mais distante se muda para a vaga, o pessoal vai andando e o prédio encolhe', () => {
@@ -460,7 +515,7 @@ describe('salas sem buracos', () => {
     const caio = sim.chars.get('caio')!;
     const homeBefore = caio.homeSpot;
     expect(c.slot).toBe(2);
-    expect(sim.building.cols).toBe(4);
+    expect(sim.building.shape.east).toBe(2);
 
     // a sessão da sala /b fecha: bia vai embora e a sala é desmontada
     sim.applySnapshot(snap([room('/a', 0), room('/c', 2)], [agents[0], agent('bia', '/b', 'offline'), agents[2], agents[3]], 2), clock.now);
@@ -493,8 +548,8 @@ describe('salas sem buracos', () => {
     expect(c.lightOn).toBe(true);
     // o endereço antigo esvaziou, apagou e foi desmontado; o prédio voltou a ter uma coluna de salas
     expect(sim.rooms.has(ghost!.id)).toBe(false);
-    run(sim, clock, 10, () => sim.building.cols === 3);
-    expect(sim.building.cols).toBe(3);
+    run(sim, clock, 10, () => sim.building.shape.east === 1);
+    expect(sim.building.shape.east).toBe(1);
     // davi (ocioso, talvez passeando) também tem o lugar dele na sala nova
     expect(c.layout.spots.some((p) => p.id === sim.chars.get('davi')!.homeSpot)).toBe(true);
   });
@@ -514,8 +569,8 @@ describe('salas sem buracos', () => {
     });
     expect(moved).toBe(false);
     expect(sim.rooms.has('/c')).toBe(false);
-    run(sim, clock, 5, () => sim.building.cols === 3);
-    expect(sim.building.cols).toBe(3);
+    run(sim, clock, 5, () => sim.building.shape.east === 1);
+    expect(sim.building.shape.east).toBe(1);
   });
 
   it('abre e fecha ao acaso (inclusive no meio de uma mudança): ninguém se teletransporta e no fim não sobra buraco', () => {
@@ -573,8 +628,8 @@ describe('salas sem buracos', () => {
     expect([...sim.rooms.keys()].sort()).toEqual([...open.keys()].sort());
     expect(slots).toEqual(slots.map((_, i) => i));
     expect([...sim.rooms.values()].some((r) => r.ghost)).toBe(false);
-    run(sim, clock, 20, () => sim.building.cols === 2 + Math.ceil(open.size / 2));
-    expect(sim.building.cols).toBe(2 + Math.ceil(open.size / 2));
+    run(sim, clock, 20, () => sim.building.shape.east === Math.ceil(open.size / 2));
+    expect(sim.building.shape.east).toBe(Math.ceil(open.size / 2));
     expect(maxStep).toBeLessThan(12);
   });
 

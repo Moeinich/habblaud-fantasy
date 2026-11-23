@@ -9,18 +9,32 @@
 // a semente da sala escolhe: o lado da ilha (layout espelhado), o tipo de canto de reunião
 // (mesa retangular, mesinhas redondas ou recanto com poltronas), os "cantos" da parte de baixo
 // (descanso, impressão, verde, mesa de pé) e a coluna de apoio junto à parede.
+//
+// A busy room spans several columns (`span`): the first 16 tiles are always the module above, and each extra
+// column adds an annex to the east with another 6-desk island, two standing spots and its own door, with no
+// partition wall in between. Annex spots are created after all of the base module's, so the base spot ids
+// stay the same when a room grows or shrinks (people keep their desks).
 import { FURNITURE, type Dir, type FurnitureKind, type RoomTheme, type WallStyle } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
 import { raceOfSeed, type Race } from '../../../../shared/race';
 import { DOOR_W, DOOR_X, TILE } from '../constants';
 import { AreaBuilder, type SpotOpts } from './builder';
-import { slotRect, slotSide } from './geometry';
+import { COL_W } from '../constants';
+import { openToRing } from './enclosure';
+import { MAX_SPAN, roomRect, slotSide, slotWing } from './geometry';
 import type { AreaLayout, SpotDef, SpotKind } from './types';
 
 export interface RoomInput {
   id: string;
   slot: number;
   seed: number;
+  /** Columns the room spans (1 = a single 16-tile module). */
+  span?: number;
+  /**
+   * Sides that open onto a neighbouring project room of the same wing: no partition wall there, so the wing reads
+   * as one open-plan hall with a department per project (sim.ts relayout decides).
+   */
+  open?: { west?: boolean; east?: boolean };
 }
 
 const PLANTS_TALL = ['palm', 'ficus', 'monstera', 'bonsai'] as const;
@@ -33,6 +47,7 @@ const POSTERS: Readonly<Record<Race, readonly string[]>> = {
   human: ['code', 'code', 'rocket', 'cat', 'bug', 'ship_it'],
   elf: ['moon', 'moon', 'rocket', 'cat', 'bug', 'ship_it'],
   orc: ['coffee', 'coffee', 'rocket', 'cat', 'bug', 'ship_it'],
+  undead: ['coffee', 'coffee', 'rocket', 'cat', 'bug', 'ship_it'],
 };
 const BEANBAGS = ['red', 'blue', 'yellow', 'green'] as const;
 
@@ -76,7 +91,9 @@ export function roomVariant(seed: number): RoomVariant {
 }
 
 export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout {
-  const rect = slotRect(room.slot);
+  const span = Math.max(1, Math.min(MAX_SPAN, Math.floor(room.span ?? 1)));
+  const W = span * COL_W;
+  const rect = roomRect(room.slot, span);
   const side = slotSide(room.slot);
   const rng = mulberry32(room.seed ^ 0x5eed);
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length) % arr.length];
@@ -87,7 +104,8 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
   area.side = side;
   const wall: WallStyle = theme.wall;
   const north = side === 'north';
-  const door = { lx: DOOR_X, w: DOOR_W };
+  /** One door per column (the annexes get their own, so people don't cross the whole room). */
+  const doors = Array.from({ length: span }, (_, k) => ({ lx: k * COL_W + DOOR_X, w: DOOR_W }));
 
   // ---- espelhamento (coordenadas locais pensadas com a ilha à esquerda)
   const mir = v.mirror;
@@ -104,30 +122,34 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
   const rug = (lx: number, ly: number, w: number, h: number, color: string, seed: number) => b.rug(fx(lx, w), ly, w, h, color, seed);
 
   // ---- piso: porcelanato claro (o banheiro é que usa azulejo); leve tom do tema dá identidade
-  b.floor('marble', 0, 0, 16, 12, room.seed);
+  b.floor('marble', 0, 0, W, 12, room.seed);
   area.floorTint = theme.carpet;
   // tapete na cor do tema sob a ilha (identidade da sala)
   rug(1.5, 3.25, 7, 5.5, theme.carpet, room.seed);
   // tapetinho na entrada
   rug(DOOR_X - 0.25, north ? 9.5 : 2, DOOR_W + 0.5, 1.25, shade(theme.carpet2, -0.1), room.seed + 1);
 
-  // ---- paredes
+  // ---- paredes (an open side runs the walls on into the neighbour's, with no partition in between)
+  const openW = !!room.open?.west;
+  const openE = !!room.open?.east;
+  const wx0 = openW ? 0 : 0.5;
+  const ww = W - wx0 - (openE ? 0 : 0.5);
   if (north) {
-    b.face(0.5, 15, wall);
-    b.south(0.5, 15, 11, wall, [door]);
+    b.face(wx0, ww, wall);
+    b.south(wx0, ww, 11, wall, doors);
   } else {
-    b.face(0.5, 15, wall, [door]);
-    b.south(0.5, 15, 11, { ...wall, exterior: true });
+    b.face(wx0, ww, wall, doors);
+    b.south(wx0, ww, 11, { ...wall, exterior: true });
     // batente na passagem da porta (a face da parede norte mostra o vão)
     b.wall('door_frame', DOOR_X + DOOR_W / 2, undefined, { order: 0.05 });
   }
-  b.cap(0, 0, 0.5, 12, wall);
-  b.cap(15.5, 0, 0.5, 12, wall);
+  if (!openW) b.cap(0, 0, 0.5, 12, wall);
+  if (!openE) b.cap(W - 0.5, 0, 0.5, 12, wall);
 
   // ---- caminhabilidade
-  b.walk(1, 2, 14, 9);
+  b.walk(openW ? 0 : 1, 2, W - (openW ? 0 : 1) - (openE ? 0 : 1), 9);
   area.door = north ? { x: rect.x + DOOR_X, y: rect.y + 11, w: DOOR_W, h: 1 } : { x: rect.x + DOOR_X, y: rect.y, w: DOOR_W, h: 2 };
-  b.walk(area.door.x - rect.x, area.door.y - rect.y, area.door.w, area.door.h);
+  for (const d of doors) b.walk(d.lx, area.door.y - rect.y, d.w, area.door.h);
 
   // ---- itens de parede
   const signCx = north ? 8 : 10.5;
@@ -272,8 +294,46 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
   spot('stand', 1, 7, 'right');
   spot('stand', 13, 9, 'up', { dy: -2 });
 
+  // ---- annexes (one per extra column), never mirrored
+  for (let k = 1; k < span; k++) annex(k);
+
+  function annex(k: number): void {
+    const ox = k * COL_W;
+    const o = 0.3 + k * 0.02;
+    b.rug(ox + 2.5, 3.25, 7, 5.5, theme.carpet, room.seed + 10 + k);
+    if (!north) b.wall('door_frame', ox + DOOR_X + DOOR_W / 2, undefined, { order: 0.05 });
+    b.wall('poster', ox + 3, pick(posters), { order: 0.5 });
+    b.wall(north ? 'window' : 'clock', ox + 12.5, undefined, { order: 0.45 });
+    const annexRanks = [2, 0, 4];
+    for (let i = 0; i < 3; i++) {
+      const lx = ox + 3 + i * 2;
+      const back = b.furn('desk_back', lx, 5, deskV, { order: o + 0.05 + i * 0.05, seat: `N${k * 3 + i}` });
+      const front = b.furn('desk', lx, 6, deskV, { order: o + 0.1 + i * 0.05, seat: `S${k * 3 + i}` });
+      b.seat('desk', 'office_chair_front', lx, 4, 'down', chairV, { dx: TILE / 2, deskId: back, rank: k * 6 + annexRanks[i] + 1, side: 'N', order: o + 0.25 + i * 0.03 });
+      b.seat('desk', 'office_chair', lx, 7, 'up', chairV, { dx: TILE / 2, deskId: front, rank: k * 6 + annexRanks[i], side: 'S', order: o + 0.3 + i * 0.03 });
+    }
+    b.furn('plant_tall', ox + 14, 2, pick(PLANTS_TALL), { order: o });
+    b.furn('filing_cabinet', ox + 13, 4, undefined, { order: o + 0.01 });
+    b.furn('floor_lamp', ox + 13, 7, undefined, { order: o + 0.02 });
+    b.furn('plant_small', ox + 1, 10, pick(PLANTS_SMALL), { order: o + 0.03 });
+    b.furn('binder_shelf', ox + 12, 10, undefined, { order: o + 0.04 });
+    b.furn('plant_tall', ox + 14, 10, pick(PLANTS_TALL), { order: o + 0.05 });
+    b.spot('stand', ox + 11, 5, 'left');
+    b.spot('stand', ox + 11, 7, 'left');
+  }
+
   // ---- sombreamento quando a luz está apagada (salas ao norte: a mureta sul fica clara)
   const p = { x: rect.x * TILE, y: rect.y * TILE, w: rect.w * TILE, h: rect.h * TILE };
   area.shade = north ? { x: p.x, y: p.y, w: p.w, h: p.h - TILE } : { x: p.x, y: p.y, w: p.w, h: p.h };
+  // undead rooms lay grave-cloth runners whatever their colour
+  if (raceOfSeed(room.seed) === 'undead') for (const r of area.rugs) r.style = 'crypt';
+  // where two departments meet, a tall plant at each end of the seam marks the border and leaves the middle open (last, so
+  // the other furniture and spot ids don't depend on the neighbours)
+  if (openE) {
+    b.furn('plant_tall', W - 1, 2, PLANTS_TALL[(room.seed >>> 3) % PLANTS_TALL.length], { order: 0.2 });
+    b.furn('plant_tall', W - 1, 10, PLANTS_TALL[(room.seed >>> 5) % PLANTS_TALL.length], { order: 0.2 });
+  }
+  // every wing but the elves' (their hollow tree) stands inside a rounded ring that is its outer wall
+  if (slotWing(room.slot) !== 'north') openToRing(area, side);
   return b.build();
 }

@@ -1,6 +1,6 @@
 // Construtor de áreas em coordenadas LOCAIS (tiles relativos ao canto da área).
 // Converte tudo para coordenadas absolutas e registra spots de forma consistente.
-import { FURNITURE, type Dir, type FloorKind, type FurnitureKind, type WallStyle } from '../../art/api';
+import { FURNITURE, type Dir, type FloorKind, type FurnitureKind, type RugStyle, type WallStyle } from '../../art/api';
 import { FOOT_DX, FOOT_DY, TILE } from '../constants';
 import type { AreaKind, AreaLayout, Doorway, FurniturePlacement, SpotDef, SpotKind, TileRect } from './types';
 
@@ -55,8 +55,18 @@ export class AreaBuilder {
     return this;
   }
 
-  rug(lx: number, ly: number, w: number, h: number, color: string, seed: number): this {
-    this.area.rugs.push({ x: Math.round(this.px(lx)), y: Math.round(this.py(ly)), w: Math.round(w * TILE), h: Math.round(h * TILE), color, seed });
+  /**
+   * A floor that melts into the one already under it: fully itself at local `from`, gone at `to` (tiles along
+   * `axis`), with an interlocking pixel edge in between (FloorFade).
+   */
+  seamFloor(kind: FloorKind, lx: number, ly: number, w: number, h: number, seed: number, fade: { axis: 'x' | 'y'; from: number; to: number }, tint?: string, tint2?: string): this {
+    const at = (v: number) => (fade.axis === 'x' ? this.px(v) : this.py(v));
+    this.area.floors.push({ kind, x: this.px(lx), y: this.py(ly), w: w * TILE, h: h * TILE, seed, tint, tint2, fade: { axis: fade.axis, from: at(fade.from), to: at(fade.to) } });
+    return this;
+  }
+
+  rug(lx: number, ly: number, w: number, h: number, color: string, seed: number, style?: RugStyle): this {
+    this.area.rugs.push({ x: Math.round(this.px(lx)), y: Math.round(this.py(ly)), w: Math.round(w * TILE), h: Math.round(h * TILE), color, seed, ...(style ? { style } : {}) });
     return this;
   }
 

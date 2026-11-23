@@ -1,3 +1,4 @@
+import { raceOfSeed } from '../../../../shared/race';
 import type { CharacterFrameRequest, FurnitureKind, Sprite, WallStyle } from '../../art/api';
 import { mix } from '../../art/core/color';
 import { hash32 } from '../../../../shared/hash';
@@ -27,6 +28,15 @@ export function seasonalCostume(theme: SeasonalTheme, seed: number): CharacterFr
 }
 
 /** Reutiliza footprints de plantas: nenhuma nova colisão ou mudança de caminhos. */
+/**
+ * Decoration theme of one area: undead rooms are always dressed for Halloween (pumpkins for plants, a ghost,
+ * cobwebs, bats and lanterns along the walls, pumpkin motifs on the rugs), whatever the season; every other area
+ * follows the season.
+ */
+export function areaTheme(theme: SeasonalTheme, room: { seed: number } | undefined | null): SeasonalTheme {
+  return room && raceOfSeed(room.seed) === 'undead' ? 'halloween' : theme;
+}
+
 export function seasonalFurniture(theme: SeasonalTheme, kind: FurnitureKind, area: AreaLayout, seed: number): Sprite | null {
   if (theme === 'none' || area.kind === 'restroom') return null;
   if (kind === 'plant_tall') {

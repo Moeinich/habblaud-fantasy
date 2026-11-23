@@ -63,6 +63,9 @@ export function floorChunk(kind: FloorKind, cx: number, cy: number, o: FloorOpts
     case 'sidewalk':
       paintSidewalk(b, x0, y0, o.seed);
       break;
+    case 'hall':
+      paintHall(b, x0, y0, o);
+      break;
     default:
       for (let ty = 0; ty < CHUNK_TILES; ty++) {
         for (let tx = 0; tx < CHUNK_TILES; tx++) {
@@ -175,6 +178,92 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
         b.set(fx, fy - 1, fc);
         b.set(fx + 1, fy + 1, '#d48a2c');
       }
+      break;
+    }
+    case 'jungle': {
+      // Undergrowth: deep greens with moss blotches, fern fronds and the odd glowing spore.
+      const n = noise(tx * TILE, ty * TILE, 40, o.seed + 6);
+      const base = mix('#22462c', '#2f5e36', n);
+      b.rect(0, 0, TILE, TILE, base);
+      for (let i = 0; i < 16; i++) b.set(Math.floor(r(i) * TILE), Math.floor(r(i + 20) * TILE), r(i + 40) < 0.5 ? shade(base, 0.08) : shade(base, -0.12));
+      for (let i = 0; i < 2; i++) {
+        // a fern frond: a stem with leaflets
+        const x = 3 + Math.floor(r(i + 80) * 10);
+        const y = 4 + Math.floor(r(i + 90) * 9);
+        const c = r(i + 95) < 0.5 ? '#4f9a4e' : '#5fae5a';
+        for (let k = 0; k < 4; k++) {
+          b.set(x + k, y - k, '#24482c');
+          b.set(x + k, y - k - 1, c);
+          b.set(x + k - 1, y - k + 1, c);
+        }
+      }
+      if (r(99) < 0.08) {
+        const fx = 3 + Math.floor(r(100) * 10);
+        const fy = 3 + Math.floor(r(101) * 10);
+        b.set(fx, fy, '#8ff0e0');
+        b.set(fx + 1, fy, '#c8fff6');
+      }
+      break;
+    }
+    case 'desert': {
+      // Dry badlands: sand in warm ochres, dark cracks, pebbles and dead grass.
+      const n = noise(tx * TILE, ty * TILE, 56, o.seed + 7);
+      const base = mix('#b48a56', '#c89e66', n);
+      b.rect(0, 0, TILE, TILE, base);
+      for (let i = 0; i < 14; i++) b.set(Math.floor(r(i) * TILE), Math.floor(r(i + 20) * TILE), r(i + 40) < 0.5 ? shade(base, 0.08) : shade(base, -0.1));
+      if (r(70) < 0.35) {
+        // a crack wandering across the tile
+        let x = Math.floor(r(71) * TILE);
+        let y = Math.floor(r(72) * TILE);
+        for (let k = 0; k < 9; k++) {
+          b.set(x, y, '#7a5a36');
+          x += r(73 + k) < 0.5 ? 1 : 0;
+          y += r(83 + k) < 0.6 ? 1 : -1;
+          if (x >= TILE || y < 0 || y >= TILE) break;
+        }
+      }
+      if (r(90) < 0.25) {
+        const x = 2 + Math.floor(r(91) * 12);
+        const y = 2 + Math.floor(r(92) * 12);
+        b.set(x, y, '#8a7a66');
+        b.set(x + 1, y, '#a8987e');
+        b.set(x, y + 1, '#5e5040');
+      }
+      if (r(95) < 0.2) {
+        const x = 2 + Math.floor(r(96) * 12);
+        const y = 4 + Math.floor(r(97) * 10);
+        b.set(x, y, '#8a7038');
+        b.set(x - 1, y - 1, '#a08440');
+        b.set(x + 1, y - 2, '#a08440');
+      }
+      break;
+    }
+    case 'blight': {
+      // Dead ground: purple-grey earth, violet mould, withered grey tufts and the odd bone.
+      const n = noise(tx * TILE, ty * TILE, 44, o.seed + 8);
+      const base = mix('#3e3346', '#4e4058', n);
+      b.rect(0, 0, TILE, TILE, base);
+      for (let i = 0; i < 14; i++) b.set(Math.floor(r(i) * TILE), Math.floor(r(i + 20) * TILE), r(i + 40) < 0.5 ? shade(base, 0.08) : shade(base, -0.12));
+      if (r(60) < 0.3) {
+        const x = 2 + Math.floor(r(61) * 12);
+        const y = 2 + Math.floor(r(62) * 12);
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [1, 1]]) b.set(x + dx, y + dy, '#6a3f86');
+      }
+      for (let i = 0; i < 2; i++) {
+        const x = 2 + Math.floor(r(i + 80) * 12);
+        const y = 3 + Math.floor(r(i + 90) * 11);
+        b.set(x, y, '#6e6a66');
+        b.set(x - 1, y - 1, '#5a5652');
+        b.set(x + 1, y - 2, '#7e7a74');
+      }
+      if (r(99) < 0.06) {
+        const x = 3 + Math.floor(r(100) * 9);
+        const y = 4 + Math.floor(r(101) * 9);
+        b.set(x, y, '#d8d0b8');
+        b.set(x + 1, y, '#e8e0c8');
+        b.set(x + 2, y, '#d8d0b8');
+      }
+      if (r(105) < 0.05) b.set(2 + Math.floor(r(106) * 12), 2 + Math.floor(r(107) * 12), '#b07ae0');
       break;
     }
     case 'street': {
@@ -346,12 +435,14 @@ const ALLY_GAP = rgba('#5e5850');
 /**
  * Floor of project rooms and the Great Hall ('marble'). The room theme (via the seed) picks the race:
  * orc = rough flagstones sunk in dirt and straw; human = neat cut-stone slabs; elf = polished moonwood planks
- * with moss and fallen leaves.
+ * with moss and fallen leaves; undead = cold slate crypt slabs, cracked, with a violet glow in the seams
+ * and the odd bone.
  */
 function paintMarble(b: PixelBuf, x0: number, y0: number, seed: number): void {
   const race = themeRace(seed);
   if (race === 'orc') paintRoughFlags(b, x0, y0, seed);
   else if (race === 'elf') paintMoonwood(b, x0, y0, seed);
+  else if (race === 'undead') paintCrypt(b, x0, y0, seed);
   else paintAshlar(b, x0, y0, seed);
 }
 
@@ -495,6 +586,97 @@ function paintSidewalk(b: PixelBuf, x0: number, y0: number, seed: number): void 
       let k = 0;
       if (gap < 2.3 || c.f1 > 4.2) k = c.dx + c.dy < 0 ? 1 : 2;
       else if (c.dx < -1 && c.dy < -1 && c.f1 < 2) k = 1;
+      b.put(px, py, t[k]);
+    }
+  }
+}
+
+/**
+ * Corridor: wall-to-wall low-pile office carpet. `tint` is the pile colour (the department's), `tint2` the
+ * colour of a small woven diamond repeated every 16px on a half-drop grid. Fine speckle keeps it from looking
+ * flat; contrast stays low so people and furniture read clearly on top.
+ */
+function paintHall(b: PixelBuf, x0: number, y0: number, o: FloorOpts): void {
+  const base = o.tint ?? '#3e4658';
+  const motif = o.tint2 ?? shade(base, 0.18);
+  const pile = [rgba(base), rgba(shade(base, 0.04)), rgba(shade(base, -0.05)), rgba(shade(base, -0.09))];
+  const mot = rgba(motif);
+  const motDark = rgba(shade(motif, -0.18));
+  for (let py = 0; py < CHUNK_PX; py++) {
+    for (let px = 0; px < CHUNK_PX; px++) {
+      const wx = x0 + px;
+      const wy = y0 + py;
+      const row = wy >> 4;
+      const ix = ((wx + (row & 1 ? 8 : 0)) & 15) - 8;
+      const iy = (wy & 15) - 8;
+      const d = Math.abs(ix) + Math.abs(iy);
+      if (d === 2) {
+        b.put(px, py, mot);
+        continue;
+      }
+      if (d === 0) {
+        b.put(px, py, motDark);
+        continue;
+      }
+      const n = noise(wx, wy, 10, o.seed) * 0.5 + rnd01(wx, wy, 11, o.seed) * 0.5;
+      b.put(px, py, pile[n < 0.2 ? 3 : n < 0.42 ? 2 : n > 0.8 ? 1 : 0]);
+    }
+  }
+}
+
+/**
+ * Seam mask for FloorFade: whether the pixel (wx, wy) of the top floor survives at progress `t` (0 = fully the
+ * top floor, 1 = fully the floor underneath). Blotches of 2px pixels from two octaves of noise, so tufts of one
+ * floor reach into the other and stray bits are left behind, like worn edges.
+ */
+export function seamKeeps(wx: number, wy: number, t: number, seed: number): boolean {
+  if (t <= 0) return true;
+  if (t >= 1) return false;
+  const qx = wx >> 1;
+  const qy = wy >> 1;
+  const n = noise(qx, qy, 5, seed + 71) * 0.65 + noise(qx, qy, 2, seed + 73) * 0.2 + rnd01(qx, qy, 75, seed) * 0.15;
+  return n > 0.12 + t * 0.76;
+}
+
+const CRYPT_STONE = stonePal(['#55525c', '#4c4a54', '#5c5864', '#504c58']);
+const CRYPT_GAP = rgba('#26242c');
+const CRYPT_MOSS = [rgba('#5a3a80'), rgba('#7a4ab0'), rgba('#b07ae0')] as const;
+const CRYPT_BONE = [rgba('#d8d0b6'), rgba('#a8a08a')] as const;
+
+/**
+ * Undead: large cold slate slabs (Voronoi ~18px) with thin dark seams; a faint violet grave-glow creeps along
+ * some seams, slabs carry hairline cracks, and here and there a small bone lies on the floor.
+ */
+function paintCrypt(b: PixelBuf, x0: number, y0: number, seed: number): void {
+  for (let py = 0; py < CHUNK_PX; py++) {
+    for (let px = 0; px < CHUNK_PX; px++) {
+      const wx = x0 + px;
+      const wy = y0 + py;
+      // a small bone (3x1 with knobbed ends), at most one per 32px cell, rare
+      const cx = wx >> 5;
+      const cy = wy >> 5;
+      const bh = h3(cx, cy, 41, seed);
+      if (bh % 5 === 0) {
+        const bx = (cx << 5) + 6 + ((bh >>> 4) % 20);
+        const by = (cy << 5) + 6 + ((bh >>> 9) % 20);
+        const dx = wx - bx;
+        if ((wy === by && dx >= 0 && dx <= 3) || ((dx === 0 || dx === 3) && wy === by + 1)) {
+          b.put(px, py, CRYPT_BONE[wy === by ? 0 : 1]);
+          continue;
+        }
+      }
+      const c = stoneAt(wx, wy, 18, 0.7, seed);
+      const gap = c.f2 - c.f1;
+      if (gap < 1.4) {
+        const m = noise(wx, wy, 16, seed + 51);
+        b.put(px, py, m > 0.66 ? CRYPT_MOSS[m > 0.8 ? 2 : h3(wx, wy, 9, seed) & 1] : CRYPT_GAP);
+        continue;
+      }
+      const t = CRYPT_STONE[(c.id >>> 16) % CRYPT_STONE.length];
+      let k = 0;
+      if (gap < 2.6) k = c.dx + c.dy < 0 ? 1 : 2;
+      else if ((c.id >>> 8) % 3 === 0 && Math.abs(c.dx - c.dy * 0.6) < 0.5 && c.f1 < 7) k = 2;
+      else if (h3(wx, wy, 7, seed) % 29 === 0) k = 3;
       b.put(px, py, t[k]);
     }
   }

@@ -1,6 +1,6 @@
 // Tipos do layout do escritório. Módulos de layout são PUROS (sem DOM): geram descrições
 // que o render transforma em pixels e a simulação usa para caminhos e pontos de interesse.
-import type { Dir, FloorKind, FurnitureKind, WallStyle } from '../../art/api';
+import type { Dir, FloorFade, FloorKind, FurnitureKind, RugStyle, WallStyle } from '../../art/api';
 
 export type AreaKind = 'reception' | 'restroom' | 'cafe' | 'lounge' | 'room' | 'corridor';
 
@@ -62,6 +62,8 @@ export interface FloorPatch {
   seed: number;
   tint?: string;
   tint2?: string;
+  /** Organic seam into the floor drawn before it (px of world). */
+  fade?: FloorFade;
 }
 
 export interface RugPatch {
@@ -71,6 +73,8 @@ export interface RugPatch {
   h: number;
   color: string;
   seed: number;
+  /** Forces a rug look regardless of the colour ('crypt' = undead grave-cloth runner). */
+  style?: RugStyle;
 }
 
 export type SpotKind =
@@ -156,7 +160,26 @@ export interface AreaLayout {
 
 /** Elemento decorativo externo (árvore, arbusto, poste...) desenhado pelo próprio mundo. */
 export interface ExteriorProp {
-  kind: 'tree' | 'pine' | 'bush' | 'flowers' | 'lamp' | 'bench' | 'rock' | 'hedge' | 'parasol' | 'totem' | 'paving';
+  kind:
+    | 'tree'
+    | 'pine'
+    | 'bush'
+    | 'flowers'
+    | 'lamp'
+    | 'bench'
+    | 'rock'
+    | 'hedge'
+    | 'parasol'
+    | 'totem'
+    | 'paving'
+    // race biomes around the wings (layout/biome.ts): elf jungle, orc badlands, undead blight
+    | 'jungle_tree'
+    | 'fern'
+    | 'stump'
+    | 'log'
+    | 'dry_bush'
+    | 'dead_tree'
+    | 'grave';
   /** px de mundo: ponto central inferior (base). */
   x: number;
   y: number;

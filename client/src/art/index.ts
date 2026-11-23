@@ -12,6 +12,8 @@ import {
   type ArtModule,
   type CharacterFrameRequest,
   type Doorway,
+  type FloorFade,
+  type RugStyle,
   type FloorKind,
   type FurnitureKind,
   type FurnitureSprites,
@@ -29,7 +31,8 @@ import type { BufSprite } from './core/sprite';
 import { drawBoard, drawClock, drawScreen, drawWindowView, footballLance } from './dynamic';
 import { normalizeFurniture, renderFurniture } from './furniture/index';
 import { renderIcon } from './icons';
-import { CHUNK_PX, floorChunk } from './surfaces/floor';
+import { CHUNK_PX, floorChunk, seamKeeps } from './surfaces/floor';
+import { boneify } from './furniture/bone';
 import { WALL_CAP_H, WALL_FACE_H, capColor, southWallTile, wallFaceTile } from './surfaces/walls';
 import { renderRug } from './surfaces/rug';
 import { roomTheme as roomThemePure } from './theme';
@@ -134,12 +137,16 @@ export function avatarCanvas(seed: number, opts: { look?: 'f' | 'm'; sub?: boole
 
 // ------------------------------------------------------------------ móveis e ícones
 
-export function furnitureSprites(kind: FurnitureKind, variant?: string, state?: number, opts: { seed?: number } = {}): FurnitureSprites {
+export function furnitureSprites(kind: FurnitureKind, variant?: string, state?: number, opts: { seed?: number; bone?: boolean } = {}): FurnitureSprites {
   // Chave normalizada: sementes/variantes equivalentes compartilham o mesmo canvas.
   const n = normalizeFurniture(kind, variant, state, opts.seed);
-  const key = `${kind}|${n.variant ?? '-'}|${n.state}|${n.vseed}`;
+  const key = `${kind}|${n.variant ?? '-'}|${n.state}|${n.vseed}${opts.bone ? '|bone' : ''}`;
   return furnCache.get(key, () => {
     const f = renderFurniture(kind, n.variant, n.state, n.vseed);
+    if (opts.bone) {
+      boneify(f.base.buf);
+      if (f.front) boneify(f.front.buf);
+    }
     return { base: toSprite(f.base), front: f.front ? toSprite(f.front) : undefined };
   });
 }
@@ -169,7 +176,7 @@ export function drawFloor(
   y: number,
   w: number,
   h: number,
-  opts: { seed: number; tint?: string; tint2?: string },
+  opts: { seed: number; tint?: string; tint2?: string; fade?: FloorFade },
 ): void {
   // Blocos de 8x8 tiles alinhados à grade do mundo, recortados à área pedida.
   const cx0 = Math.floor(x / CHUNK_PX);
@@ -178,8 +185,9 @@ export function drawFloor(
   const cy1 = Math.ceil((y + h) / CHUNK_PX);
   for (let cy = cy0; cy < cy1; cy++) {
     for (let cx = cx0; cx < cx1; cx++) {
-      const key = `f|${kind}|${opts.seed}|${opts.tint ?? ''}|${opts.tint2 ?? ''}|${cx}|${cy}`;
-      const chunk = floorCache.get(key, () => toCanvas(floorChunk(kind, cx, cy, opts)));
+      const fd = opts.fade;
+      const key = `f|${kind}|${opts.seed}|${opts.tint ?? ''}|${opts.tint2 ?? ''}|${cx}|${cy}${fd ? `|${fd.axis}${fd.from}:${fd.to}` : ''}`;
+      const chunk = floorCache.get(key, () => toCanvas(fd ? fadeChunk(floorChunk(kind, cx, cy, opts), cx, cy, fd, opts.seed) : floorChunk(kind, cx, cy, opts)));
       const px = cx * CHUNK_PX;
       const py = cy * CHUNK_PX;
       const sx = Math.max(0, x - px);
@@ -192,11 +200,27 @@ export function drawFloor(
   }
 }
 
-export function drawRug(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, seed: number): void {
+/** Clears the pixels of a floor chunk that the seam gives to the floor underneath (see FloorFade). */
+function fadeChunk(b: PixelBuf, cx: number, cy: number, fd: FloorFade, seed: number): PixelBuf {
+  const x0 = cx * CHUNK_PX;
+  const y0 = cy * CHUNK_PX;
+  const span = fd.to - fd.from || 1;
+  for (let py = 0; py < b.h; py++) {
+    for (let px = 0; px < b.w; px++) {
+      const wx = x0 + px;
+      const wy = y0 + py;
+      const t = ((fd.axis === 'x' ? wx : wy) - fd.from) / span;
+      if (!seamKeeps(wx, wy, t, seed)) b.data[(py * b.w + px) * 4 + 3] = 0;
+    }
+  }
+  return b;
+}
+
+export function drawRug(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, seed: number, style?: RugStyle): void {
   const rw = Math.max(4, Math.round(w));
   const rh = Math.max(4, Math.round(h));
-  const key = `${rw}|${rh}|${color}|${seed}`;
-  const c = rugCache.get(key, () => toCanvas(renderRug(rw, rh, color, seed)));
+  const key = `${rw}|${rh}|${color}|${seed}|${style ?? ''}`;
+  const c = rugCache.get(key, () => toCanvas(renderRug(rw, rh, color, seed, style)));
   ctx.drawImage(c, Math.round(x), Math.round(y));
 }
 

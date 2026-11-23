@@ -19,6 +19,13 @@ export class RoomState {
   readonly seed: number;
   /** Vaga no prédio escolhida pelo cliente (sem buracos; ver Sim.compact). Pode diferir de info.slot. */
   slot: number;
+  /** Columns the room spans right now (see layout/room.ts annexes). */
+  span = 1;
+  /** Columns it should span (sim/span.ts); the room is rebuilt when this differs from `span`. */
+  wantSpan = 1;
+  /** Since when the head count asks for more / fewer columns (0 = it doesn't). */
+  overSince = 0;
+  underSince = 0;
   theme: RoomTheme;
   layout: AreaLayout;
   phase: RoomPhase;
@@ -53,6 +60,12 @@ export class RoomState {
     this.phaseAt = now;
     this.lightOn = lit;
     if (lit) this.lightAt = now - 10_000;
+  }
+
+  /** Whether the room covers building cell `slot` (its anchor or one of its annexes). */
+  covers(slot: number): boolean {
+    const d = slot - this.slot;
+    return d >= 0 && d % 2 === 0 && d / 2 < this.span;
   }
 
   get id(): string {

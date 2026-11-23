@@ -4,10 +4,13 @@ import { partsKey } from '../../../../shared/appearance';
 import type { AgentInfo, OfficeSnapshot, Provider, RoomInfo } from '../../../../shared/types';
 import type { ArtModule, Dir, RoomTheme } from '../../art/api';
 import type { WorldOptions } from '../api';
-import { COL_W, COMPACT_DELAY_MS, DISMANTLE_DELAY_MS, FOOT_DX, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
+import { COL_W, COMPACT_DELAY_MS, CORE_COL0, EAST_COL0, PLAZA_COL, DISMANTLE_DELAY_MS, FOOT_DX, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
 import { assembleBuilding, type BuildingLayout } from '../layout/building';
 import { RECEPTION_ID } from '../layout/core';
-import { columnsFor, inRect } from '../layout/geometry';
+import { cellSlot, coveredSlots, inRect, insideShape, shapeOf, slotColumn, slotSide, slotWing, type Shape } from '../layout/geometry';
+import type { AreaLayout } from '../layout/types';
+import { packDepartments, type DeptPlan } from '../layout/departments';
+import { raceOfSeed } from '../../../../shared/race';
 import { layoutProjectRoom } from '../layout/room';
 import type { SpotDef, SpotKind } from '../layout/types';
 import { PathFinder } from '../path/astar';
@@ -32,6 +35,7 @@ import { Character, dirOf, facing } from './character';
 import { Elevator } from './elevator';
 import { RoomFxState } from './github';
 import { RoomState } from './room-state';
+import { spanFor, updateSpan } from './span';
 import { countShells, latestShellDone, shellLabel, shellStage, shellWaitSince, spinDir, spinPhase, yawnPhase } from './shell';
 import { SpotRegistry } from './spots';
 import type { Step } from './steps';
@@ -151,7 +155,7 @@ export class Sim {
   ) {
     this.visit = !!mode.visit;
     this.social = new Social(this, storage);
-    this.building = assembleBuilding(columnsFor([]), [], 0);
+    this.building = assembleBuilding(shapeOf([]), [], 0);
     this.finder = new PathFinder(this.building.grid);
     this.spots.setSpots(this.building.spots);
     for (const s of this.spots.ofKind('elevator')) this.elevators.push(new Elevator(this.elevators.length, s.id));
@@ -174,13 +178,17 @@ export class Sim {
     // ---- salas
     let layoutDirty = false;
     const listed = new Set<string>();
+    const created: RoomState[] = [];
+    // people per room (a new room is built wide enough for all of them right away)
+    const heads = new Map<string, number>();
+    for (const a of snap.agents) if (a.status !== 'offline' && a.status !== 'done') heads.set(a.roomId, (heads.get(a.roomId) ?? 0) + 1);
     // na ordem de chegada (slot do servidor): na carga inicial as salas ocupam as vagas 0, 1, 2... nessa ordem
     for (const r of [...snap.rooms].sort((a, b) => a.slot - b.slot)) {
       if (this.hiddenRooms.has(r.id)) continue;
       listed.add(r.id);
       const rs = this.rooms.get(r.id);
       if (!rs) {
-        this.createRoom(r, first, now);
+        created.push(this.createRoom(r, first, now, spanFor(heads.get(r.id) ?? 0)));
         layoutDirty = true;
         continue;
       }
@@ -198,6 +206,7 @@ export class Sim {
         rs.unlistedAt = now;
       }
     }
+    if (created.length) this.placeNew(created);
     if (layoutDirty) this.relayout();
     this.roomFx.sync(snap.rooms, input.serverTime, now);
 
@@ -250,28 +259,64 @@ export class Sim {
     if (this.lastSnapshot) this.applySnapshot(this.lastSnapshot, now);
   }
 
-  private createRoom(r: RoomInfo, first: boolean, now: number): RoomState {
+  private createRoom(r: RoomInfo, first: boolean, now: number, span = 1): RoomState {
     let theme = FALLBACK_THEME;
     try {
       theme = this.art.roomTheme(r.seed) ?? FALLBACK_THEME;
     } catch {
       theme = FALLBACK_THEME;
     }
-    // a primeira vaga livre do prédio (o slot do servidor só dá a ordem de chegada)
-    const slot = this.freeSlot();
-    const layout = layoutProjectRoom({ id: r.id, slot, seed: r.seed }, theme);
-    const rs = new RoomState(r, theme, layout, first ? 'ready' : 'building', now, first, slot);
+    // placed by placeNew (its department's spot if free, otherwise parked past the east end)
+    const layout = layoutProjectRoom({ id: r.id, slot: 0, seed: r.seed }, theme);
+    const rs = new RoomState(r, theme, layout, first ? 'ready' : 'building', now, first, Number.NaN);
+    rs.span = span;
+    rs.wantSpan = span;
     this.rooms.set(r.id, rs);
     return rs;
   }
 
-  /** Menor vaga sem sala (contando as que ainda estão desmontando). */
-  private freeSlot(): number {
-    const used = new Set<number>();
-    for (const r of this.rooms.values()) if (r.phase !== 'gone') used.add(r.slot);
-    let slot = 0;
-    while (used.has(slot)) slot++;
-    return slot;
+  /** Where every listed room should be: packed into race departments (layout/departments.ts). */
+  private plan(): DeptPlan {
+    const rooms = [...this.rooms.values()].filter((r) => !r.ghost && r.listed && r.phase !== 'dismantling' && r.phase !== 'gone');
+    return packDepartments(rooms.map((r) => ({ id: r.id, race: raceOfSeed(r.seed), span: r.wantSpan, order: (r.info.createdAt ?? 0) * 1000 + r.info.slot })));
+  }
+
+  /** Building cell -> room covering it (rooms that are drawn, ghosts included), skipping `skip`. */
+  private cellOwners(skip?: ReadonlySet<RoomState>): Map<number, RoomState> {
+    const owner = new Map<number, RoomState>();
+    for (const r of this.rooms.values()) {
+      if (!r.present || Number.isNaN(r.slot) || skip?.has(r)) continue;
+      for (const c of coveredSlots(r.slot, r.span)) owner.set(c, r);
+    }
+    return owner;
+  }
+
+  /** North cell at the far east end, past every room in use and the planned orc wing, where a room can wait. */
+  private parkingSlot(owner: ReadonlyMap<number, RoomState>, plan: DeptPlan): number {
+    let col = plan.shape.east;
+    for (const c of owner.keys()) if (slotWing(c) === 'east') col = Math.max(col, slotColumn(c) - EAST_COL0 + 1);
+    return cellSlot(EAST_COL0 + col, 'north');
+  }
+
+  /** Puts newly created rooms at their department spot (or parks them past the end until the spot frees up). */
+  private placeNew(created: RoomState[]): void {
+    const plan = this.plan();
+    const owner = this.cellOwners(new Set(created));
+    const order = [...created].sort((a, b) => (plan.targets.get(a.id)?.slot ?? 1e9) - (plan.targets.get(b.id)?.slot ?? 1e9));
+    for (const rs of order) {
+      const t = plan.targets.get(rs.id);
+      const slot = t && coveredSlots(t.slot, rs.span).every((c) => !owner.has(c)) ? t.slot : this.parkingSlot(owner, plan);
+      rs.slot = slot;
+      rs.layout = layoutProjectRoom({ id: rs.id, slot, seed: rs.seed, span: rs.span }, rs.theme);
+      for (const c of coveredSlots(slot, rs.span)) owner.set(c, rs);
+    }
+  }
+
+  /** People who belong to the room (arriving or seated, not leaving). */
+  private headCount(room: RoomState): number {
+    let n = 0;
+    for (const c of this.chars.values()) if (!c.gone && !c.leaving && c.roomId === room.id) n++;
+    return n;
   }
 
   private updateAgent(ch: Character, a: AgentInfo, now: number): void {
@@ -519,21 +564,17 @@ export class Sim {
   /** Recalcula o prédio (largura, grade, spots) a partir das salas presentes. */
   relayout(force = false): void {
     const present = [...this.rooms.values()].filter((r) => r.present);
-    let cols = columnsFor(present.map((r) => r.slot));
-    const cur = this.building.cols;
-    if (cols < cur && !force) {
-      // só encolhe quando ninguém está na faixa que vai sumir
-      const limit = cols * COL_W * TILE;
-      if ([...this.chars.values()].some((c) => !c.gone && c.x >= limit - TILE)) {
-        cols = cur;
+    let shape = shapeOf(present.flatMap((r) => coveredSlots(r.slot, r.span)));
+    const cur = this.building.shape;
+    if ((shape.west < cur.west || shape.east < cur.east || shape.north < cur.north || shape.south < cur.south) && !force) {
+      // only shrinks once nobody is standing in the part that would go away
+      if ([...this.chars.values()].some((c) => !c.gone && !insideShape(shape, c.tx, c.ty) && insideShape(cur, c.tx, c.ty))) {
+        shape = { west: Math.max(shape.west, cur.west), east: Math.max(shape.east, cur.east), north: Math.max(shape.north, cur.north), south: Math.max(shape.south, cur.south) };
         this.shrinkPending = true;
       } else this.shrinkPending = false;
     } else this.shrinkPending = false;
-    const building = assembleBuilding(
-      cols,
-      present.map((r) => r.layout),
-      this.layoutVersion + 1,
-    );
+    openHalls(present, shape);
+    const building = assembleBuilding(shape, present.map((r) => r.layout), this.layoutVersion + 1);
     this.building = building;
     this.layoutVersion++;
     this.finder.setGrid(building.grid);
@@ -606,6 +647,8 @@ export class Sim {
       }
     }
     if (this.shrinkPending) this.relayout();
+    // busy rooms grow, quiet ones shrink back (sim/span.ts); reconcile() rebuilds them
+    for (const room of this.rooms.values()) if (!room.ghost && room.listed && !Number.isNaN(room.slot)) updateSpan(room, this.headCount(room), now);
     this.social.housekeeping(now);
     for (const [id, until] of this.machineUntil) if (until < now) this.machineUntil.delete(id);
     this.refreshRoomInfo();
@@ -637,30 +680,87 @@ export class Sim {
       }
     }
     if (dirty) this.relayout();
-    this.compact(now);
+    this.reconcile(now);
   }
 
   // =================================================================== mudança de sala
 
   /**
-   * Sem buracos entre as salas: quando uma vaga fica livre antes da última sala (um terminal fechou e a
-   * sala foi desmontada), a sala mais distante se muda para ela depois de COMPACT_DELAY_MS. Uma sala por
-   * vez, só sala pronta e com a sessão aberta; o prédio encolhe quando o endereço antigo é desmontado.
+   * Keeps rooms where the department plan wants them (layout/departments.ts) and at the size their head count
+   * wants (sim/span.ts). One change at a time, COMPACT_DELAY_MS apart, only for ready rooms with the session
+   * open: the farthest room whose target cells are free moves first (a ghost stays at the old address until it
+   * empties), a room growing or shrinking in place is just rebuilt wider or narrower. When nothing can move and
+   * nothing is still being built or torn down, one blocking room is parked past the east end, which always
+   * frees the way.
    */
-  private compact(now: number): void {
-    const free = this.freeSlot();
-    let far: RoomState | null = null;
-    for (const r of this.rooms.values()) {
-      if (r.slot > free && !r.ghost && r.listed && r.phase === 'ready' && (!far || r.slot > far.slot)) far = r;
-    }
-    if (!far) {
+  private reconcile(now: number): void {
+    const next = this.nextChange();
+    if (!next) {
       this.gapSince = 0;
       return;
     }
     if (!this.gapSince) this.gapSince = now;
     if (now - this.gapSince < COMPACT_DELAY_MS) return;
     this.gapSince = 0;
-    this.moveRoom(far, free, now);
+    if (next.slot === next.room.slot) this.resizeRoom(next.room, next.span);
+    else this.moveRoom(next.room, next.slot, now, next.span);
+  }
+
+  /** The next room to move or resize toward the department plan, if any can go right now. */
+  private nextChange(): { room: RoomState; slot: number; span: number } | null {
+    const plan = this.plan();
+    const movers = [...this.rooms.values()].filter((r) => {
+      const t = plan.targets.get(r.id);
+      return !!t && !r.ghost && r.listed && r.phase === 'ready' && (t.slot !== r.slot || t.span !== r.span);
+    });
+    if (!movers.length) return null;
+    const owner = this.cellOwners();
+    movers.sort((a, b) => plan.targets.get(b.id)!.slot - plan.targets.get(a.id)!.slot);
+    for (const r of movers) {
+      const t = plan.targets.get(r.id)!;
+      const cells = coveredSlots(t.slot, t.span);
+      if (cells.some((c) => owner.has(c) && owner.get(c) !== r)) continue;
+      // in place: grow or shrink; a new address that overlaps the old one needs the room to step aside first
+      if (t.slot === r.slot || !cells.some((c) => owner.get(c) === r)) return { room: r, slot: t.slot, span: t.span };
+    }
+    for (const r of this.rooms.values()) if (r.present && (r.ghost || r.phase !== 'ready' || !r.listed)) return null;
+    const t = plan.targets.get(movers[0].id)!;
+    let blocker: RoomState = movers[0];
+    for (const c of coveredSlots(t.slot, t.span)) {
+      const o = owner.get(c);
+      if (o && o !== movers[0]) {
+        blocker = o;
+        break;
+      }
+    }
+    return { room: blocker, slot: this.parkingSlot(owner, plan), span: blocker.span };
+  }
+
+  /** Rebuilds a room wider or narrower where it stands (base spots keep their ids, see layout/room.ts). */
+  private resizeRoom(room: RoomState, span: number): void {
+    const before = room.layout;
+    room.span = span;
+    room.layout = layoutProjectRoom({ id: room.id, slot: room.slot, seed: room.seed, span }, room.theme);
+    room.version++;
+    this.relayout();
+    // whoever was in a part of the room that no longer exists walks back in
+    for (const ch of this.chars.values()) {
+      if (ch.gone) continue;
+      if (inRect(before.rect, ch.tx, ch.ty) && !inRect(room.layout.rect, ch.tx, ch.ty)) this.interrupt(ch);
+    }
+    this.upgradeSeats(room);
+  }
+
+  /** After a room grew: whoever is standing or on a stool because it was full takes one of the new desks. */
+  private upgradeSeats(room: RoomState): void {
+    for (const ch of this.chars.values()) {
+      if (ch.gone || ch.leaving || ch.roomId !== room.id) continue;
+      if (!ch.standTile && !(ch.homeSpot && this.spots.get(ch.homeSpot)?.kind !== 'desk')) continue;
+      if (ch.homeSpot) this.spots.release(ch.homeSpot, ch.id);
+      ch.homeSpot = null;
+      ch.standTile = null;
+      this.interrupt(ch);
+    }
   }
 
   /**
@@ -669,11 +769,14 @@ export class Sim {
    * mantêm os ids (cada um continua com a sua mesa, agora na sala nova); quem está sentado ou a caminho
    * de um lugar da sala passa a usar o lugar equivalente da fantasma, levanta dali e vai andando.
    */
-  moveRoom(room: RoomState, slot: number, now: number): void {
+  moveRoom(room: RoomState, slot: number, now: number, span = room.span): void {
     const before = room.layout;
+    const grew = span > room.span;
     const ghostId = `${room.id}#mudança${++this.moveSeq}`;
-    const ghostLayout = layoutProjectRoom({ id: ghostId, slot: room.slot, seed: room.seed }, room.theme);
+    const ghostLayout = layoutProjectRoom({ id: ghostId, slot: room.slot, seed: room.seed, span: room.span }, room.theme);
     const ghost = new RoomState({ ...room.info, id: ghostId, seed: room.seed }, room.theme, ghostLayout, 'ready', now, false, room.slot);
+    ghost.span = room.span;
+    ghost.wantSpan = room.span;
     ghost.ghost = true;
     ghost.listed = false;
     ghost.unlistedAt = now;
@@ -688,7 +791,8 @@ export class Sim {
     });
 
     room.slot = slot;
-    room.layout = layoutProjectRoom({ id: room.id, slot, seed: room.seed }, room.theme);
+    room.span = span;
+    room.layout = layoutProjectRoom({ id: room.id, slot, seed: room.seed, span }, room.theme);
     room.setPhase('building', now);
     room.lightOn = false;
     room.lightAt = -1e9;
@@ -723,6 +827,7 @@ export class Sim {
         this.interrupt(ch);
       }
     }
+    if (grew) this.upgradeSeats(room);
   }
 
   private switchClaimValid(room: RoomState): boolean {
@@ -1298,7 +1403,7 @@ export class Sim {
     let best: { x: number; y: number } | null = null;
     let bestScore = -Infinity;
     for (let y = r.y + 2; y <= r.y + 10; y++) {
-      for (let x = r.x + 1; x <= r.x + 14; x++) {
+      for (let x = r.x + 1; x <= r.x + r.w - 2; x++) {
         if (!this.overflowFree(x, y, ch, busy)) continue;
         if (door && Math.abs(x - (door.x + door.w / 2 - 0.5)) <= 1.5 && Math.abs(y - (door.y + door.h / 2 - 0.5)) <= 2) continue;
         // de costas para uma parede/móvel parece natural; espremido entre dois móveis ou colado em
@@ -1991,5 +2096,35 @@ export class Sim {
       default:
         break;
     }
+  }
+}
+
+/** Open sides each room layout was built with ('' = closed on both sides). */
+const openOf = new WeakMap<AreaLayout, string>();
+
+/**
+ * Open-plan halls: neighbouring project rooms of the same wing and side lose the partition wall between them, and
+ * a wing's last room loses its end wall to the ring round the hall, so each wing reads as one hall with a
+ * department per project. Rebuilds only the rooms whose open sides changed.
+ */
+function openHalls(present: readonly RoomState[], shape: Shape): void {
+  const owner = new Map<number, RoomState>();
+  for (const r of present) if (!r.ghost && Number.isFinite(r.slot)) for (const c of coveredSlots(r.slot, r.span)) owner.set(c, r);
+  const joins = (r: RoomState, cell: number, col: number) => {
+    const o = owner.get(cell);
+    return !!o && o !== r && slotWing(cell) === slotWing(r.slot) && slotSide(cell) === slotSide(r.slot) && slotColumn(cell) === col;
+  };
+  for (const r of present) {
+    if (r.ghost || !Number.isFinite(r.slot)) continue;
+    const col = slotColumn(r.slot);
+    // a wing's last room opens onto the ring round the hall too (the elves' tree has none)
+    const wing = slotWing(r.slot);
+    const beyond = (c: number) => (wing === 'west' ? c < CORE_COL0 - shape.west : wing === 'east' ? c >= EAST_COL0 + shape.east : wing === 'south' ? c < PLAZA_COL - shape.south : false);
+    const west = joins(r, r.slot - 2, col - 1) || beyond(col - 1);
+    const east = joins(r, r.slot + r.span * 2, col + r.span) || beyond(col + r.span);
+    const key = west || east ? `${west ? 'w' : ''}${east ? 'e' : ''}` : '';
+    if ((openOf.get(r.layout) ?? '') === key) continue;
+    r.layout = layoutProjectRoom({ id: r.id, slot: r.slot, seed: r.seed, span: r.span, open: { west, east } }, r.theme);
+    openOf.set(r.layout, key);
   }
 }

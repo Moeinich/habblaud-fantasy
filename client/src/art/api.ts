@@ -276,11 +276,28 @@ export type FloorKind =
   | 'wood' // lounge
   | 'tile_check' // copa (xadrez)
   | 'tile_white' // banheiro
-  | 'concrete' // corredor (cimento queimado/polido)
+  | 'concrete' // packed earth (old corridor; still in the art preview)
+  | 'hall' // corridor: wall-to-wall office carpet (tint = base, tint2 = woven motif)
   | 'marble' // recepção
   | 'grass' // área externa
+  | 'jungle' // outside the elf wing: deep, lush undergrowth with ferns and moss
+  | 'desert' // outside the orc wing: dry, cracked sand and pebbles
+  | 'blight' // outside the undead wing: dead purple-grey earth with withered tufts
   | 'sidewalk' // calçada externa
   | 'street'; // rua externa (faixas desenhadas pelo render se quiser)
+
+/**
+ * Organic seam between two floors: the floor is kept fully at `from` and gone at `to` (px of world, along
+ * `axis`), with a blotchy pixel edge in between, so it interlocks with the floor underneath instead of fading.
+ */
+export interface FloorFade {
+  axis: 'x' | 'y';
+  from: number;
+  to: number;
+}
+
+/** Forced rug look (otherwise the colour picks it). */
+export type RugStyle = 'crypt';
 
 export type WallPattern = 'plain' | 'stripes' | 'tiles' | 'wood_panel' | 'brick' | 'glass' | 'marble'
   | 'grove' // (additive) elf: living moonwood trunks with vines, leaves and a silver crescent band
@@ -354,11 +371,12 @@ export interface ArtModule {
    * `opts.seed` (opcional, aditivo) varia os detalhes de itens repetidos (objetos sobre a mesa, livros da
    * estante, pastas...). Sem seed, usa a variação 0. Sprites continuam em cache por (kind, variant, state, seed % N).
    */
-  furnitureSprites(kind: FurnitureKind, variant?: string, state?: number, opts?: { seed?: number }): FurnitureSprites;
+  /** `bone`: drawn as undead furniture (wood and hide turn to bone, red leather to grave violet). */
+  furnitureSprites(kind: FurnitureKind, variant?: string, state?: number, opts?: { seed?: number; bone?: boolean }): FurnitureSprites;
   /** Desenha uma área de piso (px de mundo, múltiplos de TILE). `seed` varia detalhes por tile. */
-  drawFloor(ctx: CanvasRenderingContext2D, kind: FloorKind, x: number, y: number, w: number, h: number, opts: { seed: number; tint?: string; tint2?: string }): void;
+  drawFloor(ctx: CanvasRenderingContext2D, kind: FloorKind, x: number, y: number, w: number, h: number, opts: { seed: number; tint?: string; tint2?: string; fade?: FloorFade }): void;
   /** Tapete decorativo sobre o piso. */
-  drawRug(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, seed: number): void;
+  drawRug(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, seed: number, style?: RugStyle): void;
   /** Face de parede norte: altura 2*TILE a partir de y, com "tampa" escura no topo e rodapé na base. */
   drawWallFace(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, style: WallStyle, opts?: { doorways?: Doorway[] }): void;
   /** Tampa de parede (laterais e trechos sem face), retângulo arbitrário. */

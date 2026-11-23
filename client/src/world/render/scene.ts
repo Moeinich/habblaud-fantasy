@@ -6,10 +6,13 @@ import type { AreaLayout, WallItemPlacement, WallSegment } from '../layout/types
 import type { RoomState } from '../sim/room-state';
 import type { WallArtAsset, WorldAssets } from '../assets';
 import type { SeasonalTheme } from '../api';
-import { decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWallStyle } from './seasonal';
+import { decorateRaceWall } from './race-decor';
+import { raceOfSeed } from '../../../../shared/race';
+import { areaTheme, decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWallStyle } from './seasonal';
 
 /** Margem acima da área no cache de paredes (itens que passam do topo da face). */
-export const WALL_MARGIN = 16;
+/** Room above a room's own rectangle in its cached wall layer (decorations lifted onto a hall's ring). */
+export const WALL_MARGIN = 48;
 
 /** Itens de parede redesenhados a cada frame (o resto vai para o cache). */
 const DYNAMIC_WALL: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['window', 'clock', 'whiteboard', 'tv', 'elevator', 'light_switch', 'sign', 'mirror']);
@@ -28,6 +31,8 @@ export interface FurnVis {
   seatSpot?: string;
   /** Sprites por estado (resolvidos sob demanda). */
   states: (FurnitureSprites | null | undefined)[];
+  /** Undead room: the piece is drawn in bone and grave violet (art `bone` option). */
+  bone?: boolean;
 }
 
 export interface WallVis {
@@ -65,12 +70,12 @@ function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCo
 }
 
 /** Sprites de um móvel com tolerância a falhas da arte (stub, variante desconhecida...). */
-export function furnitureSprites(art: ArtModule, f: { kind: FurnitureKind; variant?: string; seed: number; states: (FurnitureSprites | null | undefined)[] }, state = 0): FurnitureSprites | null {
+export function furnitureSprites(art: ArtModule, f: { kind: FurnitureKind; variant?: string; seed: number; states: (FurnitureSprites | null | undefined)[]; bone?: boolean }, state = 0): FurnitureSprites | null {
   const hit = f.states[state];
   if (hit !== undefined) return hit;
   let s: FurnitureSprites | null = null;
   try {
-    s = art.furnitureSprites(f.kind, f.variant, state, { seed: f.seed }) ?? null;
+    s = art.furnitureSprites(f.kind, f.variant, state, { seed: f.seed, bone: f.bone }) ?? null;
     if (s && !s.base?.canvas) s = null;
   } catch {
     s = null;
@@ -195,7 +200,7 @@ function drawRawPainting(ctx: CanvasRenderingContext2D, s: Sprite, ox: number, o
 }
 
 /** Tom leve da sala sobre o piso (multiplicação: mantém veios e rejunte). */
-function tintFloor(ctx: CanvasRenderingContext2D, px: { x: number; y: number; w: number; h: number }, color: string): void {
+export function tintFloor(ctx: CanvasRenderingContext2D, px: { x: number; y: number; w: number; h: number }, color: string): void {
   const m = /^#?([0-9a-f]{6})$/i.exec(color.trim());
   if (!m) return;
   const n = parseInt(m[1], 16);
@@ -209,7 +214,8 @@ function tintFloor(ctx: CanvasRenderingContext2D, px: { x: number; y: number; w:
   ctx.restore();
 }
 
-export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState | undefined, assets: WorldAssets | null, theme: SeasonalTheme = 'none'): AreaVis {
+export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState | undefined, assets: WorldAssets | null, seasonTheme: SeasonalTheme = 'none'): AreaVis {
+  const theme = areaTheme(seasonTheme, room);
   const r = layout.rect;
   const px = { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 
@@ -218,7 +224,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
   fctx.translate(-px.x, -px.y);
   for (const f of layout.floors) {
     try {
-      art.drawFloor(fctx, f.kind, f.x, f.y, f.w, f.h, { seed: f.seed, tint: f.tint, tint2: f.tint2 });
+      art.drawFloor(fctx, f.kind, f.x, f.y, f.w, f.h, { seed: f.seed, tint: f.tint, tint2: f.tint2, fade: f.fade });
     } catch {
       fctx.fillStyle = '#d9dde2';
       fctx.fillRect(f.x, f.y, f.w, f.h);
@@ -228,7 +234,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
   for (const rug of layout.rugs) {
     const color = seasonalRugColor(theme, rug.color);
     try {
-      art.drawRug(fctx, rug.x, rug.y, rug.w, rug.h, color, rug.seed);
+      art.drawRug(fctx, rug.x, rug.y, rug.w, rug.h, color, rug.seed, rug.style);
     } catch {
       fctx.fillStyle = color;
       fctx.fillRect(rug.x, rug.y, rug.w, rug.h);
@@ -242,6 +248,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
   const order = { face: 0, south: 1, cap: 2 } as const;
   for (const w of [...layout.walls].sort((a, b) => order[a.kind] - order[b.kind])) drawWallSegment(art, wctx, { ...w, style: seasonalWallStyle(theme, w.style) });
   for (const w of layout.walls) decorateSeasonalWall(wctx, theme, w);
+  if (room) for (const w of layout.walls) decorateRaceWall(wctx, raceOfSeed(room.seed), w, room.seed);
 
   const wallItems: WallVis[] = [];
   let sign: WallVis | undefined;
@@ -263,6 +270,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
   }
 
   // ---- móveis
+  const bone = !!room && raceOfSeed(room.seed) === 'undead';
   const furniture: FurnVis[] = layout.furniture.map((f) => {
     const def = FURNITURE[f.kind];
     const ax = (f.tx + def.footprint.w / 2) * TILE + (f.dx ?? 0);
@@ -278,6 +286,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
       areaId: layout.id,
       seatSpot: layout.spots.find((s) => s.deskId === f.id)?.id,
       states: [],
+      bone,
     };
   });
 
@@ -292,7 +301,7 @@ export function toWallVis(it: WallItemPlacement, areaId: string): WallVis {
 export function paintShell(art: ArtModule, ctx: CanvasRenderingContext2D, floors: AreaLayout['floors'], walls: WallSegment[]): void {
   for (const f of floors) {
     try {
-      art.drawFloor(ctx, f.kind, f.x, f.y, f.w, f.h, { seed: f.seed, tint: f.tint, tint2: f.tint2 });
+      art.drawFloor(ctx, f.kind, f.x, f.y, f.w, f.h, { seed: f.seed, tint: f.tint, tint2: f.tint2, fade: f.fade });
     } catch {
       ctx.fillStyle = '#9fc77f';
       ctx.fillRect(f.x, f.y, f.w, f.h);

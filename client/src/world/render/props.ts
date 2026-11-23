@@ -337,6 +337,198 @@ function totemSprite(): PropSprite {
   return { canvas: c, ax: 7, ay: 32 };
 }
 
+// ------------------------------------------------------------------ race biomes
+
+/** Jungle giant: a thick buttressed trunk wrapped in vines under a broad, layered crown with glowing blossoms. */
+function jungleTreeSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 101);
+  const [c, ctx] = makeCanvas(52, 68);
+  shadowEllipse(ctx, 26, 65, 17, 4, 0.3);
+  const p = new Painter(ctx, 52, 68);
+  for (let y = 34; y < 66; y++) {
+    const flare = y > 58 ? (y - 58) * 0.8 : 0;
+    const x0 = Math.round(22 - flare);
+    const x1 = Math.round(30 + flare);
+    for (let x = x0; x <= x1; x++) p.set(x, y, x === x0 ? '#2a1e1a' : x - x0 < 3 ? '#6a5040' : x1 - x < 2 ? '#3a2a24' : '#523e32');
+  }
+  // vines spiralling round the trunk
+  for (let y = 36; y < 64; y++) {
+    const x = 26 + Math.round(Math.sin(y * 0.45) * 4);
+    p.set(x, y, '#3f7a3e');
+    if (y % 3 === 0) p.set(x + 1, y, '#5fae5a');
+  }
+  canopy(p, rng, 16, 30, 11, ['#1f4a30', '#2a6038', '#3a7e48', '#5aa05e'], '#173826');
+  canopy(p, rng, 36, 28, 12, ['#1f4a30', '#2a6038', '#3a7e48', '#5aa05e'], '#173826');
+  canopy(p, rng, 26, 16, 14, ['#24543a', '#2f6c44', '#428c52', '#66b066'], '#173826');
+  for (let i = 0; i < 6; i++) {
+    const x = 8 + Math.floor(rng() * 36);
+    const y = 6 + Math.floor(rng() * 30);
+    if (p.alpha(x, y) < 200) continue;
+    p.set(x, y, '#c8fff6');
+    p.set(x + 1, y, '#8ff0e0');
+  }
+  // hanging vines from the crown
+  for (let k = 0; k < 4; k++) {
+    const x = 10 + Math.floor(rng() * 32);
+    for (let y = 36; y < 40 + Math.floor(rng() * 10); y++) p.set(x, y, y % 2 ? '#3f7a3e' : '#2a5a30');
+  }
+  p.flush();
+  return { canvas: c, ax: 26, ay: 65 };
+}
+
+/** Big-leafed jungle undergrowth. */
+function fernSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 202);
+  const [c, ctx] = makeCanvas(26, 18);
+  shadowEllipse(ctx, 13, 16, 10, 2, 0.22);
+  const p = new Painter(ctx, 26, 18);
+  for (let f = 0; f < 6; f++) {
+    const a = Math.PI * (0.1 + (f / 5) * 0.8) + (rng() - 0.5) * 0.2;
+    const len = 8 + rng() * 4;
+    for (let t = 0; t < len; t++) {
+      const x = Math.round(13 - Math.cos(a) * t);
+      const y = Math.round(15 - Math.sin(a) * t * 0.9);
+      p.set(x, y, '#24482c');
+      const w = Math.round(Math.sin((t / len) * Math.PI) * 2.5);
+      for (let d = 1; d <= w; d++) {
+        p.set(x, y - d, t % 2 ? '#4f9a4e' : '#62b05a');
+        p.set(x, y + d, '#3a7a40');
+      }
+    }
+  }
+  p.flush();
+  return { canvas: c, ax: 13, ay: 16 };
+}
+
+/** A felled tree's stump, cut flat, with growth rings and splinters. */
+function stumpSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 303);
+  const [c, ctx] = makeCanvas(20, 16);
+  shadowEllipse(ctx, 10, 14, 8, 2, 0.25);
+  const p = new Painter(ctx, 20, 16);
+  for (let y = 7; y < 14; y++) for (let x = 4; x < 16; x++) p.set(x, y, x === 4 ? '#3a2a1e' : x === 15 ? '#2e2018' : x < 7 ? '#7a5a3e' : '#5e4430');
+  for (let y = 3; y < 9; y++) {
+    for (let x = 4; x < 16; x++) {
+      const d = ((x - 9.5) / 6) ** 2 + ((y - 6) / 3) ** 2;
+      if (d > 1) continue;
+      const ring = Math.floor(Math.sqrt(d) * 4);
+      p.set(x, y, d > 0.8 ? '#3a2a1e' : ring % 2 ? '#c8a070' : '#b08858');
+    }
+  }
+  // splinters and a root
+  if (rng() < 0.6) {
+    p.set(6, 3, '#d8b888');
+    p.set(6, 2, '#c8a070');
+  }
+  p.set(3, 13, '#3a2a1e');
+  p.set(16, 13, '#3a2a1e');
+  p.flush();
+  return { canvas: c, ax: 10, ay: 14 };
+}
+
+/** A felled trunk lying on the ground, the cut end showing its rings. */
+function logSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 404);
+  const flip = rng() < 0.5;
+  const [c, ctx] = makeCanvas(36, 14);
+  shadowEllipse(ctx, 18, 12, 16, 2, 0.25);
+  const p = new Painter(ctx, 36, 14);
+  for (let x = 4; x < 32; x++) {
+    for (let y = 4; y < 11; y++) p.set(flip ? 35 - x : x, y, y === 4 ? '#8a6648' : y === 10 ? '#2e2018' : y < 7 ? '#6a4e38' : '#523c2c');
+    if (x % 5 === 0) p.set(flip ? 35 - x : x, 6, '#3a2a1e');
+  }
+  for (let y = 4; y < 11; y++) {
+    for (let x = 0; x < 6; x++) {
+      const d = ((x - 2.5) / 3) ** 2 + ((y - 7) / 3.5) ** 2;
+      if (d > 1) continue;
+      p.set(flip ? 35 - (29 + x) : 29 + x, y, d > 0.7 ? '#5e4430' : Math.floor(Math.sqrt(d) * 3) % 2 ? '#c8a070' : '#b08858');
+    }
+  }
+  p.flush();
+  return { canvas: c, ax: 18, ay: 12 };
+}
+
+/** Dry thorn bush of the badlands. */
+function dryBushSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 505);
+  const [c, ctx] = makeCanvas(20, 16);
+  shadowEllipse(ctx, 10, 14, 7, 2, 0.2);
+  const p = new Painter(ctx, 20, 16);
+  for (let k = 0; k < 7; k++) {
+    let x = 10;
+    let y = 14;
+    const dx = (rng() - 0.5) * 1.6;
+    for (let t = 0; t < 8 + rng() * 4; t++) {
+      x += dx;
+      y -= 1;
+      p.set(Math.round(x), y, t > 5 ? '#a08440' : '#6e5430');
+      if (t > 3 && rng() < 0.3) p.set(Math.round(x) + 1, y, '#8a7038');
+    }
+  }
+  p.flush();
+  return { canvas: c, ax: 10, ay: 14 };
+}
+
+/** Dead tree of the blight: a bare, twisted black-violet trunk with crooked branches. */
+function deadTreeSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 606);
+  const [c, ctx] = makeCanvas(40, 52);
+  shadowEllipse(ctx, 20, 49, 11, 3, 0.28);
+  const p = new Painter(ctx, 40, 52);
+  const branch = (x: number, y: number, a: number, len: number, w: number, depth: number) => {
+    for (let t = 0; t < len; t++) {
+      x += Math.cos(a);
+      y -= Math.sin(a);
+      a += (rng() - 0.5) * 0.35;
+      for (let d = 0; d < w; d++) p.set(Math.round(x) + d, Math.round(y), d === 0 ? '#9a8aa2' : '#5a4c62');
+    }
+    if (depth > 0) {
+      branch(x, y, a + 0.5 + rng() * 0.3, len * 0.6, Math.max(1, w - 1), depth - 1);
+      branch(x, y, a - 0.5 - rng() * 0.3, len * 0.6, Math.max(1, w - 1), depth - 1);
+    }
+  };
+  for (let y = 30; y < 50; y++) for (let x = 18; x < 23; x++) p.set(x, y, x === 18 ? '#9a8aa2' : x === 22 ? '#2a2030' : '#5a4c62');
+  branch(20, 30, Math.PI / 2, 10, 3, 3);
+  // a crow or a lantern now and then
+  if (rng() < 0.4) {
+    const x = 8 + Math.floor(rng() * 24);
+    const y = 6 + Math.floor(rng() * 16);
+    if (p.alpha(x, y + 1) > 0) {
+      p.set(x, y, '#141018');
+      p.set(x + 1, y, '#141018');
+      p.set(x + 1, y - 1, '#141018');
+      p.set(x + 2, y - 1, '#e0b23c');
+    }
+  }
+  p.flush();
+  return { canvas: c, ax: 20, ay: 49 };
+}
+
+/** A weathered gravestone, rounded or a cross, mossy at the foot. */
+function graveSprite(seed: number): PropSprite {
+  const rng = mulberry32(seed + 707);
+  const [c, ctx] = makeCanvas(14, 18);
+  shadowEllipse(ctx, 7, 16, 6, 2, 0.25);
+  const p = new Painter(ctx, 14, 18);
+  const stone = ['#4e4a56', '#6a6672', '#8a8692', '#a8a4b0'];
+  if (rng() < 0.65) {
+    for (let y = 3; y < 16; y++) {
+      for (let x = 2; x < 12; x++) {
+        if (y < 6 && (x - 7) ** 2 + (y - 6) ** 2 > 22) continue;
+        p.set(x, y, x === 2 || x === 11 || y === 3 ? stone[0] : x < 5 ? stone[3] : x < 9 ? stone[2] : stone[1]);
+      }
+    }
+    for (const x of [5, 6, 7, 8]) p.set(x, 8, stone[0]);
+    for (const x of [5, 6, 7]) p.set(x, 10, stone[0]);
+  } else {
+    for (let y = 2; y < 16; y++) for (let x = 6; x < 9; x++) p.set(x, y, x === 6 ? stone[3] : x === 8 ? stone[0] : stone[2]);
+    for (let y = 5; y < 8; y++) for (let x = 2; x < 13; x++) p.set(x, y, y === 5 ? stone[3] : y === 7 ? stone[0] : stone[2]);
+  }
+  for (let x = 2; x < 12; x++) if (rng() < 0.6) p.set(x, 15, '#4a6a3a');
+  p.flush();
+  return { canvas: c, ax: 7, ay: 16 };
+}
+
 export function propSprite(prop: ExteriorProp): PropSprite {
   const key = prop.kind === 'lamp' || prop.kind === 'bench' || prop.kind === 'totem' ? prop.kind : `${prop.kind}:${prop.seed % 7}`;
   let s = cache.get(key);
@@ -371,6 +563,27 @@ export function propSprite(prop: ExteriorProp): PropSprite {
       break;
     case 'totem':
       s = totemSprite();
+      break;
+    case 'jungle_tree':
+      s = jungleTreeSprite(prop.seed % 7);
+      break;
+    case 'fern':
+      s = fernSprite(prop.seed % 7);
+      break;
+    case 'stump':
+      s = stumpSprite(prop.seed % 7);
+      break;
+    case 'log':
+      s = logSprite(prop.seed % 7);
+      break;
+    case 'dry_bush':
+      s = dryBushSprite(prop.seed % 7);
+      break;
+    case 'dead_tree':
+      s = deadTreeSprite(prop.seed % 7);
+      break;
+    case 'grave':
+      s = graveSprite(prop.seed % 7);
       break;
     default:
       // 'paving' e outros tipos desenhados pelo próprio renderer

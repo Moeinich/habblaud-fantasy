@@ -7,7 +7,8 @@ import { DEFAULT_WORLD_OPTIONS, seasonalThemeFor, type Selection, type SocialEve
 import { loadWorldAssets, type WorldAssets } from './assets';
 import { Camera, overviewFrame } from './camera';
 import { createDebug, type WorldDebug } from './debug';
-import { BUILDING_H, COL_W } from './constants';
+import { rectPx } from './layout/geometry';
+import { CROWN_UP } from './render/elf-tree';
 import { RECEPTION_ID } from './layout/core';
 import { inRect } from './layout/geometry';
 import { attachInput, type Hit } from './input';
@@ -79,7 +80,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
   let suspendedAt = 0;
   let userMoved = false;
   let framed = false;
-  let lastCols = -1;
+  let lastKey = '';
   const abort = new AbortController();
 
   // ------------------------------------------------------------------ tamanho/DPR
@@ -98,7 +99,12 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     updateBounds();
   };
 
-  const buildingRect = () => ({ x: 0, y: 0, w: sim.building.cols * COL_W * TILE, h: BUILDING_H * TILE });
+  // the elf trees' crowns rise above the north strip (render/elf-tree.ts): keep them in frame
+  const buildingRect = () => {
+    const r = rectPx(sim.building.rect);
+    if (!sim.building.shape.north) return r;
+    return { x: r.x, y: r.y - CROWN_UP * TILE, w: r.w, h: r.h + CROWN_UP * TILE };
+  };
 
   const updateBounds = () => {
     const b = buildingRect();
@@ -292,8 +298,8 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
         events.length = 0;
       }
       renderer.sync(seasonalThemeFor(options.theme, new Date()));
-      if (sim.building.cols !== lastCols) {
-        lastCols = sim.building.cols;
+      if (sim.building.key !== lastKey) {
+        lastKey = sim.building.key;
         updateBounds();
         if (!framed && sim.initialized) {
           overview(false);
@@ -381,7 +387,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     overlay = new Overlay(renderer.ctx, sim, renderer, camera);
     debug = createDebug(sim, renderer, camera, markMoved);
     cues = new SoundCues(sim, camera);
-    lastCols = -1;
+    lastKey = '';
     setHover(null);
   };
 

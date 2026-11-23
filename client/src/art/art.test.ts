@@ -685,9 +685,9 @@ describe('ícones e temas', () => {
 
   it('each theme matches the race of its seed (desk, chair and wall flavour)', () => {
     expect(THEME_COUNT).toBe(ROOM_THEME_COUNT);
-    const desks = { human: ['wood', 'white'], elf: ['moonwood'], orc: ['dark'] };
-    const chairs = { human: ['blue', 'gray'], elf: ['violet', 'teal'], orc: ['red', 'black', 'green'] };
-    const walls = { human: ['stripes', 'tiles', 'plain'], elf: ['grove', 'moonstone'], orc: ['wood_panel', 'brick'] };
+    const desks = { human: ['wood', 'white'], elf: ['moonwood'], orc: ['dark'], undead: ['dark'] };
+    const chairs = { human: ['blue', 'gray'], elf: ['violet', 'teal'], orc: ['red', 'black', 'green'], undead: ['black'] };
+    const walls = { human: ['stripes', 'tiles', 'plain'], elf: ['grove', 'moonstone'], orc: ['wood_panel', 'brick'], undead: ['brick', 'tiles', 'plain'] };
     for (let seed = -20; seed < 40; seed++) {
       const race = raceOfSeed(seed);
       const t = roomTheme(seed);
@@ -696,8 +696,8 @@ describe('ícones e temas', () => {
       expect(chairs[race]).toContain(t.chairVariant);
       expect(walls[race]).toContain(t.wall.pattern);
     }
-    // The Great Hall floor (seed 101) is orc.
-    expect(themeRace(101)).toBe('orc');
+    // The Great Hall floor (seed 110) is orc.
+    expect(themeRace(110)).toBe('orc');
   });
 });
 

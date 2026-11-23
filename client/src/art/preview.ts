@@ -3,6 +3,7 @@
 // janela, relógio, ícones, temas e avatares — além de uma cena de exemplo para checar a coesão.
 import '@fontsource/pixelify-sans/400.css';
 import * as art from './index';
+import { RACES } from '../../../shared/race';
 import { pixelText, pixelTextWidth } from './pixelfont';
 import { THEME_COUNT } from './theme';
 import {
@@ -44,9 +45,9 @@ const SCREEN_PT: Record<ScreenMode, string> = {
   off: 'desligado', standby: 'em espera', idle: 'descanso', code: 'código', terminal: 'terminal', browser: 'navegador', search: 'busca', chat: 'chat', docs: 'documento', tasks: 'tarefas', alert: 'alerta',
   progress: 'progresso', show: 'programa', game: 'videogame',
 };
-const FLOORS: readonly FloorKind[] = ['carpet', 'wood', 'tile_check', 'tile_white', 'concrete', 'marble', 'grass', 'sidewalk', 'street'];
+const FLOORS: readonly FloorKind[] = ['carpet', 'wood', 'tile_check', 'tile_white', 'concrete', 'hall', 'marble', 'grass', 'jungle', 'desert', 'blight', 'sidewalk', 'street'];
 const FLOOR_PT: Record<FloorKind, string> = {
-  carpet: 'carpete', wood: 'madeira', tile_check: 'xadrez', tile_white: 'azulejo', concrete: 'cimento polido', marble: 'mármore', grass: 'grama', sidewalk: 'calçada', street: 'asfalto',
+  carpet: 'carpete', wood: 'madeira', tile_check: 'xadrez', tile_white: 'azulejo', concrete: 'cimento polido', hall: 'carpete do corredor', marble: 'mármore', grass: 'grama', jungle: 'selva', desert: 'deserto', blight: 'terra morta', sidewalk: 'calçada', street: 'asfalto',
 };
 const ICONS: readonly IconName[] = [
   'alert', 'question', 'zzz', 'check', 'heart', 'coffee', 'music', 'idea', 'sweat', 'star', 'lightning', 'chat', 'box', 'wave',
@@ -575,6 +576,24 @@ function characters(): void {
   });
 }
 
+function charactersByRace(): void {
+  const s = section('racas-personagens', 'Characters by race', 'The same 3 women and 3 men drawn as each race (rows), facing down, left, up and right.');
+  const cw = 26;
+  const ch = 36;
+  canvas(s, cw * 24 + 60, ch * RACES.length, (ctx, t) => {
+    RACES.forEach((race, row) => {
+      label(ctx, race, 2, row * ch + 18, '#3e4757');
+      for (let i = 0; i < 6; i++) {
+        const a = art.appearanceFromSeed(i * 7919 + 13, { look: i < 3 ? 'f' : 'm' });
+        DIRS.forEach((dir, k) => {
+          const x = 60 + (i * 4 + k) * cw + cw / 2;
+          blit(ctx, art.characterSprite({ appearance: a, dir, pose: 'walk', frame: frameOf('walk', t, i * 50), race }), x, row * ch + 32);
+        });
+      }
+    });
+  }, '#e9ecf1', 5);
+}
+
 function poses(): void {
   const s = section('poses', 'Poses × direções', 'Todas as poses do contrato, animadas. Poses sentadas sobre cadeira de escritório (de costas) e cadeira frontal (de frente), como o mundo posiciona.');
   const cw = 30;
@@ -954,6 +973,7 @@ raceRooms();
 shellWait();
 socialLife();
 characters();
+charactersByRace();
 poses();
 heldItems();
 furniture();

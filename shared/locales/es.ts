@@ -947,6 +947,10 @@ export const ES: Readonly<Record<string, string>> = {
   "Banheiros": "Baños",
   "Copa": "Cocina",
   "Lounge": "Salón",
+  "Ala humana": "Ala humana",
+  "Ala orc": "Ala orca",
+  "Ala dos elfos noturnos": "Ala de los elfos nocturnos",
+  "Ala dos mortos-vivos": "Ala de los no-muertos",
 
   // client/src/world/sim/shell.ts
   "Monitorando um processo": "Vigilando un proceso",

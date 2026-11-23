@@ -3,9 +3,11 @@
 // - cool colours (blue/teal, Alliance rooms) become a woven heraldic runner: blue field, gold border, lozenges;
 // - violet/plum colours (elf rooms) become a leaf-woven moon runner: violet field, silver border wound with a
 //   teal leaf vine, crescent sigils and leaf tips scalloping the edge;
+// - undead rooms (style 'crypt') get a grave-cloth runner: purple-black field, vertebrae border, little skulls;
 // - warm colours (Horde rooms, tavern) become a stretched hide rug with painted tribal stripes and lacing.
 import { mix, parseColor, ramp, rgbToHsl, shade } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
+import type { RugStyle } from '../api';
 
 /** Cheap deterministic hash for per-pixel variation. */
 function hp(x: number, y: number, seed: number): number {
@@ -16,8 +18,9 @@ function hp(x: number, y: number, seed: number): number {
   return h >>> 0;
 }
 
-export function renderRug(w: number, h: number, color: string, seed: number): PixelBuf {
+export function renderRug(w: number, h: number, color: string, seed: number, style?: RugStyle): PixelBuf {
   if (w >= h * 6 && h <= 24) return pathStrip(w, h, seed);
+  if (style === 'crypt') return cryptRunner(w, h, color, seed);
   const [r, g, bl] = parseColor(color);
   const [hue, sat] = rgbToHsl(r, g, bl);
   if (hue >= 165 && hue <= 280 && sat > 0.12) return heraldicRunner(w, h, color, seed);
@@ -172,6 +175,75 @@ function moonRunner(w: number, h: number, color: string, seed: number): PixelBuf
     }
   }
   for (const [cx, cy] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]] as const) b.clear(cx, cy);
+  return b;
+}
+
+/**
+ * Undead: worn grave-cloth runner — a purple-black field with frayed ends, a bone-white border of little vertebrae,
+ * and small skulls with glowing amber eyes spaced along the middle.
+ */
+function cryptRunner(w: number, h: number, color: string, seed: number): PixelBuf {
+  const b = new PixelBuf(w, h);
+  const field = ramp(mix(color, '#241a2e', 0.4), 0.07);
+  const bone = { lt: '#ece6d0', base: '#d2cab0', dk: '#9a927c' };
+  const glow = '#ffb43a';
+  const x0 = 0;
+  const y0 = 1;
+  const x1 = w - 1;
+  const y1 = h - 2;
+  b.rect(x0, y0, w, y1 - y0 + 1, field.dd);
+  b.rect(x0 + 1, y0 + 1, w - 2, y1 - y0 - 1, field.base);
+  // worn cloth: mottled darker patches and a few holes
+  for (let y = y0 + 2; y < y1 - 1; y++) {
+    for (let x = x0 + 2; x < x1 - 1; x++) {
+      const k = hp(x >> 1, y >> 1, seed) % 23;
+      if (k === 0) b.set(x, y, field.dk);
+      else if (k === 1) b.set(x, y, field.lt);
+    }
+  }
+  // vertebrae border along the long sides
+  for (let x = x0 + 2; x < x1 - 1; x += 3) {
+    b.set(x, y0 + 1, bone.lt);
+    b.set(x + 1, y0 + 1, bone.dk);
+    b.set(x, y1 - 1, bone.base);
+    b.set(x + 1, y1 - 1, bone.dk);
+  }
+  for (let y = y0 + 2; y < y1 - 1; y += 3) {
+    b.set(x0 + 1, y, bone.lt);
+    b.set(x1 - 1, y, bone.dk);
+  }
+  // frayed ends: loose threads past the short edges
+  for (let y = y0 + 1; y < y1; y += 2) {
+    if (hp(0, y, seed) & 1) b.set(x0, y, field.dk);
+    else b.clear(x0, y);
+    if (hp(1, y, seed) & 1) b.set(x1, y, field.dk);
+    else b.clear(x1, y);
+  }
+  // little skulls along the middle (5x4: dome, eye sockets with a green glow, teeth)
+  const fw = x1 - x0 - 4;
+  const fh = y1 - y0 - 3;
+  if (fw > 8 && fh >= 5) {
+    const horiz = fw >= fh;
+    const len = horiz ? fw : fh;
+    const step = 12;
+    const n = Math.max(1, Math.floor(len / step));
+    const start = Math.floor((len - (n - 1) * step) / 2);
+    for (let i = 0; i < n; i++) {
+      const c = start + i * step;
+      const cx = horiz ? x0 + 2 + c : Math.floor(w / 2);
+      const cy = horiz ? Math.floor((y0 + y1) / 2) : y0 + 2 + c;
+      for (let dx = -2; dx <= 2; dx++) b.set(cx + dx, cy - 1, dx === -2 ? bone.lt : bone.base);
+      for (let dx = -1; dx <= 1; dx++) b.set(cx + dx, cy - 2, bone.lt);
+      b.set(cx - 2, cy, bone.base);
+      b.set(cx - 1, cy, glow);
+      b.set(cx, cy, bone.dk);
+      b.set(cx + 1, cy, glow);
+      b.set(cx + 2, cy, bone.dk);
+      b.set(cx - 1, cy + 1, bone.base);
+      b.set(cx, cy + 1, bone.dk);
+      b.set(cx + 1, cy + 1, bone.base);
+    }
+  }
   return b;
 }
 

@@ -1,5 +1,5 @@
 // Character names in the style of each race of the camp (shared/race.ts): guttural Horde names for orcs, medieval
-// Alliance names for humans and flowing night-elf names for elves. All of them are original (no canon Warcraft
+// Alliance names for humans, flowing night-elf names for elves and gothic Forsaken names for the undead. All of them are original (no canon Warcraft
 // characters), first names only, unique across every pool and without near-duplicates, so that each character in the
 // office is unmistakable. Pure (no DOM or Node): the server names the real agents with it and the demo its fake ones.
 import { hash32 } from './hash';
@@ -53,6 +53,22 @@ const ELF_M = [
   'Nethander', 'Oskaron', 'Pheladon', 'Quorath', 'Ravendil', 'Silvaran', 'Telvarin', 'Uthalor', 'Varethos', 'Wyndral',
 ];
 
+/** Forsaken-style names for the undead: cold, gothic and a little mournful. */
+const UNDEAD_F = [
+  'Morwenna', 'Grira', 'Lethpera', 'Nocora', 'Cinsella', 'Ravmira', 'Ashilde', 'Dolria', 'Hesette', 'Lisessa',
+  'Malturna', 'Osova', 'Quilice', 'Sevisse', 'Taldelle', 'Umbvine', 'Widenna', 'Zelpera', 'Belora', 'Coryne',
+  'Ebonmira', 'Fenilde', 'Gloamria', 'Inkessa', 'Jesturna', 'Kesabel', 'Lornova', 'Myrith', 'Nellice', 'Oreisse',
+  'Ruevine', 'Thornenna', 'Veyra', 'Wisppera', 'Mormira', 'Lethette', 'Nocessa', 'Ravova', 'Ashith', 'Dolice',
+  'Lisdelle', 'Malvine', 'Osenna', 'Sevora', 'Talyne', 'Umbsella', 'Velmira', 'Widilde', 'Ysria', 'Belessa',
+];
+const UNDEAD_M = [
+  'Gravix', 'Mordric', 'Voran', 'Calok', 'Duskulf', 'Ebonorn', 'Fellath', 'Gaunteth', 'Hollowel', 'Ichorius',
+  'Jarlgrim', 'Kaelwick', 'Lurkard', 'Marrmund', 'Noxdred', 'Ostren', 'Pyreas', 'Quelius', 'Roton', 'Skelmor',
+  'Tombix', 'Ulmorth', 'Vexan', 'Wraithen', 'Yorrulf', 'Zarorn', 'Bramath', 'Crypteth', 'Dravel', 'Ferrius',
+  'Grimvald', 'Haskwick', 'Kassard', 'Lorcmund', 'Morbdred', 'Nevren', 'Pallas', 'Raskius', 'Sorron', 'Thanevar',
+  'Varnix', 'Wendric', 'Gravorn', 'Voreth', 'Calel', 'Gauntard', 'Ichordred', 'Jarlren', 'Kaelas', 'Lurkius',
+];
+
 /** Interleaves the female and male lists, so that neighbors in a pool alternate the look. */
 function interleave(f: readonly string[], m: readonly string[]): readonly PersonName[] {
   const out: PersonName[] = [];
@@ -67,6 +83,7 @@ export const FANTASY_NAME_POOLS: Readonly<Record<Race, readonly PersonName[]>> =
   orc: interleave(ORC_F, ORC_M),
   human: interleave(HUMAN_F, HUMAN_M),
   elf: interleave(ELF_F, ELF_M),
+  undead: interleave(UNDEAD_F, UNDEAD_M),
 });
 
 const ALL_NAMES = new Set(Object.values(FANTASY_NAME_POOLS).flatMap((pool) => pool.map((p) => p.name)));

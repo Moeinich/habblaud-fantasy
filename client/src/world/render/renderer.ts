@@ -5,16 +5,16 @@ import { TILE, type ArtModule, type CharacterFrameRequest, type IconName, type S
 import type { SeasonalTheme, WorldOptions } from '../api';
 import type { WorldAssets } from '../assets';
 import type { Camera } from '../camera';
-import { BUILDING_H, COL_W, CORE_COLS, CORRIDOR_Y } from '../constants';
-import { layoutExterior, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
-import { slotAt } from '../layout/geometry';
+import { BUILDING_H, COL_W, CORRIDOR_Y, NSTRIP_Y, PLAZA_COL } from '../constants';
+import { layoutExterior, plazaShells, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
+import { cellsOf, mainRect, type Shape } from '../layout/geometry';
 import type { ExteriorProp } from '../layout/types';
 import { screenModeFor } from '../sim/behavior';
 import type { Character } from '../sim/character';
 import type { RoomState } from '../sim/room-state';
 import { cobwebScale, hourglassIcon, HOURGLASS_FLIP_MS, STORM_LIFT } from '../sim/shell';
 import type { Sim } from '../sim/sim';
-import { raceOfRoom, type Race } from '../../../../shared/race';
+import { raceOfRoom, raceOfSeed, type Race } from '../../../../shared/race';
 import { buildAnim, furnitureScale, NO_ANIM, sweepDelay, type BuildAnim } from './anim';
 import { daylightModeOf, parseHourParam } from './daylight';
 import { RoomFxRenderer } from './github-fx';
@@ -22,7 +22,10 @@ import { Lighting } from './lighting';
 import { Particles } from './particles';
 import { carSprite, propSprite, shadowSprite } from './props';
 import { countBadge, fallbackIcon } from './shell-sprites';
-import { decorateElevator, drawSeasonalLights, drawSeasonalWindow, seasonalCostume, seasonalFurniture } from './seasonal';
+import { worldTree } from './elf-tree';
+import { ringSprite } from './enclosure';
+import { hallRings } from '../layout/enclosure';
+import { areaTheme, decorateElevator, drawSeasonalLights, drawSeasonalWindow, seasonalCostume, seasonalFurniture } from './seasonal';
 import { buildAreaVis, furnitureSprites, opaqueBounds, paintShell, toWallVis, WALL_MARGIN, wallItemOrigin, wallSprites, type AreaVis, type FurnVis, type WallVis } from './scene';
 
 const enum K {
@@ -126,7 +129,7 @@ export class Renderer {
   private base: HTMLCanvasElement | null = null;
   private baseX = 0;
   private baseY = 0;
-  private baseCols = -1;
+  private baseKey = '';
   private layoutVersion = -1;
   private assetsVersion = 0;
   private builtAssetsVersion = 0;
@@ -165,7 +168,7 @@ export class Renderer {
     private readonly camera: Camera,
   ) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
-    this.exterior = layoutExterior(sim.building.cols);
+    this.exterior = layoutExterior(sim.building.shape);
     this.lighting = new Lighting(art, sim);
   }
 
@@ -182,11 +185,11 @@ export class Renderer {
     const themeChanged = theme !== this.theme;
     this.theme = theme;
     const assetsChanged = this.builtAssetsVersion !== this.assetsVersion || themeChanged;
-    if (this.baseCols !== sim.building.cols || assetsChanged) this.buildBase();
+    if (this.baseKey !== sim.building.key || assetsChanged) this.buildBase();
     if (this.layoutVersion !== sim.layoutVersion || assetsChanged) {
       this.layoutVersion = sim.layoutVersion;
       const want = new Set<string>();
-      for (const a of [...sim.building.core, sim.building.corridor]) {
+      for (const a of [...sim.building.core, sim.building.corridor, ...sim.building.extra]) {
         want.add(a.id);
         const cur = this.areas.get(a.id);
         if (!cur || cur.layout !== a || assetsChanged) this.areas.set(a.id, buildAreaVis(this.art, a, undefined, this.assets, theme));
@@ -202,7 +205,7 @@ export class Renderer {
     this.occupiedSlots.clear();
     for (const room of sim.rooms.values()) {
       if (!room.present) continue;
-      this.occupiedSlots.add(room.slot);
+      for (let k = 0; k < room.span; k++) this.occupiedSlots.add(room.slot + k * 2);
       const cur = this.areas.get(room.id);
       if (!cur || cur.layout !== room.layout || cur.version !== room.version || assetsChanged) {
         this.areas.set(room.id, buildAreaVis(this.art, room.layout, room, this.assets, theme));
@@ -214,9 +217,9 @@ export class Renderer {
 
   /** Camada base: área externa, pátios dos slots e fechamentos do corredor. */
   private buildBase(): void {
-    const cols = this.sim.building.cols;
-    this.baseCols = cols;
-    this.exterior = layoutExterior(cols);
+    const shape = this.sim.building.shape;
+    this.baseKey = this.sim.building.key;
+    this.exterior = layoutExterior(shape);
     const b = this.exterior.bounds;
     this.baseX = b.x * TILE;
     this.baseY = b.y * TILE;
@@ -227,16 +230,18 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     ctx.translate(-this.baseX, -this.baseY);
     paintShell(this.art, ctx, this.exterior.floors, []);
-    paintRoadRuts(ctx, this.baseX, c.width, this.exterior.streetY, this.exterior.streetH);
+    // the halls' floors running out to their rings (layout/enclosure.ts)
+    for (const ring of hallRings(shape)) {
+      const sp = ringSprite(ring, this.art);
+      ctx.drawImage(sp.floor, sp.x, sp.y);
+    }
+    if (this.exterior.streetH) paintRoadRuts(ctx, this.baseX, c.width, this.exterior.streetY, this.exterior.streetH);
     this.shells = [];
     this.shellWindows = [];
-    for (let col = CORE_COLS; col < cols; col++) {
-      for (const side of ['north', 'south'] as const) {
-        const sh = slotShell(slotAt(col, side), col === cols - 1);
-        this.shells.push(sh);
-        paintShell(this.art, ctx, sh.floors, sh.walls);
-        for (const w of sh.windows) this.shellWindows.push(toWallVis(w, `shell:${sh.slot}`));
-      }
+    for (const sh of [...cellsOf(shape).map((cell) => slotShell(cell)), ...plazaShells(shape)]) {
+      this.shells.push(sh);
+      paintShell(this.art, ctx, sh.floors, sh.walls);
+      for (const w of sh.windows) this.shellWindows.push(toWallVis(w, `shell:${sh.slot}`));
     }
     this.desaturate(ctx);
     // fundo além da área desenhada: a própria grama (amostra espelhada 2x2, sem emendas), já no
@@ -284,7 +289,7 @@ export class Renderer {
       this.grass = null;
       this.clearColor = '#6f9a5a';
     }
-    this.finishBase(ctx, cols);
+    this.finishBase(ctx, shape);
     this.base = c;
   }
 
@@ -303,7 +308,7 @@ export class Renderer {
   }
 
   /** Acabamento da camada externa: bordas levemente mais escuras (vinheta) e o capacho da entrada. */
-  private finishBase(ctx: CanvasRenderingContext2D, cols: number): void {
+  private finishBase(ctx: CanvasRenderingContext2D, shape: Shape): void {
     const b = this.exterior.bounds;
     const x0 = b.x * TILE;
     const y0 = b.y * TILE;
@@ -312,7 +317,9 @@ export class Renderer {
     ctx.save();
     // vinheta: escurece com a distância ao prédio e chega ao tom da grama "de fora" exatamente na
     // borda da área desenhada (máscara de 1 px por tile, ampliada com suavização)
-    const bwT = cols * COL_W;
+    const E = this.sim.building.rect;
+    const ex1 = E.x + E.w;
+    const ey1 = E.y + E.h;
     const smooth = (a: number, z: number, v: number) => {
       const t = Math.max(0, Math.min(1, (v - a) / Math.max(1e-6, z - a)));
       return t * t * (3 - 2 * t);
@@ -327,8 +334,8 @@ export class Renderer {
         for (let tx = 0; tx < b.w; tx++) {
           const wx = b.x + tx + 0.5;
           const wy = b.y + ty + 0.5;
-          const fx = wx < 0 ? smooth(6, -b.x, -wx) : wx > bwT ? smooth(6, b.x + b.w - bwT, wx - bwT) : 0;
-          const fy = wy < 0 ? smooth(5, -b.y, -wy) : wy > BUILDING_H ? smooth(12, b.y + b.h - BUILDING_H, wy - BUILDING_H) : 0;
+          const fx = wx < E.x ? smooth(6, E.x - b.x, E.x - wx) : wx > ex1 ? smooth(6, b.x + b.w - ex1, wx - ex1) : 0;
+          const fy = wy < E.y ? smooth(5, E.y - b.y, E.y - wy) : wy > ey1 ? smooth(12, b.y + b.h - ey1, wy - ey1) : 0;
           const i = (ty * b.w + tx) * 4;
           img.data[i] = 18;
           img.data[i + 1] = 40;
@@ -345,12 +352,13 @@ export class Renderer {
     }
     // capacho diante da fachada de vidro da entrada (oeste do corredor)
     const my = (CORRIDOR_Y + 1.25) * TILE;
+    const mx = (mainRect(shape).x - 1.75) * TILE;
     ctx.fillStyle = '#3f4652';
-    ctx.fillRect(-1.75 * TILE, my, 1.5 * TILE, 2.5 * TILE);
+    ctx.fillRect(mx, my, 1.5 * TILE, 2.5 * TILE);
     ctx.fillStyle = '#596170';
-    ctx.fillRect(-1.75 * TILE + 2, my + 2, 1.5 * TILE - 4, 2.5 * TILE - 4);
+    ctx.fillRect(mx + 2, my + 2, 1.5 * TILE - 4, 2.5 * TILE - 4);
     ctx.fillStyle = '#4b525f';
-    for (let y = my + 4; y < my + 2.5 * TILE - 4; y += 3) ctx.fillRect(-1.75 * TILE + 3, y, 1.5 * TILE - 6, 1);
+    for (let y = my + 4; y < my + 2.5 * TILE - 4; y += 3) ctx.fillRect(mx + 3, y, 1.5 * TILE - 6, 1);
     ctx.restore();
   }
 
@@ -531,6 +539,13 @@ export class Renderer {
     this.roomFx.emit(this.particles, this.sim, now, dt, view);
     this.particles.update(dt);
     this.particles.draw(ctx, vx0, vy0, vx1, vy1, now);
+    // the rounded walls round the halls, and the elf wing's world tree (neither covers a floor; the tree's vines
+    // over the offices are see-through)
+    for (const ring of hallRings(this.sim.building.shape)) {
+      const sp = ringSprite(ring, this.art);
+      if (visible(sp.x, sp.y, sp.canvas.width, sp.canvas.height)) this.ctx.drawImage(sp.canvas, sp.x, sp.y);
+    }
+    this.drawElfTree(visible);
 
     // ---- luz: noite, salas apagadas, brilhos
     this.night = this.lighting.night;
@@ -539,7 +554,7 @@ export class Renderer {
       for (const vis of this.areas.values()) {
         if (vis.room && vis.room.phase !== 'ready') continue;
         if (!visible(vis.px.x, vis.px.y, vis.px.w, vis.px.h)) continue;
-        drawSeasonalLights(ctx, this.theme, vis.layout, vis.room ? vis.room.light(now) : 1);
+        drawSeasonalLights(ctx, areaTheme(this.theme, vis.room), vis.layout, vis.room ? vis.room.light(now) : 1);
       }
     }
     // giroflex e balão "!" do alarme de CI (brilham também no escuro)
@@ -574,9 +589,36 @@ export class Renderer {
     for (const id of this.heads.keys()) if (!this.sim.person(id)) this.heads.delete(id);
   }
 
+  /**
+   * The world tree of the elf wing (render/elf-tree.ts): the elf offices live inside its hollow foot. Bark walls,
+   * trunk and crown are solid (none of them covers a floor); the veil of vines over the offices is see-through.
+   */
+  private drawElfTree(visible: (x: number, y: number, w: number, h: number) => boolean): void {
+    const shape = this.sim.building.shape;
+    if (!shape.north) return;
+    let elves = false;
+    for (const r of this.sim.rooms.values()) if (r.present && !r.ghost && raceOfSeed(r.seed) === 'elf') elves = true;
+    if (!elves) return;
+    const { ctx } = this;
+    const tree = worldTree(shape.north * COL_W * TILE);
+    const wx = PLAZA_COL * COL_W * TILE;
+    const wy = NSTRIP_Y * TILE;
+    const x = wx + tree.ox;
+    const y = wy + tree.oy;
+    if (!visible(x, y, tree.solid.width, tree.solid.height)) return;
+    ctx.drawImage(tree.solid, x, y);
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.rect(wx, wy + 2 * TILE, shape.north * COL_W * TILE, BUILDING_H * TILE - 2 * TILE);
+    ctx.clip();
+    ctx.drawImage(tree.veil, x, y);
+    ctx.restore();
+  }
+
   roomInSlot(slot: number): RoomState | undefined {
     if (!this.occupiedSlots.has(slot)) return undefined;
-    for (const r of this.sim.rooms.values()) if (r.slot === slot && r.present) return r;
+    for (const r of this.sim.rooms.values()) if (r.present && r.covers(slot)) return r;
     return undefined;
   }
 
@@ -801,7 +843,7 @@ export class Renderer {
     const state = this.furnState(f, now);
     const fs = furnitureSprites(this.art, f, state);
     if (!fs) return;
-    const s = front ? fs.front : seasonalFurniture(this.theme, f.kind, area.layout, f.seed) ?? fs.base;
+    const s = front ? fs.front : seasonalFurniture(areaTheme(this.theme, area.room), f.kind, area.layout, f.seed) ?? fs.base;
     if (!s) return;
     const dx = Math.round(f.ax - s.ax);
     const dy = Math.round(f.ay - s.ay);

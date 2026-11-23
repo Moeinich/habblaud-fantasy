@@ -947,6 +947,10 @@ export const EN: Readonly<Record<string, string>> = {
   "Banheiros": "Bathhouse",
   "Copa": "Mess Hall",
   "Lounge": "Tavern",
+  "Ala humana": "Human wing",
+  "Ala orc": "Orc wing",
+  "Ala dos elfos noturnos": "Night-elf wing",
+  "Ala dos mortos-vivos": "Undead wing",
 
   // client/src/world/sim/shell.ts
   "Monitorando um processo": "Monitoring a process",

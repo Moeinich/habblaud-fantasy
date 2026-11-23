@@ -12,6 +12,45 @@ one (0.**3**.0).
 
 ### Added
 
+- **Undead.** A fourth race: Forsaken crypts with cold slate floors glowing violet in the seams, grave-cloth runners
+  with little skulls, and Halloween dressing all year (pumpkins, a ghost, cobwebs, bats and lanterns). Their people
+  are stooped skeletons with dark sockets glowing yellow, bare teeth, an exposed ribcage and lank grey hair, and
+  they get gothic names of their own. The undead wing has its own building to the south,
+  reached by a covered walkway from the square. Every project room's race is picked anew from its seed, so existing rooms may change
+  race once.
+- **Races you can tell apart at a glance.** Characters no longer differ only by colour. Orcs are a strong green
+  with a broad jaw, big upturned tusks, dark hair in war braids, topknots or mohawks with bone rings, a war belt with
+  a bone buckle and spiked iron spaulders. Night elves have deeper violet skin, glowing eyes, face markings, a
+  moon-silver circlet, long flowing hair with a leaf pin and leaf-blade shoulders. Humans wear a blue and gold
+  Alliance tabard with steel shoulder caps.
+- **Room dressing by race.** Elf rooms sit inside a living tree, with a leafy canopy and vines over the north wall
+  and bark-trunk corners with roots. Orc rooms get sharpened stakes, horned skull trophies and blood-red war paint.
+  Human rooms hang blue and gold bunting. Undead rooms are furnished in bone and violet, on a crypt floor.
+- **The elf world tree.** The night-elf wing stands in the hollow heart of one huge tree. A rounded ring of living
+  trunk wraps the whole wing, with a gap in front where the walkway comes in. At the back the trunk rises high
+  behind the offices as a wall of furrowed bark with glowing runes and roots running down to the floor. Around the
+  offices lies a floor of heartwood with growth rings and glowing mushrooms, and jungle leaves crown the rim all the
+  way round. Vines hang over the offices but are see-through, so everyone inside stays visible.
+- **Lands of the races.** Every hall sits in the middle of its own land: a jungle of giant vine-wrapped trees and
+  ferns round the elves, cut-down badlands with stumps, felled logs and dry thorn bushes round the orcs, dead
+  purple ground with bare trees and gravestones round the undead, and a green park round the humans. The lands
+  meet roughly halfway between the halls in winding, organic borders, frayed at the pixel level so the grounds melt
+  into each other.
+- **Round, open-plan halls.** Each wing is one hall with a department per project instead of a row of boxes.
+  Rooms next to each other in a wing have no wall between them, only tall plants marking where one department
+  ends, and the whole hall runs out to a rounded outer wall: the rooms' floor continues out to it, their back
+  walls and outer walls are gone, and their whiteboards, clocks, posters and windows hang on the round wall
+  instead. The wall itself is in the race's style: a crenellated stone wall round the human wing and the core, a
+  palisade of sharpened stakes with the odd skull round the orc camp, and an iron graveyard fence with violet
+  lanterns round the undead crypts. Departments still grow and shrink with their team.
+- **Rooms grow with their team.** A room has 6 desks per column, and when more agents belong to it than it has
+  desks, it widens into the next column (up to four), with another desk island and its own door. Agents who were
+  standing or sitting on a stool move to the new desks. When the crowd is gone, the room shrinks back after a minute.
+- **Wings.** The office now branches out from a square next to the core instead of being one long building. Human
+  rooms fill a wing to the west along the main corridor, and orc rooms fill a wing to the east. Night-elf rooms get
+  their own building to the north and undead rooms one to the south, each reached by a covered glass walkway from
+  the square. Each wing has a name label
+  where it begins. When a new room joins a wing, the rooms further out move over one at a time.
 - **White-labeling.** Set `HABBLAUD_BRAND_NAME` (and optionally `HABBLAUD_BRAND_SHORT` for the home-screen label) to
   show your own name instead of "Habblaud" in the page title, the pixel logo (same font and colours), the home-screen
   app and the phone login page. It applies at runtime, so the same Docker image works for any brand.
@@ -39,6 +78,14 @@ one (0.**3**.0).
 
 ### Changed
 
+- **No more road.** The dirt road with its carts, the cobbled verges, the street lamps and the hedge along the
+  south of the office are gone. The office now sits in open country, with trees, bushes and stones growing densely
+  all around it.
+- **Carpeted corridors.** The walkway between rooms is no longer a dirt road. Each wing's corridor is a wall-to-wall
+  office carpet in its race's colours (royal blue and gold, oxblood and bronze, violet and teal), with a runner in
+  the race's style. The square is paved in stone, and where floors meet they melt into each other with a ragged,
+  worn pixel edge (tufts of carpet over the paving, stones showing through) instead of a hard line. The elf carpet
+  spills out of the walkway onto the square.
 - **Habblaud World removed.** The online city, the account and building sync, the World and Visit scenes, the
   `/api/world/*` routes and the `HABBLAUD_WORLD`, `HABBLAUD_WORLD_URL` and `HABBLAUD_WORLD_DEV` settings are gone;
   Habblaud no longer contacts server.habblaud.com.

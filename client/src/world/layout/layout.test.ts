@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FURNITURE, TILE, type FurnitureKind, type RoomTheme } from '../../art/api';
-import { BUILDING_H, COL_W, CORRIDOR_Y, SOUTH_Y } from '../constants';
+import { COL_W, CORE_COL0, CORRIDOR_H, CORRIDOR_Y, EAST_COL0, MAIN_BOTTOM, NORTH_Y, PLAZA_COL, ROOM_H, SOUTH_Y } from '../constants';
 import { assembleBuilding, coreAreas } from './building';
-import { columnsFor, slotAt, slotColumn, slotRect, slotSide } from './geometry';
+import { cellSlot, cellsOf, coveredSlots, mainRect, NORTH_SLOT0, shapeOf, slotColumn, slotRect, slotSide, slotStrip, slotWing, stripY, WALKWAY_SLOT } from './geometry';
 import { layoutProjectRoom, roomVariant } from './room';
 import { layoutExterior, slotShell } from './exterior';
 import { RECEPTION_ID } from './core';
@@ -21,41 +21,52 @@ function roomsFor(slots: number[]): AreaLayout[] {
   return slots.map((slot) => layoutProjectRoom({ id: `/proj/${slot}`, slot, seed: 1000 + slot * 77 }, theme));
 }
 
-describe('mapeamento de slots', () => {
-  it('coluna = núcleo + floor(slot/2); par = norte, ímpar = sul', () => {
-    expect(slotColumn(0)).toBe(2);
-    expect(slotColumn(1)).toBe(2);
-    expect(slotColumn(2)).toBe(3);
-    expect(slotColumn(7)).toBe(5);
+describe('slot mapping', () => {
+  it('east wing from the square, west wing from the core outwards, north strip from the square', () => {
+    expect(slotColumn(0)).toBe(EAST_COL0);
+    expect(slotColumn(1)).toBe(EAST_COL0);
+    expect(slotColumn(2)).toBe(EAST_COL0 + 1);
+    expect(slotColumn(7)).toBe(EAST_COL0 + 3);
+    expect(slotColumn(-1)).toBe(CORE_COL0 - 1);
+    expect(slotColumn(-2)).toBe(CORE_COL0 - 1);
+    expect(slotColumn(-3)).toBe(CORE_COL0 - 2);
+    expect(slotColumn(NORTH_SLOT0)).toBe(PLAZA_COL);
     expect(slotSide(0)).toBe('north');
     expect(slotSide(1)).toBe('south');
-    expect(slotSide(6)).toBe('north');
-    expect(slotAt(3, 'south')).toBe(3);
-    expect(slotAt(slotColumn(9), slotSide(9))).toBe(9);
+    expect(slotSide(-1)).toBe('north');
+    expect(slotSide(-2)).toBe('south');
+    expect(slotSide(NORTH_SLOT0 + 3)).toBe('south');
+    expect([0, 1, -1, -4, NORTH_SLOT0 + 5].map(slotWing)).toEqual(['east', 'east', 'west', 'west', 'north']);
+    for (const slot of [0, 1, 9, -1, -2, -7, NORTH_SLOT0, NORTH_SLOT0 + 5]) expect(cellSlot(slotColumn(slot), slotSide(slot), slotStrip(slot))).toBe(slot);
+    // slot + 2 is always one column further east
+    for (const slot of [0, -3, NORTH_SLOT0 + 1]) expect(slotColumn(slot + 2)).toBe(slotColumn(slot) + 1);
   });
 
-  it('retângulos das salas não se sobrepõem e respeitam o corredor', () => {
+  it('room rectangles respect the corridor of their strip', () => {
     const a = slotRect(0);
     const b = slotRect(1);
-    expect(a).toEqual({ x: 2 * COL_W, y: 0, w: COL_W, h: 12 });
+    expect(a).toEqual({ x: EAST_COL0 * COL_W, y: NORTH_Y, w: COL_W, h: 12 });
     expect(b.y).toBe(SOUTH_Y);
     expect(a.y + a.h).toBe(CORRIDOR_Y);
-    expect(b.y + b.h).toBe(BUILDING_H);
+    expect(b.y + b.h).toBe(MAIN_BOTTOM);
+    const n = slotRect(NORTH_SLOT0 + 2);
+    expect(n.y + n.h + CORRIDOR_H).toBe(slotRect(NORTH_SLOT0 + 3).y);
   });
 
-  it('largura do prédio: núcleo + maior coluna usada + 1 (mínimo 1 coluna de projeto)', () => {
-    expect(columnsFor([])).toBe(3);
-    expect(columnsFor([0, 1])).toBe(3);
-    expect(columnsFor([5])).toBe(5);
-    expect(columnsFor([2, 11])).toBe(8);
+  it('shape: how far each wing reaches (at least one east column)', () => {
+    expect(shapeOf([])).toEqual({ west: 0, east: 1, north: 0, south: 0 });
+    expect(shapeOf([0, 1])).toEqual({ west: 0, east: 1, north: 0, south: 0 });
+    expect(shapeOf([5])).toEqual({ west: 0, east: 3, north: 0, south: 0 });
+    expect(shapeOf([-3, -1])).toEqual({ west: 2, east: 1, north: 0, south: 0 });
+    expect(shapeOf([NORTH_SLOT0 + 2])).toEqual({ west: 0, east: 1, north: 2, south: 0 });
   });
 });
 
 describe('layout do prédio', () => {
-  const slots = [0, 1, 2, 3, 4, 7];
+  const slots = [0, 1, 2, 3, 4, 7, -1, -2, -3, NORTH_SLOT0, NORTH_SLOT0 + 2, NORTH_SLOT0 + 3];
   const rooms = roomsFor(slots);
-  const cols = columnsFor(slots);
-  const b = assembleBuilding(cols, rooms);
+  const shape = shapeOf(slots);
+  const b = assembleBuilding(shape, rooms);
   const reception = coreAreas().find((a) => a.id === RECEPTION_ID)!;
   const elevator = reception.spots.find((s) => s.kind === 'elevator')!;
   const reach = b.grid.reachableFrom(elevator.tx, elevator.ty);
@@ -80,7 +91,8 @@ describe('layout do prédio', () => {
         for (let y = door.y; y < door.y + door.h; y++) expect(b.grid.walkable(x, y)).toBe(true);
         // tile do corredor imediatamente fora da porta
         const outside = room.side === 'north' ? door.y + door.h : door.y - 1;
-        expect(outside >= CORRIDOR_Y && outside < SOUTH_Y).toBe(true);
+        const cy = room.rect.y < CORRIDOR_Y - ROOM_H ? stripY('north') + ROOM_H : CORRIDOR_Y;
+        expect(outside >= cy && outside < cy + CORRIDOR_H).toBe(true);
         expect(reachable(x, outside)).toBe(true);
       }
       // o interior inteiro (fora móveis) é alcançável
@@ -139,19 +151,25 @@ describe('layout do prédio', () => {
   });
 
   it('corredor alterna bebedouro e banco nas colunas de projeto, sem excesso de plantas', () => {
+    const cols = shape.west + shape.east;
     const coolers = b.corridor.furniture.filter((f) => f.kind === 'water_cooler');
-    expect(coolers.length).toBeGreaterThanOrEqual(Math.ceil((cols - 2) / 2));
+    expect(coolers.length).toBeGreaterThanOrEqual(Math.floor(cols / 2));
     const benches = b.corridor.furniture.filter((f) => f.kind === 'bench');
-    expect(benches.length).toBeGreaterThanOrEqual(Math.floor((cols - 2) / 2));
+    expect(benches.length).toBeGreaterThanOrEqual(Math.floor(cols / 2));
     const plants = b.corridor.furniture.filter((f) => f.kind === 'plant_tall' || f.kind === 'plant_small');
-    expect(plants.length).toBeLessThanOrEqual(cols * 2);
+    expect(plants.length).toBeLessThanOrEqual((cols + 3) * 2);
   });
 
   it('a área externa e os pátios cobrem o prédio', () => {
-    const ext = layoutExterior(cols);
-    expect(ext.bounds.x).toBeLessThan(0);
-    expect(ext.bounds.x + ext.bounds.w).toBeGreaterThan(cols * COL_W);
-    const shell = slotShell(5, true);
+    const ext = layoutExterior(shape);
+    const m = mainRect(shape);
+    expect(ext.bounds.x).toBeLessThan(m.x);
+    expect(ext.bounds.x + ext.bounds.w).toBeGreaterThan(m.x + m.w);
+    expect(ext.bounds.y).toBeLessThan(0);
+    const cells = cellsOf(shape);
+    expect(cells.some((c) => c.slot === WALKWAY_SLOT)).toBe(false);
+    const cell = cells.find((c) => c.slot === 5)!;
+    const shell = slotShell(cell);
     expect(shell.walls.length).toBeGreaterThan(0);
     expect(shell.props.every((p) => p.slot === 5)).toBe(true);
   });
@@ -185,7 +203,7 @@ describe('variações das salas de projeto', () => {
     for (const slot of [0, 1]) {
       for (const seed of seeds) {
         const room = layoutProjectRoom({ id: `/v/${seed}`, slot, seed }, theme);
-        const b = assembleBuilding(columnsFor([slot]), [room]);
+        const b = assembleBuilding(shapeOf([slot]), [room]);
         const used = new Map<string, string>();
         for (const f of room.furniture) {
           const def = FURNITURE[f.kind];
@@ -234,5 +252,53 @@ describe('itens de parede', () => {
     const restroom = coreAreas().find((a) => a.kind === 'restroom')!;
     expect(restroom.wallItems.some((w) => w.kind === 'door_frame')).toBe(true);
     for (const room of roomsFor([1, 3, 7])) expect(room.wallItems.some((w) => w.kind === 'door_frame'), room.id).toBe(true);
+  });
+});
+
+describe('rooms that span several columns', () => {
+  it('each extra column adds 6 desks and a door; the base spots keep their ids', () => {
+    for (const seed of [3, 1000, 4242, 77777]) {
+      const one = layoutProjectRoom({ id: '/w', slot: 2, seed }, theme);
+      for (const span of [2, 3, 4]) {
+        const wide = layoutProjectRoom({ id: '/w', slot: 2, seed, span }, theme);
+        expect(wide.rect.w).toBe(span * COL_W);
+        expect(wide.spots.filter((s) => s.kind === 'desk')).toHaveLength(6 * span);
+        expect(new Set(wide.spots.filter((s) => s.kind === 'desk').map((s) => s.rank)).size).toBe(6 * span);
+        expect(wide.spots.slice(0, one.spots.length).map((s) => s.id)).toEqual(one.spots.map((s) => s.id));
+        for (const s of wide.spots) expect(s.tx >= wide.rect.x && s.tx < wide.rect.x + wide.rect.w).toBe(true);
+        // every desk can be reached from the corridor
+        const b = assembleBuilding(shapeOf(coveredSlots(2, span)), [wide]);
+        const start = { x: wide.rect.x + 1, y: CORRIDOR_Y + 2 };
+        const seen = new Set<number>([start.y * b.grid.w + start.x]);
+        const queue = [start];
+        while (queue.length) {
+          const p = queue.shift()!;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const x = p.x + dx;
+            const y = p.y + dy;
+            const k = y * b.grid.w + x;
+            if (seen.has(k) || !b.grid.walkable(x, y)) continue;
+            seen.add(k);
+            queue.push({ x, y });
+          }
+        }
+        for (const d of wide.spots.filter((s) => s.kind === 'desk')) expect(seen.has(d.ty * b.grid.w + d.tx), `${seed}/${span} ${d.id}`).toBe(true);
+      }
+    }
+  });
+});
+
+describe('open-plan halls', () => {
+  it('an open side drops the partition cap and lets people walk to the edge', () => {
+    const closed = layoutProjectRoom({ id: '/h/a', slot: 0, seed: 5 }, theme);
+    const open = layoutProjectRoom({ id: '/h/a', slot: 0, seed: 5, open: { west: true, east: true } }, theme);
+    expect(closed.walls.filter((w) => w.kind === 'cap')).toHaveLength(2);
+    expect(open.walls.filter((w) => w.kind === 'cap')).toHaveLength(0);
+    const r = open.rect;
+    const walk = (x: number) => open.walkable.some((a) => x >= a.x && x < a.x + a.w && 5 >= a.y - r.y && 5 < a.y - r.y + a.h);
+    expect(walk(r.x)).toBe(true);
+    expect(walk(r.x + r.w - 1)).toBe(true);
+    // base spots keep their ids, so people keep their desks when a neighbour arrives
+    expect(open.spots.map((s) => s.id).slice(0, closed.spots.length)).toEqual(closed.spots.map((s) => s.id));
   });
 });

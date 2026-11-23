@@ -7,7 +7,7 @@
 import { TILE } from '../../art/api';
 import type { WorldOptions } from '../api';
 import type { Camera } from '../camera';
-import { COL_W, CORRIDOR_Y, SOUTH_Y } from '../constants';
+import { COL_W, CORE_COL0, CORRIDOR_Y, EAST_COL0, NCORRIDOR_Y, PLAZA_COL, SCORRIDOR_Y, SOUTH_Y } from '../constants';
 import type { Character } from '../sim/character';
 import { shellAgeKey, shellBubbleAlpha, shellBubbleText, STORM_LIFT, unitHash } from '../sim/shell';
 import type { Sim } from '../sim/sim';
@@ -15,6 +15,8 @@ import { buildAnim } from './anim';
 import { drawFxBanner } from './github-fx';
 import type { HeadInfo, Renderer } from './renderer';
 import { tr } from '../../../../shared/i18n';
+import type { Race } from '../../../../shared/race';
+import { DEPT_CARPET } from '../layout/departments';
 
 // A Pixelify Sans tem o "C" maiúsculo quase fechado (lê-se "Oopa" em vez de "Copa") em qualquer
 // peso/tamanho usado no canvas; os textos do mundo usam a fonte do sistema, sempre legível.
@@ -51,6 +53,14 @@ const CORE_NAMES: Record<string, string> = {
   'core:banheiros': tr('Banheiros'),
   'core:copa': tr('Copa'),
   'core:lounge': tr('Lounge'),
+};
+
+/** Department (wing) names, see layout/departments.ts. */
+const DEPT_NAMES: Record<Race, string> = {
+  human: tr('Ala humana'),
+  orc: tr('Ala orc'),
+  elf: tr('Ala dos elfos noturnos'),
+  undead: tr('Ala dos mortos-vivos'),
 };
 
 /** 'shell' = espera de shell: balão escuro de terminal com texto verde. 'say' = fala das rodas (papo, torcida, apostas). */
@@ -305,6 +315,7 @@ export class Overlay {
 
     // placas e pílulas primeiro: são fixas e grandes; balões e etiquetas desviam delas
     this.drawRoomTexts(now, zoom);
+    this.drawDeptLabels(zoom);
     this.drawFxBanners(now, zoom);
 
     // ---- coleta balões e etiquetas dos personagens visíveis
@@ -569,6 +580,44 @@ export class Overlay {
       ctx.fillText(countText, dx + 7, y + h / 2 + 0.5);
     }
     ctx.restore();
+    this.place(x, y, w, h);
+  }
+
+  /** Wing labels in the corridors, where each wing branches off the core and the square. */
+  private drawDeptLabels(zoom: number): void {
+    if (zoom < 0.6) return;
+    const shape = this.sim.building.shape;
+    const maxW = 220;
+    const labels: { race: Race; x: number; y: number; right?: boolean }[] = [{ race: 'orc', x: EAST_COL0 * COL_W + 1, y: CORRIDOR_Y + 1 }];
+    if (shape.west) labels.push({ race: 'human', x: CORE_COL0 * COL_W - 1, y: CORRIDOR_Y + 1, right: true });
+    if (shape.north) labels.push({ race: 'elf', x: PLAZA_COL * COL_W + 1, y: NCORRIDOR_Y + 1 });
+    if (shape.south) labels.push({ race: 'undead', x: PLAZA_COL * COL_W - 1, y: SCORRIDOR_Y + 1, right: true });
+    for (const l of labels) {
+      const x = this.sx(l.x * TILE);
+      const y = this.sy(l.y * TILE) - 2;
+      if (y < -40 || y > this.camera.viewH + 40 || x < -maxW - 20 || x > this.camera.viewW + maxW + 20) continue;
+      this.drawDeptPill(DEPT_NAMES[l.race], x, y, maxW, DEPT_CARPET[l.race].band, l.right);
+    }
+  }
+
+  private drawDeptPill(name: string, x0: number, cy: number, maxW: number, accent: string, right = false): void {
+    const { ctx } = this;
+    const font = this.measure(CORE_FONT, name) <= maxW - 20 ? CORE_FONT : CORE_FONT_SMALL;
+    const text = this.fit(font, name, maxW - 20);
+    if (text.length < 3) return;
+    const w = Math.round(this.measure(font, text) + 20);
+    const h = 18;
+    const x = Math.round(right ? x0 - w : x0);
+    const y = Math.round(cy - h);
+    ctx.fillStyle = 'rgba(22,27,40,0.62)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.fillRect(x + 5, y + 4, 3, h - 8);
+    ctx.font = font;
+    ctx.fillStyle = '#e8ecf5';
+    ctx.fillText(text, x + 13, y + h / 2 + 1);
     this.place(x, y, w, h);
   }
 

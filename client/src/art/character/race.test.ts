@@ -24,8 +24,8 @@ function hex(c: readonly number[]): string {
     .join('')}`;
 }
 
-/** Cheek pixel of the front view (head grid column 2, row 8), standing frame 0. */
-const CHEEK: [number, number] = [7, 15];
+/** Cheek pixel of the front view (head grid column 2, row 7), standing frame 0 (row 8 is where an orc's shoulder spike reaches). */
+const CHEEK: [number, number] = [7, 14];
 /** Template tusk pixel (head grid column 4, row 8). */
 const TUSK_AT: [number, number] = [9, 15];
 

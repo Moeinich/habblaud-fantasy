@@ -176,7 +176,7 @@ export function createDebug(sim: Sim, renderer: Renderer, camera: Camera, onCame
 
   return {
     state: () => ({
-      cols: sim.building.cols,
+      shape: sim.building.shape,
       camera: { x: Math.round(camera.x), y: Math.round(camera.y), zoom: camera.zoom },
       rooms: [...sim.rooms.values()].map((r) => ({
         id: r.id,
