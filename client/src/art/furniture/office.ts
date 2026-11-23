@@ -1,6 +1,6 @@
-// Móveis das salas de projeto: mesas (frente e traseira), cadeiras, estantes, arquivo, impressora,
-// lixeira, plantas, divisórias de vidro, mesa de reunião, banqueta, luminária e bebedouro.
-// Coordenadas de desenho = footprint (0,0 no canto superior esquerdo; base em y = h*TILE).
+// Project room furniture: desks (front and back), chairs, shelves, filing cabinet, printer,
+// bin, plants, glass partitions, meeting table, stool, lamp and water cooler.
+// Drawing coordinates = footprint (0,0 at the top-left corner; base at y = h*TILE).
 import { ramp, shade, type Ramp } from '../core/color';
 import { floorSheet, rectAt, type BufFurniture, type BufSprite } from '../core/sprite';
 import type { PixelBuf } from '../core/pixbuf';
@@ -12,7 +12,7 @@ import {
 
 type Box = { x: number; y: number; w: number; h: number };
 
-// ------------------------------------------------------------------ mesas
+// ------------------------------------------------------------------ desks
 
 /** Desk faction: `dark` = Horde; `moonwood` = Elf; `wood` and `white` = Alliance. */
 function deskFaction(variant: string | undefined): Faction {
@@ -29,34 +29,34 @@ interface DeskMats {
 function deskMats(variant: string | undefined): DeskMats {
   switch (variant) {
     case 'white':
-      // Aliança: tampo de mármore claro, borda de pedra talhada, pés de carvalho.
+      // Alliance: light marble top, carved stone edge, oak legs.
       return { top: ramp('#ddd4c0', 0.05), edge: FACTION.alliance.stone, legs: FACTION.alliance.oak, ped: FACTION.alliance.oak };
     case 'dark':
-      // Horda: tábuas grossas de madeira escura, pés de tronco, baú com cintas de ferro.
+      // Horde: thick dark-wood planks, log legs, chest with iron bands.
       return { top: ramp('#5e3d24', 0.07), edge: FACTION.horde.timber, legs: FACTION.horde.timber, ped: ramp('#553822', 0.07) };
     case 'moonwood':
       // Elf: polished violet heartwood top grown from living moonwood, bark edge and root legs.
       return { top: ramp('#a8969e', 0.05), edge: FACTION.elf.bark, legs: FACTION.elf.bark, ped: FACTION.elf.bark };
     default:
-      // Aliança: carvalho mel com friso de ouro.
+      // Alliance: honey oak with a gold trim.
       return { top: ramp('#b07d45', 0.07), edge: FACTION.alliance.oak, legs: FACTION.alliance.oak, ped: FACTION.alliance.oak };
   }
 }
 
 const MUG_COLORS = ['#9c2f25', '#2f7a78', '#e0b23c', '#5f8a3a', '#d9cba8', '#6a4a8a'] as const;
 
-/** Sombra de contato da mesa e sombra do vão sob o tampo (compostas por baixo, após o contorno). */
+/** Contact shadow of the desk and the shadow of the gap under the top (composited underneath, after the outline). */
 function deskShadow(b: PixelBuf): void {
   underRect(b, 3, 8, 26, 7, 'rgba(36,24,14,0.22)');
   contact(b, -1, 13, 34, 4, 0.2);
 }
 
-/** Marca de garra (Horda): três riscos diagonais. */
+/** Claw mark (Horde): three diagonal scratches. */
 function clawMark(b: PixelBuf, x: number, y: number, h: number, c: string): void {
   for (let k = 0; k < 3; k++) b.line(x + k * 2, y, x + k * 2 + 1, y + h - 1, c);
 }
 
-/** Emblema dourado da Aliança (coroa simples de 5x4). */
+/** Golden Alliance emblem (simple 5x4 crown). */
 function crestMark(b: PixelBuf, x: number, y: number): void {
   const g = FACTION.alliance.gold;
   b.set(x, y, g.hi);
@@ -67,7 +67,7 @@ function crestMark(b: PixelBuf, x: number, y: number): void {
   b.hline(x + 1, x + 3, y + 3, g.dk);
 }
 
-/** Pé da mesa: tronco com cintas de ferro (Horda) ou perna torneada com anéis de ouro (Aliança). */
+/** Desk leg: a log with iron bands (Horde) or a turned leg with gold rings (Alliance). */
 function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
   b.rect(x, 8, 3, 8, m.legs.base);
   b.vline(x, 8, 15, m.legs.lt);
@@ -92,7 +92,7 @@ function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
     const g = FACTION.alliance.gold;
     b.hline(x, x + 2, 8, g.base);
     b.set(x, 8, g.hi);
-    // Cintura torneada.
+    // Turned waist.
     b.set(x, 11, m.legs.dk);
     b.set(x + 2, 11, m.legs.dd);
     b.hline(x, x + 2, 14, g.dk);
@@ -100,14 +100,14 @@ function deskLeg(b: PixelBuf, x: number, m: DeskMats, faction: Faction): void {
   }
 }
 
-/** Tampo + bordas + pernas + baú/gaveteiro (comum a desk e desk_back). */
+/** Top + edges + legs + chest/drawer unit (shared by desk and desk_back). */
 function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, back: boolean): void {
   const b = s.buf;
   const horde = faction === 'horde';
   const elf = faction === 'elf';
   const E = FACTION.elf;
   if (back) {
-    // Painel do lado de quem olha cobrindo o vão, com estandarte da facção pendurado no meio.
+    // Panel on the viewer's side covering the gap, with the faction banner hanging in the middle.
     frontFace(b, 1, 8, 30, 6, m.ped);
     b.hline(1, 30, 8, m.ped.dk);
     if (horde) {
@@ -138,7 +138,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
   for (const x of [0, 29]) deskLeg(b, x, m, faction);
   if (!back) {
     if (horde) {
-      // Baú de tábuas com cintas e cadeado de ferro, sob o lado direito.
+      // Plank chest with bands and an iron padlock, under the right side.
       frontFace(b, 19, 8, 10, 8, m.ped);
       b.vline(22, 8, 15, m.ped.dk);
       b.vline(25, 8, 15, m.ped.dk);
@@ -160,7 +160,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       for (const x of [19, 21, 26, 28]) b.set(x, 8 + (x & 1), E.leaf.base);
       b.set(20, 9, E.leaf.lt);
     } else {
-      // Gaveteiro de carvalho com puxadores de ouro.
+      // Oak drawer unit with gold handles.
       frontFace(b, 19, 8, 10, 8, m.ped);
       b.hline(19, 28, 11, m.ped.dk);
       b.hline(20, 27, 12, m.ped.lt);
@@ -168,7 +168,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       b.hline(23, 24, 14, FACTION.alliance.gold.base);
     }
   }
-  // Tampo (12 linhas) + espessura da borda (2 linhas).
+  // Top (12 rows) + edge thickness (2 rows).
   topFace(b, 0, -6, 32, 12, m.top);
   if (elf) {
     // Polished heartwood: long flowing grain with a couple of knots and a thin silver leaf inlay.
@@ -179,7 +179,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
     b.set(kx + 1, -3, m.top.dd);
     b.hline(1, 30, -5, m.top.base);
   } else if (horde) {
-    // Tábuas grossas com juntas e pregos.
+    // Thick planks with joints and nails.
     woodGrain(b, 1, -5, 30, 10, m.top, seed);
     for (const y of [-2, 2]) {
       b.hline(0, 31, y, m.top.dk);
@@ -187,7 +187,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
       b.set(30, y + 1, '#2a2a2e');
     }
   } else if (m.top.lt === deskMats('white').top.lt) {
-    // Mármore: veios cinza diagonais e esparsos (longe do canto de leitura do teclado).
+    // Marble: sparse diagonal grey veins (away from the corner where the keyboard is read).
     const r = rngOf(seed, 9);
     for (let k = 0; k < 3; k++) {
       const x0 = 8 + Math.floor(r() * 18);
@@ -200,7 +200,7 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
   b.hline(0, 31, 7, m.edge.dk);
   b.set(0, 6, m.edge.lt);
   if (horde) {
-    // Cantoneiras de ferro rebitadas na borda da frente.
+    // Riveted iron corner brackets on the front edge.
     for (const x of [0, 28]) {
       b.rect(x, 4, 4, 4, '#3a3a40');
       b.hline(x, x + 3, 4, '#55555e');
@@ -216,13 +216,13 @@ function deskBody(s: BufSprite, m: DeskMats, faction: Faction, seed: number, bac
     b.set(1, 5, E.leaf.base);
     b.set(31, 5, E.leaf.dk);
   } else {
-    // Friso de ouro ao longo da borda.
+    // Gold trim along the edge.
     b.hline(0, 31, 6, FACTION.alliance.gold.base);
     b.set(0, 6, FACTION.alliance.gold.hi);
     b.set(31, 6, FACTION.alliance.gold.dk);
   }
   if (!back) {
-    // Pano da facção caindo sobre a borda, à esquerda (fora do vulto de quem senta no meio).
+    // Faction cloth hanging over the edge, on the left (outside the silhouette of whoever sits in the middle).
     if (horde) {
       drape(b, 4, 5, 6, 8, FACTION.horde.red);
       clawMark(b, 5, 7, 3, '#2a1a14');
@@ -272,7 +272,7 @@ function owlQuill(b: PixelBuf, x: number, y: number): void {
   b.set(x + 4, y - 7, '#e8dcc4');
 }
 
-/** Objetos sobre a mesa (variações por semente). Retorna o retângulo da tela principal e o da secundária. */
+/** Objects on the desk (variations by seed). Returns the main and the secondary screen rectangles. */
 function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Faction): { screen: Box; screen2?: Box } {
   const b = s.buf;
   const r = rngOf(seed, 11);
@@ -294,7 +294,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
     }
     case 2: {
       screen = monitorFront(b, 5, -17, 16, 11, faction);
-      // Tomo aberto de pé à direita (página com runas), capa de couro (Horda) ou azul com cantos de ouro.
+      // Open tome standing on the right (a page with runes), leather cover (Horde) or blue with gold corners.
       // Elf: violet cover with silver corners.
       const cover = horde ? '#5a2a1c' : elf ? '#4a2f66' : '#2f4f9c';
       const corner = horde ? '#e8dcc0' : elf ? FACTION.elf.silver.lt : '#e0b23c';
@@ -316,7 +316,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
     }
     case 3: {
       screen = monitorFront(b, 8, -17, 16, 11, faction);
-      // Selos de cera pregados na moldura.
+      // Wax seals nailed to the frame.
       // Wax seals (Horde red, Alliance blue) or teal moonstones (Elf) on the frame.
       b.rect(22, -15, 2, 2, horde ? '#9c2f25' : elf ? '#4fc8c0' : '#2f4f9c');
       b.rect(9, -15, 2, 2, '#d48a2c');
@@ -341,7 +341,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
       keyboard(b, 11, -1, 10, tone);
       mouse(b, 23, 0, tone);
       if (horde) {
-        // Machado de mão deitado sobre a bancada.
+        // Hand axe lying on the bench.
         handAxe(b, 0, -2);
       } else if (elf) {
         // Leaf-bound scroll tied with a violet ribbon, a fallen leaf beside it.
@@ -352,7 +352,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
         b.set(1, 0, FACTION.elf.leaf.base);
         b.set(2, 0, FACTION.elf.leaf.lt);
       } else {
-        // Pergaminho enrolado com fita azul.
+        // Scroll rolled up with a blue ribbon.
         b.rect(1, -3, 7, 2, '#eadcb4');
         b.hline(1, 7, -2, '#c2a874');
         b.vline(4, -3, -2, '#2f4f9c');
@@ -379,7 +379,7 @@ function deskTop(s: BufSprite, seed: number, tone: DeskItemTone, faction: Factio
   return { screen, screen2 };
 }
 
-/** Tom dos objetos conforme o tampo: no branco, um degrau mais escuros e com sombra firme. */
+/** Tone of the objects according to the top: on white, one step darker and with a firm shadow. */
 function itemTone(variant: string | undefined): DeskItemTone {
   return variant === 'white' ? 'onLight' : 'light';
 }
@@ -407,7 +407,7 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
   const v = seed % 4;
   const mugC = pick(r, MUG_COLORS);
   const tone = itemTone(variant);
-  // Verso claro (couro cru na Horda, painel de carvalho na Aliança) — nunca escuro como a face.
+  // Light back (rawhide for the Horde, oak panel for the Alliance) — never dark like the face.
   const plastic = variant === 'dark' ? 'mid' : 'light';
   if (v === 1) {
     monitorBack(b, 2, -7, 15, 10, plastic, faction);
@@ -427,7 +427,7 @@ export function deskBack(variant: string | undefined, seed: number): BufFurnitur
   return { base: s };
 }
 
-// ------------------------------------------------------------------ cadeiras
+// ------------------------------------------------------------------ chairs
 
 /** Chair faction: `red`, `black`, `green` = Horde; `blue`, `gray` = Alliance; `violet`, `teal` = Elf. */
 function chairFaction(variant: string | undefined): Faction {
@@ -436,7 +436,7 @@ function chairFaction(variant: string | undefined): Faction {
   return 'horde';
 }
 
-// Horda: couro tingido / pele escura / couro de musgo. Aliança: veludo azul real / veludo cinza-ardósia.
+// Horde: dyed leather / dark hide / moss leather. Alliance: royal-blue velvet / slate-grey velvet.
 const CHAIR_COLORS: Readonly<Record<string, string>> = {
   black: '#3e3430',
   blue: '#3d63b8',
@@ -451,7 +451,7 @@ function chairRamp(variant: string | undefined): Ramp {
   return ramp(CHAIR_COLORS[variant ?? 'black'] ?? CHAIR_COLORS.black, 0.07);
 }
 
-/** Toco de árvore (Horda) com raízes, sob o assento. */
+/** Tree stump (Horde) with roots, under the seat. */
 function stumpBase(b: PixelBuf): void {
   const t = FACTION.horde.timber;
   b.rect(4, 9, 8, 6, t.base);
@@ -459,14 +459,14 @@ function stumpBase(b: PixelBuf): void {
   b.vline(5, 10, 13, t.lt);
   b.vline(11, 9, 14, t.dk);
   b.vline(8, 10, 14, t.dk);
-  // Raízes.
+  // Roots.
   b.hline(3, 4, 15, t.base);
   b.hline(11, 12, 15, t.dk);
   b.set(2, 15, t.dk);
   b.set(13, 15, t.dd);
 }
 
-/** Assento de pele (Horda) com franja de pelo irregular. */
+/** Hide seat (Horde) with a ragged fur fringe. */
 function hideSeat(b: PixelBuf, c: Ramp, y: number): void {
   b.rect(2, y, 12, 5, c.lt);
   b.hline(3, 12, y, c.hi);
@@ -474,7 +474,7 @@ function hideSeat(b: PixelBuf, c: Ramp, y: number): void {
   b.hline(2, 13, y + 4, c.dk);
   b.set(2, y, c.base);
   b.set(13, y, c.base);
-  // Tufos de pelo caindo da borda.
+  // Tufts of fur hanging from the edge.
   for (const x of [3, 6, 9, 12]) b.set(x, y + 5, c.dk);
   b.set(5, y + 1, c.hi);
 }
@@ -513,7 +513,7 @@ function leafSeat(b: PixelBuf, c: Ramp, y: number): void {
   b.set(14, y + 3, e.leaf.dk);
 }
 
-/** Pernas torneadas de carvalho (Aliança) com sapatas douradas. */
+/** Turned oak legs (Alliance) with golden feet. */
 function carvedLegs(b: PixelBuf): void {
   const oak = FACTION.alliance.oak;
   const g = FACTION.alliance.gold;
@@ -528,7 +528,7 @@ function carvedLegs(b: PixelBuf): void {
   b.hline(4, 11, 12, oak.base);
 }
 
-/** Assento estofado (Aliança) com debrum dourado e rebites. */
+/** Upholstered seat (Alliance) with gold piping and rivets. */
 function cushionSeat(b: PixelBuf, c: Ramp, y: number): void {
   const oak = FACTION.alliance.oak;
   const g = FACTION.alliance.gold;
@@ -536,7 +536,7 @@ function cushionSeat(b: PixelBuf, c: Ramp, y: number): void {
   b.hline(3, 12, y, c.hi);
   b.hline(2, 13, y + 3, c.base);
   b.set(5, y + 1, c.hi);
-  // Moldura do assento.
+  // Seat frame.
   b.hline(1, 14, y + 4, g.base);
   b.set(1, y + 4, g.hi);
   b.hline(1, 14, y + 5, oak.dk);
@@ -548,7 +548,7 @@ export function officeChair(variant: string | undefined): BufFurniture {
   const faction = chairFaction(variant);
   const horde = faction === 'horde';
   const elf = faction === 'elf';
-  // Base: assento visto por trás (o encosto fica no `front`, por cima de quem senta).
+  // Base: the seat seen from behind (the backrest is in `front`, over whoever sits).
   const base = floorSheet(1, 1, 6);
   const b = base.buf;
   if (horde) {
@@ -563,11 +563,11 @@ export function officeChair(variant: string | undefined): BufFurniture {
   }
   b.outline();
   contact(b, 1, 13, 14, 3, 0.22);
-  // Frente: encosto baixo — cobre a lombar de quem senta e deixa ombros e braços à mostra.
+  // Front: low backrest — covers the sitter's lower back and leaves the shoulders and arms showing.
   const front = floorSheet(1, 1, 6);
   const f = front.buf;
   if (horde) {
-    // Verso do encosto: couro esticado num aro de galho, amarrado; presas de osso subindo dos lados.
+    // Back of the backrest: leather stretched on a branch hoop, lashed; bone tusks rising from the sides.
     const t = FACTION.horde.timber;
     f.rect(4, 7, 8, 6, c.base);
     f.hline(4, 11, 7, c.lt);
@@ -604,7 +604,7 @@ export function officeChair(variant: string | undefined): BufFurniture {
     f.set(12, 4, e.leaf.base);
     f.set(8, 3, e.leaf.hi);
   } else {
-    // Verso do espaldar: tecido da cor do assento esticado num aro de carvalho, montantes com pinhas de ouro.
+    // Back of the chair back: seat-coloured fabric stretched on an oak hoop, posts with gold finials.
     const oak = FACTION.alliance.oak;
     const g = FACTION.alliance.gold;
     f.rect(4, 6, 8, 7, oak.base);
@@ -673,19 +673,19 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
     leafSeat(b, c, 5);
   } else if (horde) {
     stumpBase(b);
-    // Encosto ao norte: couro esticado entre duas presas grandes, amarrado com tiras.
+    // Backrest to the north: leather stretched between two big tusks, lashed with straps.
     b.rect(4, -5, 8, 10, c.base);
     b.hline(4, 11, -5, c.lt);
     b.rect(5, -4, 6, 7, c.lt);
     b.hline(5, 10, -4, c.hi);
     b.vline(11, -5, 4, c.dk);
     b.hline(4, 11, 4, c.dd);
-    // Costura em X no couro.
+    // X stitching on the leather.
     for (const y of [-2, 1]) {
       b.set(6, y, c.dk);
       b.set(9, y, c.dk);
     }
-    // Presas (de trás para a frente) e amarras.
+    // Tusks (back to front) and lashings.
     tusk(b, 2, 6, 13, -1);
     tusk(b, 12, 6, 13, 1);
     for (const y of [-3, 2]) {
@@ -695,7 +695,7 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
     hideSeat(b, c, 5);
   } else {
     carvedLegs(b);
-    // Espaldar alto entalhado: montantes de carvalho com pinhas de ouro, arco no topo e painel estofado.
+    // Tall carved chair back: oak posts with gold finials, an arch on top and an upholstered panel.
     const oak = FACTION.alliance.oak;
     const g = FACTION.alliance.gold;
     for (const x of [2, 12]) {
@@ -706,13 +706,13 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
       b.set(x, -10, g.hi);
       b.set(x + 1, -9, g.dk);
     }
-    // Arco do topo com medalhão.
+    // Arch on top with a medallion.
     b.hline(4, 11, -7, oak.lt);
     b.hline(4, 11, -6, oak.base);
     b.hline(6, 9, -8, oak.lt);
     b.rect(7, -9, 2, 2, g.base);
     b.set(7, -9, g.hi);
-    // Painel estofado com botões dourados.
+    // Upholstered panel with golden buttons.
     b.rect(4, -5, 8, 10, c.base);
     b.rect(5, -4, 6, 8, c.lt);
     b.hline(5, 10, -4, c.hi);
@@ -725,9 +725,9 @@ export function officeChairFront(variant: string | undefined): BufFurniture {
   return { base: s };
 }
 
-// ------------------------------------------------------------------ estantes e arquivos
+// ------------------------------------------------------------------ shelves and cabinets
 
-/** Frasco de poção (3x4) com rolha e brilho. */
+/** Potion flask (3x4) with a cork and a highlight. */
 function potion(b: PixelBuf, x: number, y: number, color: string): void {
   b.set(x + 1, y, '#8a6239');
   b.set(x + 1, y + 1, shade(color, 0.2));
@@ -736,7 +736,7 @@ function potion(b: PixelBuf, x: number, y: number, color: string): void {
   b.set(x + 2, y + 3, shade(color, -0.25));
 }
 
-/** Cantoneira de ferro rebitada (3x3) num canto do móvel. */
+/** Riveted iron corner bracket (3x3) on a corner of the furniture. */
 function cornerIron(b: PixelBuf, x: number, y: number): void {
   b.rect(x, y, 3, 3, '#3a3a40');
   b.set(x, y, '#55555e');
@@ -748,7 +748,7 @@ export function bookshelf(seed: number): BufFurniture {
   const b = s.buf;
   const w = ramp('#7a5232', 0.07);
   const r = rngOf(seed, 21);
-  // Corpo: laterais grossas, cornija e fundo escuro.
+  // Body: thick sides, cornice and a dark back.
   topFace(b, 0, -21, 32, 3, w);
   b.rect(0, -18, 32, 34, w.dk);
   b.rect(2, -17, 28, 31, '#2a1c12');
@@ -756,14 +756,14 @@ export function bookshelf(seed: number): BufFurniture {
   b.vline(1, -18, 15, w.base);
   b.vline(30, -18, 15, w.base);
   b.vline(31, -18, 15, w.dd);
-  // Prateleiras.
+  // Shelves.
   const shelves = [-8, 3, 15];
   for (const y of shelves) {
     b.hline(1, 30, y, w.lt);
     b.hline(1, 30, y + 1, w.dk);
   }
   b.hline(0, 31, 15, w.dd);
-  // Conteúdo de cada prateleira (apoiado na prateleira de baixo).
+  // Contents of each shelf (resting on the shelf below).
   const tomes = ['#9c2f25', '#2f4f9c', '#5f8a3a', '#6a4a8a', '#7a4a2a', '#b8572c', '#2f6a6a'];
   shelves.forEach((shelf, i) => {
     const bottom = shelf - 1;
@@ -771,12 +771,12 @@ export function bookshelf(seed: number): BufFurniture {
     while (x < 29) {
       const kind = r();
       if (kind < 0.12 && x < 24) {
-        // Poções.
+        // Potions.
         potion(b, x, bottom - 3, pick(r, ['#5fd06a', '#d0453a', '#4a8ae0', '#b06ad8']));
         potion(b, x + 3, bottom - 3, pick(r, ['#5fd06a', '#e0b23c', '#4a8ae0']));
         x += 7;
       } else if (kind < 0.22 && x < 24) {
-        // Pilha de pergaminhos enrolados (pontas redondas).
+        // Stack of rolled scrolls (round ends).
         for (const [dx, dy] of [[0, -1], [2, -1], [1, -3], [4, -1]] as const) {
           b.rect(x + dx, bottom + dy, 2, 2, '#eadcb4');
           b.set(x + dx + 1, bottom + dy + 1, '#b8a272');
@@ -789,7 +789,7 @@ export function bookshelf(seed: number): BufFurniture {
         candle(b, x + 1, bottom - 1, 3);
         x += 6;
       } else {
-        // Tomos grossos com faixas douradas na lombada (um às vezes deitado).
+        // Thick tomes with gold bands on the spine (one sometimes lying down).
         const n = 2 + Math.floor(r() * 3);
         for (let k = 0; k < n && x < 28; k++) {
           const bw = 2;
@@ -840,14 +840,14 @@ export function binderShelf(seed: number): BufFurniture {
     b.hline(1, 14, y + 1, w.dk);
   }
   const tops = [-17, -6, 5];
-  // Rolos de pergaminho de pé, amarrados com fitas coloridas.
+  // Standing scroll rolls, tied with coloured ribbons.
   const binders = ['#e2d2a4', '#d8c79c', '#eadcb4', '#cfbf90', '#e2d2a4', '#d8c79c', '#eadcb4'];
   const ribbons = ['#9c2f25', '#2f4f9c', '#e0b23c', '#5f8a3a'];
   tops.forEach((top, i) => {
     const bottom = shelves[i] - 1;
     const h = bottom - top + 1;
     if (i === 2 && r() < 0.6) {
-      // Arca pequena com cintas de ferro na prateleira de baixo.
+      // Small chest with iron bands on the bottom shelf.
       const c = ramp('#8a5a32', 0.07);
       b.rect(2, bottom - 6, 12, 7, c.base);
       b.hline(2, 13, bottom - 6, c.lt);
@@ -883,7 +883,7 @@ export function binderShelf(seed: number): BufFurniture {
 }
 
 export function filingCabinet(): BufFurniture {
-  // Cômoda de gavetões de carvalho com cintas de ferro rebitadas, espelhos de fechadura dourados.
+  // Oak chest of big drawers with riveted iron bands and golden keyhole plates.
   const s = floorSheet(1, 1, 8);
   const b = s.buf;
   const m = ramp('#8a5a32', 0.07);
@@ -895,7 +895,7 @@ export function filingCabinet(): BufFurniture {
     b.hline(1, 14, y + 1, m.dd);
   }
   for (const y of [-1, 5, 11]) {
-    // Argola de ferro + espelho dourado.
+    // Iron ring + golden keyhole plate.
     b.rect(7, y, 2, 2, '#e0b23c');
     b.set(7, y, '#f6d878');
     b.set(8, y + 1, '#8a6a20');
@@ -903,7 +903,7 @@ export function filingCabinet(): BufFurniture {
     b.set(9, y + 2, '#3a3a40');
     b.hline(7, 8, y + 3, '#3a3a40');
   }
-  // Montantes de ferro com rebites.
+  // Iron posts with rivets.
   for (const x of [1, 14]) {
     b.vline(x, -3, 15, '#3a3a40');
     for (const y of [-2, 4, 10]) b.set(x, y, '#8a8a94');
@@ -912,7 +912,7 @@ export function filingCabinet(): BufFurniture {
   b.set(2, -7, '#8a8a94');
   b.set(13, -7, '#8a8a94');
   candle(b, 3, -6, 3);
-  // Tomo deitado em cima.
+  // Tome lying on top.
   b.rect(8, -7, 6, 2, '#2f4f9c');
   b.hline(8, 13, -7, '#3d63b8');
   b.set(13, -6, '#e0b23c');
@@ -922,29 +922,29 @@ export function filingCabinet(): BufFurniture {
 }
 
 export function printer(): BufFurniture {
-  // Prensa de goblin: cavalete de madeira, fuso de latão com manivela, engrenagens de cobre,
-  // lâmpada verde de "ligado" e uma folha impressa saindo na frente.
+  // Goblin press: wooden frame, brass screw with a crank, copper gears,
+  // a green "on" lamp and a printed sheet coming out at the front.
   const s = floorSheet(1, 1, 22);
   const b = s.buf;
   const t = ramp('#8a5a32', 0.07);
   const cu = ramp('#c27a3a', 0.08);
-  // Base (caixa da máquina).
+  // Base (machine housing).
   topFace(b, 0, 1, 16, 4, t);
   frontFace(b, 0, 5, 16, 11, t);
   woodGrain(b, 0, 5, 16, 11, t, 5, true);
   ironBand(b, 0, 15, 7);
   ironBand(b, 0, 15, 14);
-  // Engrenagem de cobre na face.
+  // Copper gear on the face.
   b.ellipse(4.5, 10.5, 3, 3, cu.base);
   for (const [x, y] of [[4, 6], [4, 14], [0, 10], [8, 10], [1, 7], [7, 7], [1, 13], [7, 13]] as const) b.set(x, y, cu.dk);
   b.set(3, 9, cu.hi);
   b.rect(4, 10, 2, 2, '#3a2a1c');
-  // Bandeja com folha impressa.
+  // Tray with a printed sheet.
   b.rect(9, 9, 6, 6, '#eadcb4');
   b.hline(9, 14, 9, '#f6eed6');
   for (const y of [11, 13]) b.hline(10, 13, y, '#5a4a3a');
   b.vline(14, 10, 14, '#c2a874');
-  // Cavalete: dois montantes e travessa.
+  // Frame: two posts and a crossbar.
   for (const x of [1, 13]) {
     b.rect(x, -12, 2, 14, t.base);
     b.vline(x, -12, 1, t.lt);
@@ -955,18 +955,18 @@ export function printer(): BufFurniture {
   b.hline(0, 15, -12, t.dk);
   rivet(b, 1, -13);
   rivet(b, 13, -13);
-  // Fuso de latão e manivela.
+  // Brass screw and crank.
   b.rect(7, -11, 2, 8, cu.lt);
   for (let y = -10; y < -3; y += 2) b.set(8, y, cu.dk);
   b.hline(3, 12, -8, cu.base);
   b.set(3, -8, cu.hi);
   b.rect(2, -9, 2, 3, '#3a3a40');
   b.rect(12, -9, 2, 3, '#3a3a40');
-  // Platina de ferro sobre a folha.
+  // Iron platen over the sheet.
   b.rect(4, -3, 8, 2, '#4a4a52');
   b.hline(4, 11, -3, '#6a6a74');
   b.rect(4, -1, 8, 2, '#eadcb4');
-  // Lâmpada verde e cano com fumaça.
+  // Green lamp and a smoking pipe.
   b.rect(14, -18, 2, 3, '#7fd65a');
   b.set(14, -18, '#d4ffb0');
   b.set(15, -16, '#4fa03a');
@@ -981,7 +981,7 @@ export function printer(): BufFurniture {
 }
 
 export function trashBin(): BufFurniture {
-  // Barrilzinho de aduelas com aros de ferro e pergaminhos amassados.
+  // Little stave barrel with iron hoops and crumpled scrolls.
   const s = floorSheet(1, 1, 3);
   const b = s.buf;
   const m = ramp('#9a6a3c', 0.07);
@@ -999,7 +999,7 @@ export function trashBin(): BufFurniture {
   b.set(4, 13, '#8a8a94');
   b.ellipse(8, 5.5, 4.5, 2, m.lt);
   b.ellipse(8, 5.6, 3.5, 1.3, '#2a1c12');
-  // Pergaminhos amassados.
+  // Crumpled scrolls.
   b.rect(5, 3, 3, 3, '#eadcb4');
   b.set(7, 4, '#c2a874');
   b.rect(8, 2, 3, 3, '#e2d2a4');
@@ -1010,9 +1010,9 @@ export function trashBin(): BufFurniture {
   return { base: s };
 }
 
-// ------------------------------------------------------------------ plantas
+// ------------------------------------------------------------------ plants
 
-/** Tina de madeira com aro de ferro (vaso rústico). (x, y) = canto superior esquerdo. */
+/** Wooden tub with an iron hoop (rustic pot). (x, y) = top-left corner. */
 function tub(b: PixelBuf, x: number, y: number, w: number, h: number): void {
   const m = ramp('#8a5a32', 0.07);
   pot(b, x, y, w, h, m);
@@ -1022,19 +1022,19 @@ function tub(b: PixelBuf, x: number, y: number, w: number, h: number): void {
   b.set(x + 1, y + 2, '#8a8a94');
 }
 
-/** Urna de pedra talhada (Aliança) com friso dourado. */
+/** Carved stone urn (Alliance) with a gold trim. */
 function urn(b: PixelBuf, x: number, y: number, w: number, h: number): void {
   pot(b, x, y, w, h, FACTION.alliance.stone);
   b.hline(x + 1, x + w - 2, y + 3, FACTION.alliance.gold.base);
   b.set(x + 1, y + 3, FACTION.alliance.gold.hi);
 }
 
-/** Cogumelo com chapéu (cx = centro, y = topo do chapéu); `glow` marca as pintas luminosas. */
+/** Capped mushroom (cx = centre, y = top of the cap); `glow` marks the glowing spots. */
 function mushroom(b: PixelBuf, cx: number, y: number, rx: number, stem: number, cap: Ramp, glow: string): void {
-  // Haste.
+  // Stem.
   b.rect(cx - 1, y + 2, 2, stem, '#e8dcc0');
   b.vline(cx, y + 2, y + 1 + stem, '#c4b498');
-  // Chapéu em cúpula.
+  // Domed cap.
   for (let i = 0; i < 3; i++) {
     const half = Math.max(1, Math.round(rx * Math.sqrt(1 - ((2 - i) / 3) ** 2)));
     b.hline(cx - half, cx + half - 1, y + i, i === 2 ? cap.dk : cap.base);
@@ -1051,7 +1051,7 @@ export function plantSmall(variant: string | undefined, seed: number): BufFurnit
   const b = s.buf;
   const v = variant ?? 'fern';
   if (v === 'succulent') {
-    // Cogumelos luminosos numa tigela de pedra.
+    // Glowing mushrooms in a stone bowl.
     pot(b, 3, 10, 10, 6, M.stone);
     b.rect(4, 10, 8, 1, '#3a2a1c');
     const teal = ramp('#2f8a8a', 0.09);
@@ -1060,7 +1060,7 @@ export function plantSmall(variant: string | undefined, seed: number): BufFurnit
     mushroom(b, 10, 1, 4, 8, teal, '#9ff5e0');
     mushroom(b, 7, 7, 2, 3, teal, '#9ff5e0');
   } else if (v === 'flower') {
-    // Flores douradas numa urna de pedra (Aliança).
+    // Golden flowers in a stone urn (Alliance).
     urn(b, 4, 9, 8, 7);
     b.rect(5, 9, 6, 1, '#3a2a1c');
     const g = M.leaf;
@@ -1073,13 +1073,13 @@ export function plantSmall(variant: string | undefined, seed: number): BufFurnit
       b.set(x + 1, y + 1, '#f7d154');
     }
   } else {
-    // Arbusto espinhoso numa tina com aro de ferro.
+    // Thorny bush in a tub with an iron hoop.
     tub(b, 4, 9, 8, 7);
     b.rect(5, 9, 6, 1, '#3a2a1c');
     const g = ramp('#4f7a34', 0.08);
     const fr: [number, number, number][] = [[0, 7, 0], [16, 7, 0], [2, 1, 1], [14, 1, 0], [5, -3, 1], [11, -3, 1], [8, -5, 1], [-1, 11, 0], [17, 11, 0]];
     fr.forEach(([x1, y1, light]) => leafBlade(b, 8, 9, x1, y1, 2.6, light ? g : ramp(g.dk, 0.07), x1 < 8));
-    // Espinhos/bagas vermelhas.
+    // Thorns/red berries.
     for (const [x, y] of [[3, 4], [12, 2], [7, -2], [14, 8]] as const) b.set(x, y, '#c8402e');
     b.set(8, -5, g.hi);
   }
@@ -1093,7 +1093,7 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
   const b = s.buf;
   const v = variant ?? 'ficus';
   if (v === 'bonsai') {
-    // Bonsai retorcido numa bandeja de pedra sobre plinto talhado, com lanterninha.
+    // Twisted bonsai in a stone tray on a carved plinth, with a little lantern.
     const st = M.stone;
     topFace(b, 1, 7, 14, 3, st);
     frontFace(b, 1, 10, 14, 4, st);
@@ -1117,12 +1117,12 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
     foliage(b, 4, -6.5, 3.6, 2.2, M.leafDark, seed + 3);
     foliage(b, 12.5, -7.5, 3.2, 2, M.leafDark, seed + 4);
     foliage(b, 8.5, -10.5, 4, 2.4, M.leaf, seed + 5);
-    // Lanterna de pedra no canto da bandeja.
+    // Stone lantern in the corner of the tray.
     b.rect(12, 1, 3, 3, '#7a7468');
     b.set(13, 2, '#ffd060');
     b.hline(11, 15, 0, '#5a554c');
   } else if (v === 'palm') {
-    // Totem espiritual: poste entalhado com rostos pintados, presas e penas, numa base de pedras.
+    // Spirit totem: a carved post with painted faces, tusks and feathers, on a base of stones.
     const t = FACTION.horde.timber;
     b.ellipse(8, 13.5, 6, 2.5, '#7a7468');
     b.ellipse(7, 12.8, 4, 1.5, '#9c968a');
@@ -1130,7 +1130,7 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
     b.vline(5, -18, 12, t.lt);
     b.vline(6, -18, 12, ramp('#6a4a30', 0.07).base);
     b.vline(10, -18, 12, t.dd);
-    // Rostos entalhados (dois), com olhos pintados de vermelho e boca de presas.
+    // Carved faces (two), with eyes painted red and a tusked mouth.
     for (const fy of [-12, 0]) {
       b.hline(5, 10, fy - 1, t.dd);
       b.rect(6, fy + 1, 2, 1, '#c8402e');
@@ -1140,11 +1140,11 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
       b.set(6, fy + 3, FACTION.horde.bone.lt);
       b.set(9, fy + 3, FACTION.horde.bone.lt);
     }
-    // Faixas pintadas.
+    // Painted bands.
     b.hline(5, 10, -6, '#9c2f25');
     b.hline(5, 10, 6, '#9c2f25');
     b.hline(5, 10, 7, '#2a1a14');
-    // Presas grandes saindo dos lados e topo com penas.
+    // Big tusks coming out of the sides and a feathered top.
     tusk(b, 4, -8, 6, -1);
     tusk(b, 11, -8, 6, 1);
     b.rect(4, -21, 8, 3, '#3a3a40');
@@ -1155,12 +1155,12 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
     }
     b.set(7, -28, '#ffffff');
   } else if (v === 'monstera') {
-    // Cogumelos gigantes luminosos numa jardineira de pedra.
+    // Giant glowing mushrooms in a stone planter.
     pot(b, 2, 6, 12, 10, M.stone);
     b.rect(3, 6, 10, 1, '#3a2a1c');
     const teal = ramp('#2f8a8a', 0.09);
     const violet = ramp('#7a4ab0', 0.09);
-    // Cogumelo grande central.
+    // Big central mushroom.
     b.rect(6, -10, 4, 16, '#e8dcc0');
     b.vline(9, -10, 5, '#c4b498');
     b.vline(6, -10, 5, '#f4ead6');
@@ -1170,11 +1170,11 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
     b.set(4, -16, violet.hi);
     b.hline(1, 14, -11, violet.dd);
     for (const [x, y] of [[3, -13], [8, -16], [12, -13], [10, -15], [5, -12]] as const) b.set(x, y, '#e0c8ff');
-    // Cogumelos menores.
+    // Smaller mushrooms.
     mushroom(b, 3, -2, 3, 7, teal, '#9ff5e0');
     mushroom(b, 13, -4, 3, 9, teal, '#9ff5e0');
   } else {
-    // Árvore retorcida numa tina com cintas de ferro.
+    // Twisted tree in a tub with iron bands.
     tub(b, 3, 6, 10, 10);
     b.rect(4, 6, 8, 1, '#3a2a1c');
     const tr = ramp('#5e4430', 0.08);
@@ -1197,9 +1197,9 @@ export function plantTall(variant: string | undefined, seed: number): BufFurnitu
   return { base: s };
 }
 
-// ------------------------------------------------------------------ divisórias de vidro
+// ------------------------------------------------------------------ glass partitions
 
-/** Ponta talhada de um tronco da paliçada (madeira clara no corte). */
+/** Carved tip of a palisade log (light wood at the cut). */
 function stakeTip(b: PixelBuf, x: number, top: number, w: number, log: Ramp): void {
   b.hline(x + 1, x + w - 2, top - 1, log.lt);
   b.set(x + 1, top - 1, '#e2c89a');
@@ -1208,13 +1208,13 @@ function stakeTip(b: PixelBuf, x: number, top: number, w: number, log: Ramp): vo
 }
 
 export function glassPartition(variant: string | undefined): BufFurniture {
-  // Paliçada: troncos apontados, amarrados com corda e cintados de ferro (separa áreas do acampamento).
+  // Palisade: pointed logs, tied with rope and banded with iron (separates areas of the camp).
   const v = variant ?? 'h';
   const s = floorSheet(1, 1, 22, 2);
   const b = s.buf;
   const log = ramp('#9a6a3c', 0.07);
   if (v === 'v') {
-    // Norte-sul: vista de cima é uma faixa de topos de tronco (sem contorno para emendar).
+    // North-south: seen from above it is a strip of log tops (no outline, so it joins up).
     const cols = ['#3f2a18', '#7a5232', '#a8763f', '#c9a06a', '#a8763f', '#7a5232', '#5e3d24', '#3f2a18'];
     cols.forEach((c, i) => b.vline(4 + i, -16, 15, c));
     for (let y = -16; y < 16; y += 4) {
@@ -1227,7 +1227,7 @@ export function glassPartition(variant: string | undefined): BufFurniture {
     return { base: s };
   }
   if (v === 'end') {
-    // Ponta: poste mais grosso com ponta talhada, cintas de ferro e flâmula vermelha.
+    // End: a thicker post with a carved tip, iron bands and a red pennant.
     b.rect(5, -16, 6, 32, log.base);
     b.vline(5, -16, 15, log.lt);
     b.vline(6, -16, 15, log.lt);
@@ -1243,7 +1243,7 @@ export function glassPartition(variant: string | undefined): BufFurniture {
     contact(b, 3, 13, 10, 4, 0.2);
     return { base: s };
   }
-  // 'h': leste-oeste — 4 troncos de 4px com pontas, amarrados por cordas e uma cinta de ferro.
+  // 'h': east-west — 4 logs of 4px with tips, tied with ropes and an iron band.
   for (let i = 0; i < 4; i++) {
     const x = i * 4;
     const top = -14 - ((i * 5) % 3);
@@ -1267,9 +1267,9 @@ export function glassPartition(variant: string | undefined): BufFurniture {
   return { base: s };
 }
 
-// ------------------------------------------------------------------ reunião e apoio
+// ------------------------------------------------------------------ meeting and support
 
-/** Miniatura de soldado (peão) da mesa de guerra: base, corpo colorido e cabeça. */
+/** Soldier miniature (pawn) of the war table: base, coloured body and head. */
 function figurine(b: PixelBuf, x: number, y: number, c: string): void {
   b.hline(x, x + 2, y + 3, '#3a3a40');
   b.rect(x, y + 1, 3, 2, c);
@@ -1280,10 +1280,10 @@ function figurine(b: PixelBuf, x: number, y: number, c: string): void {
 export function meetingTable(seed: number): BufFurniture {
   const s = floorSheet(3, 2, 12);
   const b = s.buf;
-  // Mesa de guerra: tampo de tábuas com borda cintada, mapa aberto, miniaturas, adaga e velas.
+  // War table: plank top with a banded edge, an open map, miniatures, a dagger and candles.
   const m = ramp('#9a6a3c', 0.07);
   const r = rngOf(seed, 31);
-  // Cavaletes em X nas pontas.
+  // X-shaped trestles at the ends.
   for (const x of [3, 41]) {
     b.line(x, 31, x + 4, 22, M.walnut.base, 2);
     b.line(x + 4, 31, x, 22, M.walnut.lt, 2);
@@ -1293,10 +1293,10 @@ export function meetingTable(seed: number): BufFurniture {
   b.hline(0, 47, 21, m.dk);
   woodGrain(b, 1, -3, 46, 22, m, seed);
   for (const y of [4, 12]) b.hline(1, 46, y, m.base);
-  // Borda cintada de ferro com cantoneiras.
+  // Iron-banded edge with corner brackets.
   ironBand(b, 0, 47, 20);
   for (const [x, y] of [[0, -4], [45, -4], [0, 17], [45, 17]] as const) cornerIron(b, x, y);
-  // Mapa de pergaminho no centro, com rio, montanhas, floresta e fronteira.
+  // Parchment map in the centre, with a river, mountains, forest and a border.
   b.rect(4, 2, 40, 10, '#e2d2a4');
   b.hline(4, 43, 2, '#c9b483');
   b.hline(4, 43, 11, '#b8a272');
@@ -1312,7 +1312,7 @@ export function meetingTable(seed: number): BufFurniture {
     b.set(x + 1, y, '#3a5a28');
   }
   for (let y = 3; y < 11; y += 2) b.set(24, y, '#9c2f25');
-  // Miniaturas: Horda (vermelho) à esquerda, Aliança (azul) à direita; adaga cravada.
+  // Miniatures: Horde (red) on the left, Alliance (blue) on the right; a dagger stuck in.
   figurine(b, 18, 4, '#b8402e');
   figurine(b, 20, 7, '#b8402e');
   figurine(b, 27, 5, '#3d63b8');
@@ -1320,9 +1320,9 @@ export function meetingTable(seed: number): BufFurniture {
   b.line(14, 6, 16, 10, '#c4c8d0');
   b.rect(13, 4, 2, 2, '#5a3c22');
   b.set(12, 5, '#e0b23c');
-  // Tomos e objetos (variam por semente).
+  // Tomes and objects (vary by seed).
   const laptop = (x: number, y: number, facing: 'up' | 'down') => {
-    // Tomos abertos (de pé, virados para a câmera) ou fechados (capa de couro).
+    // Open tomes (standing, facing the camera) or closed (leather cover).
     if (facing === 'down') {
       b.rect(x, y, 9, 5, '#5a2a1c');
       b.hline(x, x + 8, y, '#7a3a26');
@@ -1342,7 +1342,7 @@ export function meetingTable(seed: number): BufFurniture {
   else papers(b, 34, -1, 7, 5);
   papers(b, 8, 14, 6, 4);
   mug(b, 18, 14, pick(r, MUG_COLORS));
-  // Velas.
+  // Candles.
   candle(b, 29, 1, 3);
   candle(b, 16, 0, 3);
   skullCandle(b, 24, 13);
@@ -1353,7 +1353,7 @@ export function meetingTable(seed: number): BufFurniture {
 }
 
 export function stool(): BufFurniture {
-  // Toco de árvore com raízes, anéis no topo e marca de machado.
+  // Tree stump with roots, rings on top and an axe mark.
   const s = floorSheet(1, 1, 2);
   const b = s.buf;
   const bark = ramp('#5e3d24', 0.07);
@@ -1362,13 +1362,13 @@ export function stool(): BufFurniture {
   b.vline(5, 7, 13, bark.lt);
   b.vline(11, 6, 14, bark.dk);
   b.vline(8, 8, 13, bark.dk);
-  // Raízes.
+  // Roots.
   b.hline(2, 4, 15, bark.base);
   b.set(2, 14, bark.lt);
   b.hline(11, 13, 15, bark.dk);
   b.set(13, 14, bark.dk);
   b.set(7, 15, bark.dk);
-  // Musgo.
+  // Moss.
   b.set(5, 12, '#6a8a3a');
   b.set(4, 13, '#5f7a34');
   b.ellipse(8, 6, 4.5, 2.2, '#d9b88e');
@@ -1382,22 +1382,22 @@ export function stool(): BufFurniture {
 }
 
 export function floorLamp(): BufFurniture {
-  // Braseiro alto: tripé de ferro, poste e cesto de ferro com chamas grandes.
+  // Tall brazier: iron tripod, a post and an iron basket with big flames.
   const s = floorSheet(1, 1, 26);
   const b = s.buf;
   const iron = FACTION.horde.iron;
-  // Tripé.
+  // Tripod.
   b.line(8, 9, 3, 15, iron.base);
   b.line(8, 9, 13, 15, iron.dk);
   b.line(8, 9, 8, 14, iron.lt);
   b.set(3, 15, iron.dd);
   b.set(13, 15, iron.dd);
-  // Poste.
+  // Post.
   b.rect(7, -14, 2, 24, iron.base);
   b.vline(7, -14, 9, iron.lt);
   b.hline(6, 9, -2, '#c9a46a');
   b.hline(6, 9, -1, '#a8844e');
-  // Cesto.
+  // Basket.
   b.rect(3, -18, 10, 4, iron.base);
   b.hline(3, 12, -18, iron.hi);
   b.hline(4, 11, -15, iron.dk);
@@ -1405,7 +1405,7 @@ export function floorLamp(): BufFurniture {
   for (const x of [5, 8, 11]) b.vline(x, -17, -15, iron.dd);
   b.set(3, -19, iron.lt);
   b.set(12, -19, iron.lt);
-  // Chamas.
+  // Flames.
   b.hline(4, 11, -19, '#d0451e');
   b.hline(4, 11, -20, '#e08a2c');
   b.hline(5, 10, -21, '#f0b040');
@@ -1422,20 +1422,20 @@ export function floorLamp(): BufFurniture {
 }
 
 export function waterCooler(): BufFurniture {
-  // Barril de água num suporte, com torneira de madeira, balde embaixo e concha pendurada.
+  // Water barrel on a stand, with a wooden tap, a bucket underneath and a hanging ladle.
   const s = floorSheet(1, 1, 20);
   const b = s.buf;
   const st = ramp('#5e3d24', 0.07);
-  // Suporte.
+  // Stand.
   b.rect(3, 4, 2, 12, st.base);
   b.rect(11, 4, 2, 12, st.base);
   b.vline(3, 4, 15, st.lt);
   b.hline(3, 12, 10, st.lt);
-  // Balde embaixo.
+  // Bucket underneath.
   b.rect(6, 11, 4, 4, '#9a6a3c');
   b.hline(6, 9, 12, '#3a3a40');
   b.hline(6, 9, 11, '#5f8aa8');
-  // Barril.
+  // Barrel.
   const m = ramp('#9a6a3c', 0.07);
   for (let y = -14; y <= 3; y++) {
     const bulge = y > -11 && y < 0 ? 1 : 0;
@@ -1452,11 +1452,11 @@ export function waterCooler(): BufFurniture {
   b.ellipse(7.5, -14.5, 4.5, 1.5, m.lt);
   b.ellipse(7.5, -14.5, 3, 0.8, '#4f8ac0');
   b.set(6, -15, '#a8d8f0');
-  // Torneira com gota.
+  // Tap with a drop.
   b.rect(7, 3, 2, 2, '#6b4a2b');
   b.set(7, 3, '#8a6239');
   b.set(8, 6, '#7fb0d0');
-  // Concha pendurada na lateral.
+  // Ladle hanging on the side.
   b.vline(14, -9, -3, '#8a6239');
   b.set(14, -10, '#3a3a40');
   b.rect(13, -3, 3, 2, '#6b4a2b');

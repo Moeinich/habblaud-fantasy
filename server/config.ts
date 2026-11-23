@@ -1,4 +1,4 @@
-// Configuração do servidor a partir das variáveis de ambiente (documentadas em server/README.md).
+// Server configuration from environment variables (documented in server/README.md).
 import { existsSync, readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { homedir } from 'node:os';
@@ -14,48 +14,48 @@ import { parseBrand, type Brand } from '../shared/brand';
 export interface ServerConfig {
   port: number;
   host: string;
-  /** `--dev`: Vite em middleware mode (HMR) no mesmo servidor. */
+  /** `--dev`: Vite in middleware mode (HMR) on the same server. */
   dev: boolean;
-  /** Liga o simulador de demonstração ao iniciar. */
+  /** Starts the demo simulator on boot. */
   demo: boolean;
-  /** Rodando dentro de um container (PIDs do registro são do host: não dá para checá-los). */
+  /** Running inside a container (registry PIDs belong to the host, so they can't be checked). */
   inDocker: boolean;
   home: string;
-  /** Config dirs do Claude Code observados (um por conta). */
+  /** Claude Code config dirs being watched (one per account). */
   claudeDirs: string[];
-  /** Onde o Habblaud guarda o próprio estado (nomes persistidos). */
+  /** Where Habblaud keeps its own state (persisted names). */
   dataDir: string;
   /**
-   * Pasta com o uso capturado pelo statusline do Claude Code (scripts/statusline-tap.mjs):
-   * HABBLAUD_USAGE_DIR ou ~/.habblaud/usage. No Docker, o docker-up monta essa pasta em /usage.
+   * Folder with the usage captured by Claude Code's statusline (scripts/statusline-tap.mjs):
+   * HABBLAUD_USAGE_DIR or ~/.habblaud/usage. In Docker, docker-up mounts this folder at /usage.
    */
   usageDir: string;
-  /** Nomes extras aceitos no cabeçalho Host/Origin (HABBLAUD_ALLOWED_HOSTS); localhost e IPs sempre valem. */
+  /** Extra names accepted in the Host/Origin header (HABBLAUD_ALLOWED_HOSTS); localhost and IPs always pass. */
   allowedHosts: Set<string>;
   /**
-   * Terminal (GET /api/agents/:id/terminal) ligado: só com bind local, isto é, com o Habblaud acessível apenas
-   * pelo próprio computador (ver terminalOffReason). É a trava de tudo o que mostra ou age sobre as sessões.
+   * Terminal (GET /api/agents/:id/terminal) on: only with a local bind, i.e. with Habblaud reachable only from
+   * this computer (see terminalOffReason). It's the lock for everything that shows or acts on the sessions.
    */
   terminal: boolean;
   /**
-   * Mensagens pelo escritório (POST /api/messages e a caixa de entrada do plugin habblaud-mensagens) ligadas: a
-   * trava do terminal e HABBLAUD_MENSAGENS sem desligar (ver messagesOffReason).
+   * Messages through the office (POST /api/messages and the habblaud-mensagens plugin's inbox) on: the terminal
+   * lock plus HABBLAUD_MENSAGENS not turned off (see messagesOffReason).
    */
   messages: boolean;
-  /** Grava a linha do tempo do escritório para o timelapse (<dataDir>/timeline); HABBLAUD_TIMELINE=0 desliga. */
+  /** Records the office timeline for the timelapse (<dataDir>/timeline); HABBLAUD_TIMELINE=0 turns it off. */
   timeline: boolean;
-  /** Raiz do projeto (onde fica o package.json); serve dist/client a partir daqui. */
+  /** Project root (where package.json lives); dist/client is served from here. */
   rootDir: string;
   version: string;
-  /** Repositório no GitHub ("dono/nome", do campo `repository` do package.json) onde saem as versões novas. */
+  /** GitHub repository ("owner/name", from package.json's `repository` field) where new versions are released. */
   repo?: string;
-  /** Consulta o GitHub atrás de versão nova (server/updates/checker.ts); HABBLAUD_UPDATE_CHECK=0 desliga. */
+  /** Checks GitHub for a new version (server/updates/checker.ts); HABBLAUD_UPDATE_CHECK=0 turns it off. */
   updateCheck: boolean;
-  /** Observa as sessões do Codex (sources/codex/); HABBLAUD_CODEX=0 desliga. */
+  /** Watches Codex sessions (sources/codex/); HABBLAUD_CODEX=0 turns it off. */
   codex: boolean;
-  /** Segunda porta, com login, para o celular na rede local (http/remote.ts); ausente = desligada. */
+  /** Second port, with login, for the phone on the local network (http/remote.ts); absent = off. */
   remote?: RemoteConfig;
-  /** Por que o acesso remoto ficou desligado quando as variáveis estão incompletas. */
+  /** Why remote access stayed off when the variables are incomplete. */
   remoteWarning?: string;
   /**
    * HABBLAUD_INGEST=1: other machines send their sessions to /api/ingest/* (server/ingest/), only on the remote port
@@ -74,7 +74,7 @@ export function isTruthy(v: string | undefined): boolean {
   return !!v && /^(1|true|yes|sim|on)$/i.test(v.trim());
 }
 
-/** Sobe a partir de `from` até achar o package.json do projeto. */
+/** Walks up from `from` until it finds the project's package.json. */
 export function findRoot(from: string): string {
   let dir = from;
   for (let i = 0; i < 6; i++) {
@@ -84,7 +84,7 @@ export function findRoot(from: string): string {
         const name = (JSON.parse(readFileSync(pkg, 'utf8')) as { name?: unknown }).name;
         if (name === 'habblaud') return dir;
       } catch {
-        // package.json ilegível: continua subindo
+        // unreadable package.json: keep walking up
       }
     }
     const parent = dirname(dir);
@@ -94,7 +94,7 @@ export function findRoot(from: string): string {
   return resolve(from, '..');
 }
 
-/** Versão e repositório do package.json. */
+/** Version and repository from package.json. */
 function readPackage(rootDir: string): { version: string; repo?: string } {
   try {
     const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { version?: unknown; repository?: unknown };
@@ -110,8 +110,8 @@ export function detectDocker(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /**
- * Endereço de escuta que só o próprio computador alcança: 127.0.0.0/8, `::1` (com ou sem colchetes)
- * ou `localhost`. `0.0.0.0`, `::`, IPs de rede e nomes quaisquer não contam.
+ * Listen address that only this computer can reach: 127.0.0.0/8, `::1` (with or without brackets)
+ * or `localhost`. `0.0.0.0`, `::`, network IPs and arbitrary names don't count.
  */
 export function isLoopbackBind(value: string | undefined): boolean {
   let v = value?.trim().toLowerCase() ?? '';
@@ -121,7 +121,7 @@ export function isLoopbackBind(value: string | undefined): boolean {
   if (family === 4) return v.startsWith('127.');
   if (family !== 6) return false;
   try {
-    // Forma canônica (0:0:0:0:0:0:0:1 -> [::1]).
+    // Canonical form (0:0:0:0:0:0:0:1 -> [::1]).
     return new URL(`http://[${v}]/`).hostname === '[::1]';
   } catch {
     return false;
@@ -129,36 +129,36 @@ export function isLoopbackBind(value: string | undefined): boolean {
 }
 
 /**
- * Por que o terminal fica desligado (undefined = ligado). Os transcripts têm a conversa inteira, então ele
- * só liga quando o Habblaud não fica exposto além do próprio computador:
- * - Node: o HABBLAUD_HOST precisa ser loopback;
- * - Docker: o processo sempre escuta em 0.0.0.0 dentro do container e quem decide a exposição é a porta
- *   publicada no host, HABBLAUD_BIND (o docker-compose.yml repassa o mesmo valor ao container). Ausente
- *   ou vazia = desligado: sem ela não dá para saber se a porta está exposta.
- * HABBLAUD_TERMINAL com qualquer valor que não seja "ligado" (0, false, off...) desliga; não existe forma
- * de ligar com a porta exposta.
+ * Why the terminal is off (undefined = on). Transcripts hold the whole conversation, so it only turns on
+ * when Habblaud isn't exposed beyond this computer:
+ * - Node: HABBLAUD_HOST must be loopback;
+ * - Docker: the process always listens on 0.0.0.0 inside the container, and what decides exposure is the port
+ *   published on the host, HABBLAUD_BIND (docker-compose.yml passes the same value to the container). Absent
+ *   or empty = off: without it there's no way to know whether the port is exposed.
+ * HABBLAUD_TERMINAL with any value other than "on" (0, false, off...) turns it off; there is no way to turn
+ * it on with the port exposed.
  */
 export function terminalOffReason(env: NodeJS.ProcessEnv, host: string, inDocker: boolean): string | undefined {
   const flag = env.HABBLAUD_TERMINAL?.trim();
   if (flag && !isTruthy(flag)) return `HABBLAUD_TERMINAL=${flag}`;
   if (inDocker) {
     const bind = env.HABBLAUD_BIND?.trim();
-    if (!bind) return tr('HABBLAUD_BIND não chegou ao container, então a porta pode estar exposta na rede');
-    return isLoopbackBind(bind) ? undefined : tr('a porta está exposta na rede: HABBLAUD_BIND={0}', [bind]);
+    if (!bind) return tr('HABBLAUD_BIND didn\'t reach the container, so the port may be exposed on the network');
+    return isLoopbackBind(bind) ? undefined : tr('the port is exposed on the network: HABBLAUD_BIND={0}', [bind]);
   }
-  return isLoopbackBind(host) ? undefined : tr('a porta está exposta na rede: HABBLAUD_HOST={0}', [host]);
+  return isLoopbackBind(host) ? undefined : tr('the port is exposed on the network: HABBLAUD_HOST={0}', [host]);
 }
 
 /**
- * Por que as mensagens pelo escritório ficam desligadas (undefined = ligadas). Elas entram na sessão como se você
- * as tivesse digitado, então seguem a trava do terminal; HABBLAUD_MENSAGENS com qualquer valor que não seja
- * "ligado" (0, false, off, no...) desliga só elas.
+ * Why messages through the office are off (undefined = on). They enter the session as if you had typed them, so
+ * they follow the terminal lock; HABBLAUD_MENSAGENS with any value other than "on" (0, false, off, no...) turns
+ * off just them.
  */
 export function messagesOffReason(env: NodeJS.ProcessEnv, host: string, inDocker: boolean): string | undefined {
   const flag = env.HABBLAUD_MENSAGENS?.trim();
   if (flag && !isTruthy(flag)) return `HABBLAUD_MENSAGENS=${flag}`;
   const terminal = terminalOffReason(env, host, inDocker);
-  return terminal ? tr('mesma trava do terminal: {0}', [terminal]) : undefined;
+  return terminal ? tr('same lock as the terminal: {0}', [terminal]) : undefined;
 }
 
 /**
@@ -167,8 +167,8 @@ export function messagesOffReason(env: NodeJS.ProcessEnv, host: string, inDocker
  */
 export function ingestOffReason(env: NodeJS.ProcessEnv, remote: RemoteConfig | undefined): string | undefined {
   if (!isTruthy(env.HABBLAUD_INGEST)) return 'off';
-  if (!remote) return tr('HABBLAUD_INGEST=1 precisa do acesso remoto ligado (npm run remote:setup): os tokens só entram pela porta remota');
-  if (!remote.tls) return tr('HABBLAUD_INGEST=1 precisa da porta remota com HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP não serve)');
+  if (!remote) return tr('HABBLAUD_INGEST=1 needs remote access turned on (npm run remote:setup): tokens are only accepted on the remote port');
+  if (!remote.tls) return tr('HABBLAUD_INGEST=1 needs the remote port with HTTPS (HABBLAUD_REMOTE_INSECURE_HTTP is not enough)');
   return undefined;
 }
 

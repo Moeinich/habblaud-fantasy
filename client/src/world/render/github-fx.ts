@@ -1,9 +1,9 @@
-// GitHub no escritório, lado do desenho: festa (confete caindo na sala) e alarme (giroflex vermelho
-// nos cantos da sala, luz girando pelo chão, tom vermelho pulsando no piso e balão "!" sobre quem viu
-// o CI falhar), além da faixa curta ("PR #12 mergeado!") desenhada pelo overlay em espaço de tela.
-// Com prefers-reduced-motion: nada pisca nem gira (luz parada, tom fixo, sem chuva de confete).
-// Desempenho: só percorre as salas com efeito (quase sempre nenhuma); sprites em cache; o confete
-// usa o pool fixo de partículas, com taxa limitada por sala.
+// GitHub in the office, drawing side: party (confetti falling in the room) and alarm (red rotating
+// beacons in the room's corners, light sweeping the floor, a red tint pulsing on the floor and a "!"
+// balloon over whoever saw CI fail), plus the short banner ("PR #12 merged!") drawn by the overlay in
+// screen space. With prefers-reduced-motion nothing blinks or spins (still light, fixed tint, no
+// confetti rain). Performance: only walks the rooms with an effect (almost always none); sprites are
+// cached; the confetti uses the fixed particle pool, at a rate limited per room.
 import { TILE } from '../../art/api';
 import type { HeadInfo } from './renderer';
 import type { Particles } from './particles';
@@ -14,25 +14,25 @@ const UI_FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "H
 const BANNER_FONT = `800 11.5px ${UI_FONT}`;
 const BANNER_H = 22;
 
-/** Voltas do giroflex (ms por volta). */
+/** Beacon rotation (ms per turn). */
 const SPIN_MS = 900;
-/** Confetes por segundo em cada sala em festa (~160 no ar por sala; o pool tem 600). */
+/** Confetti per second in each partying room (~160 in the air per room; the pool holds 600). */
 const CONFETTI_RATE = 42;
 
 let reducedMq: MediaQueryList | null | undefined;
 
-/** prefers-reduced-motion (a MediaQueryList acompanha a mudança sozinha). */
+/** prefers-reduced-motion (the MediaQueryList tracks changes by itself). */
 export function reducedMotion(): boolean {
   if (reducedMq === undefined) reducedMq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   return !!reducedMq?.matches;
 }
 
-/** Entrada (fade de 300 ms) e saída (600 ms) de um efeito: 0..1. */
+/** Fade-in (300 ms) and fade-out (600 ms) of an effect: 0..1. */
 export function fxFade(fx: Pick<RoomFx, 'start' | 'end'>, now: number): number {
   return Math.max(0, Math.min(1, (now - fx.start) / 300, (fx.end - now) / 600));
 }
 
-// ------------------------------------------------------------------ sprites (gerados uma vez)
+// ------------------------------------------------------------------ sprites (generated once)
 
 type Rows = readonly string[];
 
@@ -52,8 +52,8 @@ function sprite(rows: Rows, pal: Readonly<Record<string, string>>): HTMLCanvasEl
   return c;
 }
 
-// Giroflex: cúpula vermelha sobre uma base de metal. Quadros de uma volta: lâmpada de frente (brilho
-// no meio), indo para a direita, de costas (cúpula escura) e voltando pela esquerda.
+// Beacon: a red dome on a metal base. Frames of one turn: lamp facing the viewer (glint in the
+// middle), turning right, facing away (dark dome) and coming back round the left.
 const BEACON_ROWS: Rows[] = [
   ['..kkkkk..', '.kRbwbrk.', 'kRRbwbRrk', 'kRRbwbRrk', 'kRRRRRRrk', 'kmmmmmmmk', 'kMMMMMMMk', '.kkkkkkk.'],
   ['..kkkkk..', '.kRRRwbk.', 'kRRRRRwbk', 'kRRRRRwbk', 'kRRRRRRrk', 'kmmmmmmmk', 'kMMMMMMMk', '.kkkkkkk.'],
@@ -62,7 +62,7 @@ const BEACON_ROWS: Rows[] = [
 ];
 const BEACON_PAL = { k: '#3a1012', R: '#ff3b3b', r: '#c4161f', b: '#ff9a9a', w: '#fff4f4', d: '#9b161d', e: '#6d0d12', m: '#8d96a6', M: '#5c6372' };
 
-// Balão "!" (vermelho, com rabicho) sobre quem viu o CI falhar.
+// "!" balloon (red, with a tail) over whoever saw CI fail.
 const BANG_ROWS: Rows = ['.kkkkkkk.', 'krrrrrrrk', 'krrrwrrrk', 'krrrwrrrk', 'krrrwrrrk', 'krrrrrrrk', 'krrrwrrrk', 'krrrrrrrk', '.kkkkkkk.', '...krk...', '....k....'];
 const BANG_PAL = { k: '#4a0d10', r: '#e5383b', w: '#ffffff' };
 
@@ -77,12 +77,12 @@ function bangSprite(): HTMLCanvasElement {
   return (bang ??= sprite(BANG_ROWS, BANG_PAL));
 }
 
-/** Quadro do giroflex na fase `ph` da volta (0 = de frente): de frente, à direita, de costas, à esquerda. */
+/** Beacon frame at phase `ph` of the turn (0 = facing): facing, right, away, left. */
 export function beaconFrame(ph: number): number {
   return Math.min(3, Math.floor(((((ph + 0.125) % 1) + 1) % 1) * 4));
 }
 
-/** Quanto a lâmpada está virada para quem olha na fase `ph` (1 = de frente, 0 = de lado ou de costas). */
+/** How much the lamp faces the viewer at phase `ph` (1 = facing, 0 = side-on or facing away). */
 export function beaconFacing(ph: number): number {
   return Math.max(0, Math.cos(ph * Math.PI * 2));
 }
@@ -90,8 +90,8 @@ export function beaconFacing(ph: number): number {
 const glows = new Map<number, HTMLCanvasElement>();
 
 /**
- * Halo vermelho (gradiente radial, desenhado por cima com opacidade): tinge de vermelho tanto a parede
- * clara quanto o escuro — com 'lighter', o vermelho some sobre o branco.
+ * Red halo (radial gradient, drawn on top with opacity): tints both the light wall and the dark areas red —
+ * with 'lighter', red would vanish over white.
  */
 function redGlow(size: number): HTMLCanvasElement {
   let c = glows.get(size);
@@ -110,7 +110,7 @@ function redGlow(size: number): HTMLCanvasElement {
   return c;
 }
 
-// ------------------------------------------------------------------ mundo
+// ------------------------------------------------------------------ world
 
 interface View {
   x0: number;
@@ -119,7 +119,7 @@ interface View {
   y1: number;
 }
 
-/** Retângulos (px de mundo) de uma sala: a sala inteira e o piso (sem as paredes). */
+/** Rectangles (world px) of a room: the whole room and the floor (without the walls). */
 function roomRects(r: { x: number; y: number; w: number; h: number }) {
   return {
     room: { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE },
@@ -128,7 +128,7 @@ function roomRects(r: { x: number; y: number; w: number; h: number }) {
 }
 
 export class RoomFxRenderer {
-  /** Acumulador da taxa de confete por sala. */
+  /** Per-room confetti rate accumulator. */
   private acc = new Map<string, number>();
 
   private visibleRoom(sim: Sim, fx: RoomFx, v: View) {
@@ -140,7 +140,7 @@ export class RoomFxRenderer {
     return rects;
   }
 
-  /** Tom vermelho pulsando no piso das salas em alarme (antes dos móveis e personagens). */
+  /** Red tint pulsing on the floor of alarmed rooms (before furniture and characters). */
   drawFloor(ctx: CanvasRenderingContext2D, sim: Sim, now: number, v: View): void {
     if (!sim.roomFx.active.size) return;
     const still = reducedMotion();
@@ -157,7 +157,7 @@ export class RoomFxRenderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Confete caindo nas salas em festa (antes de as partículas andarem). */
+  /** Confetti falling in partying rooms (before the particles move). */
   emit(particles: Particles, sim: Sim, now: number, dt: number, v: View): void {
     if (!sim.roomFx.active.size) {
       if (this.acc.size) this.acc.clear();
@@ -171,7 +171,7 @@ export class RoomFxRenderer {
       }
       const rects = this.visibleRoom(sim, fx, v);
       if (!rects) continue;
-      // começa forte e rareia nos últimos 2 s
+      // starts strong and thins out in the last 2 s
       const k = Math.min(1, (fx.end - now) / 2000) * (now - fx.start < 1500 ? 1.6 : 1);
       let a = (this.acc.get(id) ?? 0) + Math.min(0.1, dt) * CONFETTI_RATE * k;
       const f = rects.floor;
@@ -187,8 +187,8 @@ export class RoomFxRenderer {
   }
 
   /**
-   * Giroflex nos dois cantos de cima da sala em alarme, com a luz girando pelo chão, e o balão "!" do
-   * responsável. Desenhado por cima da luz/escuridão (brilha também à noite e com a sala apagada).
+   * Beacons in both top corners of an alarmed room, with their light sweeping the floor, and the
+   * culprit's "!" balloon. Drawn over the light/darkness (it also shines at night and in a dark room).
    */
   drawLights(ctx: CanvasRenderingContext2D, sim: Sim, heads: ReadonlyMap<string, HeadInfo>, now: number, v: View): void {
     if (!sim.roomFx.active.size) return;
@@ -198,8 +198,8 @@ export class RoomFxRenderer {
       const fade = fxFade(fx, now);
       const rects = this.visibleRoom(sim, fx, v);
       if (rects) this.drawBeacons(ctx, rects, now - fx.start, fade, still);
-      // balão "!" sobre o responsável (onde ele estiver), à direita do ícone da cabeça; o overlay
-      // sobe o balão de atividade para não cobri-lo
+      // "!" balloon over the culprit (wherever they are), right of the head icon; the overlay
+      // raises the activity balloon so it doesn't cover it
       const head = fx.agentId ? heads.get(fx.agentId) : undefined;
       if (head?.visible) {
         const s = bangSprite();
@@ -216,11 +216,11 @@ export class RoomFxRenderer {
     const r = rects.room;
     const f = rects.floor;
     const spots = [r.x + 4, r.x + r.w - 4];
-    // parado (prefers-reduced-motion): lâmpadas de frente, acesas, sem girar
+    // still (prefers-reduced-motion): lamps facing the viewer, lit, not spinning
     const ph = still ? 0 : t / SPIN_MS;
-    /** Quanto a lâmpada `i` está virada para quem olha (0..1); a da direita está meia volta adiantada. */
+    /** How much lamp `i` faces the viewer (0..1); the right one is half a turn ahead. */
     const facing = (i: number) => (still ? 0.6 : beaconFacing(ph + i * 0.5));
-    // luz girando: um facho de cada lâmpada varrendo o chão da sala (em lados opostos)
+    // sweeping light: one beam from each lamp sweeping the room's floor (on opposite sides)
     if (!still) {
       ctx.save();
       ctx.beginPath();
@@ -236,7 +236,7 @@ export class RoomFxRenderer {
       }
       ctx.restore();
     }
-    // halo de cada lâmpada (vaza um pouco para fora da sala, como luz de verdade)
+    // each lamp's halo (spills a little outside the room, like real light)
     const glow = redGlow(48);
     for (const [i, x] of spots.entries()) {
       ctx.globalAlpha = (0.25 + 0.75 * facing(i)) * fade;
@@ -248,7 +248,7 @@ export class RoomFxRenderer {
       const sx = Math.round(x - s.width / 2);
       const sy = Math.round(r.y + 7 - s.height);
       ctx.drawImage(s, sx, sy);
-      // de frente para quem olha: raios curtos saindo da cúpula
+      // facing the viewer: short rays coming out of the dome
       if (!still && facing(i) > 0.75) {
         ctx.fillStyle = '#ff6b6b';
         const cy = sy + 2;
@@ -265,9 +265,9 @@ export class RoomFxRenderer {
   }
 }
 
-// ------------------------------------------------------------------ faixa (espaço de tela)
+// ------------------------------------------------------------------ banner (screen space)
 
-/** Retângulo ocupado na tela (px CSS). */
+/** Rectangle taken up on screen (CSS px). */
 export interface BannerRect {
   x: number;
   y: number;
@@ -276,10 +276,10 @@ export interface BannerRect {
 }
 
 /**
- * Faixa curta da festa ("🎉 PR #12 mergeado!", dourada com as pontas recortadas) ou do alarme
- * ("🚨 CI falhou (main)", vermelha) centrada em `cx`, com o topo em `top` (px CSS). Entra descendo,
- * sai sumindo; a festa balança de leve e o alarme pulsa — parados com prefers-reduced-motion. Sem
- * espaço para o texto, vira só o emoji. Devolve o retângulo ocupado (para os balões desviarem).
+ * Short banner for a party ("🎉 PR #12 merged!", gold with notched ends) or an alarm ("🚨 CI failed
+ * (main)", red) centred on `cx`, with its top at `top` (CSS px). Slides down in, fades out; the party
+ * sways slightly and the alarm pulses — both still with prefers-reduced-motion. Without room for the
+ * text it becomes just the emoji. Returns the rectangle it takes up (so the balloons can avoid it).
  */
 export function drawFxBanner(
   ctx: CanvasRenderingContext2D,
@@ -311,7 +311,7 @@ export function drawFxBanner(
   const edge = party ? '#c98a12' : '#7a0d16';
   const ink = party ? '#3a2606' : '#ffffff';
   if (!text || text === '…') {
-    // só o emoji, num círculo
+    // just the emoji, in a circle
     const r = 11;
     ctx.fillStyle = 'rgba(16,20,32,0.25)';
     ctx.beginPath();
@@ -350,7 +350,7 @@ export function drawFxBanner(
   ribbon(0);
   ctx.fill();
   if (party) {
-    // bandeirinhas coloridas na borda de cima
+    // coloured bunting along the top edge
     const colors = ['#ff4d6d', '#3fa7ff', '#3ddc84', '#b06bff'];
     for (let i = 0, px = x + notch + 6; px < x + w - notch - 6; i++, px += 9) {
       ctx.fillStyle = colors[i % colors.length];

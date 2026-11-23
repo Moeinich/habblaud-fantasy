@@ -27,7 +27,7 @@ type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _sameAppearance: Same<SeedAppearance, Appearance> = true;
 void _sameAppearance;
 
-/** Chave estável de uma aparência (para cache de sprites). */
+/** Stable key of an appearance (for the sprite cache). */
 export function appearanceKey(a: Appearance): string {
   return [
     a.skin, a.hair, a.hairStyle, a.eyes, a.top, a.topAccent, a.topStyle, a.bottom, a.shoes, a.accessory,
@@ -35,13 +35,13 @@ export function appearanceKey(a: Appearance): string {
   ].join('|');
 }
 
-// ------------------------------------------------------------------ editor do personagem
+// ------------------------------------------------------------------ character editor
 
 const uniq = (list: readonly string[]): readonly string[] => [...new Set(list)];
 const colorsOf = (pairs: readonly (readonly [string, number])[]): string[] => pairs.map(([c]) => c);
 const ACCENTS = uniq([...LIGHT_ACCENTS, ...TOP_COLORS]);
 
-/** Cores da parte de cima e do detalhe para cada estilo: as mesmas que o sorteio usa. */
+/** Top and detail colours for each style: the same ones the random roll uses. */
 function topPalettes(style: TopStyle): { top: readonly string[]; topAccent: readonly string[] } {
   switch (style) {
     case 'shirt_tie':
@@ -55,7 +55,7 @@ function topPalettes(style: TopStyle): { top: readonly string[]; topAccent: read
 
 export type EditorOptions = Readonly<Record<PartKey, readonly string[]>>;
 
-/** Opções de cada peça no editor do personagem, conforme a aparência atual (as cores da roupa dependem do estilo). */
+/** Options for each piece in the character editor, given the current appearance (clothes colours depend on the style). */
 export function editorOptions(a: Appearance): EditorOptions {
   const top = topPalettes(a.topStyle);
   return {
@@ -78,20 +78,20 @@ export function editorOptions(a: Appearance): EditorOptions {
 const TALL_HAIR: readonly string[] = ['afro', 'bun', 'mohawk', 'pigtails'];
 const SHORT_HAIR: readonly string[] = ['bald', 'buzz'];
 
-/** Combinação que o sorteio evita (o editor desabilita a opção): devolve o motivo, ou undefined se pode. */
+/** A combination the random roll avoids (the editor disables the option): returns the reason, or undefined if allowed. */
 export function editorConflict(a: Appearance, key: PartKey, value: string): string | undefined {
   if (key === 'accessory') {
-    if ((value === 'cap' || value === 'beanie') && TALL_HAIR.includes(a.hairStyle)) return tr('Não combina com este cabelo');
-    if (value === 'bow' && SHORT_HAIR.includes(a.hairStyle)) return tr('Não combina com este cabelo');
+    if ((value === 'cap' || value === 'beanie') && TALL_HAIR.includes(a.hairStyle)) return tr('Doesn\'t go with this hair');
+    if (value === 'bow' && SHORT_HAIR.includes(a.hairStyle)) return tr('Doesn\'t go with this hair');
   }
   if (key === 'hairStyle') {
-    if ((a.accessory === 'cap' || a.accessory === 'beanie') && TALL_HAIR.includes(value)) return tr('Não combina com o boné ou o gorro');
-    if (a.accessory === 'bow' && SHORT_HAIR.includes(value)) return tr('Não combina com o laço');
+    if ((a.accessory === 'cap' || a.accessory === 'beanie') && TALL_HAIR.includes(value)) return tr('Doesn\'t go with the cap or beanie');
+    if (a.accessory === 'bow' && SHORT_HAIR.includes(value)) return tr('Doesn\'t go with the bow');
   }
   return undefined;
 }
 
-/** Depois de trocar um estilo: cores que não existem na paleta nova caem na primeira dela. */
+/** After switching a style: colours that don't exist in the new palette fall back to its first one. */
 export function fitToOptions(a: Appearance): Appearance {
   const o = editorOptions(a);
   const fit = (v: string, list: readonly string[]): string => (list.includes(v) ? v : list[0]);

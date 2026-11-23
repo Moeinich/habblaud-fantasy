@@ -1,17 +1,17 @@
-// Proteções de borda do servidor HTTP (valem para a API, os estáticos e o Vite no modo dev).
+// Edge protections of the HTTP server (they apply to the API, static files and Vite in dev mode).
 //
-// 1) DNS rebinding: um site malicioso pode fazer o próprio domínio resolver para 127.0.0.1 e,
-//    assim, ler /api/snapshot "como se fosse a mesma origem". O navegador manda o cabeçalho Host
-//    com o domínio do atacante, então só aceitamos Host que seja um IP literal, `localhost`
-//    (ou `*.localhost`) ou um nome liberado em HABBLAUD_ALLOWED_HOSTS.
-// 2) CSRF: requisições que mudam estado (POST) exigem `Content-Type: application/json` — o que um
-//    formulário ou um fetch "simples" de outro site não consegue enviar sem preflight de CORS, que
-//    este servidor nunca autoriza — e, quando há `Origin`, ele precisa ser da mesma origem ou local.
+// 1) DNS rebinding: a malicious site can make its own domain resolve to 127.0.0.1 and thus read
+//    /api/snapshot "as if it were the same origin". The browser sends the Host header with the
+//    attacker's domain, so we only accept a Host that is a literal IP, `localhost` (or `*.localhost`)
+//    or a name allowed in HABBLAUD_ALLOWED_HOSTS.
+// 2) CSRF: state-changing requests (POST) require `Content-Type: application/json` — which a form or a
+//    "simple" fetch from another site can't send without a CORS preflight, which this server never
+//    grants — and, when there is an `Origin`, it must be the same origin or local.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isIP } from 'node:net';
 import { tr } from '../../shared/i18n';
 
-/** Nomes liberados por HABBLAUD_ALLOWED_HOSTS (lista separada por vírgula; porta é ignorada). */
+/** Names allowed by HABBLAUD_ALLOWED_HOSTS (comma-separated list; the port is ignored). */
 export function parseAllowedHosts(raw: string | undefined): Set<string> {
   const out = new Set<string>();
   for (const item of (raw ?? '').split(',')) {
@@ -22,8 +22,8 @@ export function parseAllowedHosts(raw: string | undefined): Set<string> {
 }
 
 /**
- * Nome do host (minúsculo, sem porta e sem colchetes no IPv6) a partir de um cabeçalho Host
- * ou de um `host[:porta]`. Devolve undefined se o valor for inválido.
+ * Host name (lowercase, no port and no IPv6 brackets) from a Host header or a `host[:port]`.
+ * Returns undefined if the value is invalid.
  */
 export function hostnameOf(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -47,9 +47,9 @@ function isLoopbackName(name: string): boolean {
 }
 
 /**
- * Cabeçalho Host local (`localhost`, `*.localhost`, 127.x ou `[::1]`; porta ignorada)? Usado pelo terminal, pelas
- * permissões e pelas mensagens, que só atendem quem abriu o Habblaud pelo próprio computador: um IP da rede ou um nome
- * de HABBLAUD_ALLOWED_HOSTS (proxy, túnel) não serve. Ausente ou inválido: false.
+ * Is the Host header local (`localhost`, `*.localhost`, 127.x or `[::1]`; port ignored)? Used by the terminal,
+ * permissions and messages, which only serve whoever opened Habblaud on the computer itself: a network IP or a
+ * HABBLAUD_ALLOWED_HOSTS name (proxy, tunnel) doesn't count. Absent or invalid: false.
  */
 export function isLoopbackHost(host: string | undefined): boolean {
   const name = hostnameOf(host);
@@ -57,9 +57,9 @@ export function isLoopbackHost(host: string | undefined): boolean {
 }
 
 /**
- * Host aceito? IP literal (não há DNS envolvido, logo não há rebinding), `localhost`/`*.localhost`
- * (os navegadores resolvem sempre para o loopback) ou um nome de HABBLAUD_ALLOWED_HOSTS.
- * Sem cabeçalho Host (HTTP/1.0, ferramentas de linha de comando): aceito — navegadores sempre enviam.
+ * Is the Host accepted? A literal IP (no DNS involved, hence no rebinding), `localhost`/`*.localhost`
+ * (browsers always resolve it to loopback) or a HABBLAUD_ALLOWED_HOSTS name.
+ * No Host header (HTTP/1.0, command-line tools): accepted — browsers always send one.
  */
 export function hostAllowed(host: string | undefined, allowed: ReadonlySet<string>): boolean {
   if (host === undefined) return true;
@@ -69,8 +69,8 @@ export function hostAllowed(host: string | undefined, allowed: ReadonlySet<strin
 }
 
 /**
- * Origin aceito para requisições que mudam estado: ausente (curl, scripts), da mesma origem que o
- * Host da requisição, local (localhost/loopback) ou um nome de HABBLAUD_ALLOWED_HOSTS.
+ * Origin accepted for state-changing requests: absent (curl, scripts), the same origin as the request's
+ * Host, local (localhost/loopback) or a HABBLAUD_ALLOWED_HOSTS name.
  */
 export function originAllowed(origin: string | undefined, host: string | undefined, allowed: ReadonlySet<string>): boolean {
   if (origin === undefined) return true;
@@ -103,13 +103,13 @@ function reject(res: ServerResponse, status: number, message: string): void {
 }
 
 export interface GuardOptions {
-  /** Nomes extras aceitos no Host/Origin (HABBLAUD_ALLOWED_HOSTS). */
+  /** Extra names accepted in Host/Origin (HABBLAUD_ALLOWED_HOSTS). */
   allowedHosts?: ReadonlySet<string>;
 }
 
 /**
- * Devolve um filtro para o início de cada requisição: responde (e devolve true) quando a
- * requisição deve ser recusada; senão devolve false e não toca na resposta.
+ * Returns a filter for the start of every request: it responds (and returns true) when the request
+ * must be refused; otherwise it returns false and leaves the response untouched.
  */
 export function createRequestGuard(opts: GuardOptions = {}): (req: IncomingMessage, res: ServerResponse) => boolean {
   const allowed = opts.allowedHosts ?? new Set<string>();
@@ -119,8 +119,8 @@ export function createRequestGuard(opts: GuardOptions = {}): (req: IncomingMessa
       reject(
         res,
         403,
-        tr('Host não permitido: {0}. Abra o Habblaud por http://localhost (ou pelo IP) ', [String(host).slice(0, 100)]) +
-          tr('ou libere o nome em HABBLAUD_ALLOWED_HOSTS.'),
+        tr('Host not allowed: {0}. Open Habblaud at http://localhost (or by IP) ', [String(host).slice(0, 100)]) +
+          tr('or allow the name in HABBLAUD_ALLOWED_HOSTS.'),
       );
       return true;
     }
@@ -128,12 +128,12 @@ export function createRequestGuard(opts: GuardOptions = {}): (req: IncomingMessa
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return false;
     const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
     if (!originAllowed(origin, host, allowed)) {
-      reject(res, 403, tr('Origem não permitida.'));
+      reject(res, 403, tr('Origin not allowed.'));
       return true;
     }
     const path = (req.url ?? '/').split('?')[0];
     if (path.startsWith('/api/') && !isJsonContentType(req.headers['content-type'])) {
-      reject(res, 415, tr('Envie o corpo como JSON (Content-Type: application/json).'));
+      reject(res, 415, tr('Send the body as JSON (Content-Type: application/json).'));
       return true;
     }
     return false;

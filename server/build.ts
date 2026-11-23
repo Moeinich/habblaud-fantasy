@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 const BUNDLE = /bundle\/(main-[\w-]+)\.js/;
 
-/** Lê o id do build a partir do index.html compilado (com cache pela data de modificação). */
+/** Reads the build id from the compiled index.html (cached by modification time). */
 export function createBuildReader(rootDir: string): () => string | undefined {
   const file = join(rootDir, 'dist', 'client', 'index.html');
   let mtime = -1;

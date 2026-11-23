@@ -1,5 +1,5 @@
-// O app do cliente: store (dados) -> mundo (canvas) -> UI (painéis). Carregado por main.ts depois do dicionário do
-// idioma ativo, porque vários módulos chamam tr() ao carregar.
+// The client app: store (data) -> world (canvas) -> UI (panels). Loaded by main.ts after the active language's
+// dictionary, because several modules call tr() when they load.
 import { loadAccess } from './net/access';
 import { OfficeStore } from './net/store';
 import { createWorld } from './world';
@@ -8,14 +8,14 @@ import { migrateLegacyKeys, safeLocalStorage } from './ui/prefs';
 import { getLocale, tr } from '../../shared/i18n';
 
 export function start(): void {
-  // Antes de tudo: o mundo (carteiras) e a UI (preferências) leem o localStorage ao serem criados.
+  // Before anything else: the world (wallets) and the UI (preferences) read localStorage when they are created.
   migrateLegacyKeys(safeLocalStorage());
 
-  // Idioma escolhido (shared/i18n): leitores de tela e o corretor do navegador seguem o atributo lang.
+  // Chosen language (shared/i18n): screen readers and the browser spellchecker follow the lang attribute.
   document.documentElement.lang = getLocale();
   document.querySelector('meta[name="description"]')?.setAttribute(
     'content',
-    tr('Escritório virtual em pixel art que mostra, em tempo real, o que seus agentes do Claude Code estão fazendo.'),
+    tr('Pixel-art virtual office that shows, in real time, what your Claude Code agents are doing.'),
   );
 
   const params = new URLSearchParams(location.search);
@@ -24,13 +24,13 @@ export function start(): void {
   const uiRoot = document.getElementById('ui') as HTMLElement;
   const world = createWorld(worldCanvas, store);
   createUI(uiRoot, store, world);
-  // O que esta página pode fazer (porta local ou remota com login) chega antes do primeiro snapshot (ou desiste em
-  // poucos segundos e fica a regra de antes).
+  // What this page may do (local port, or remote with login) arrives before the first snapshot (or gives up after a
+  // few seconds and the previous rule stays).
   if (store.mock) store.connect();
   else {
     void loadAccess().finally(() => store.connect());
-    // Reconexão (servidor reiniciado, celular de volta do bloqueio): o acesso pode ter mudado, e o login pode ter
-    // vencido (loadAccess leva à tela de entrada).
+    // Reconnection (server restarted, phone back from the lock screen): access may have changed, and the login may
+    // have expired (loadAccess goes to the sign-in screen).
     let opened = false;
     store.on('connection', (state) => {
       if (state === 'open') {
@@ -40,6 +40,6 @@ export function start(): void {
     });
   }
 
-  // Facilita a depuração pelo console do navegador.
+  // Makes debugging from the browser console easier.
   Object.assign(window, { habblaud: { store, world } });
 }

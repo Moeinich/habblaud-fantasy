@@ -1,7 +1,7 @@
-// Interface do Habblaud (painéis DOM sobre o canvas do escritório).
-// Recebe o OfficeStore (dados) e o WorldApi (canvas) e monta: barra superior com uso por conta,
-// barra lateral, gaveta de detalhes, feed, avisos, configurações, ajuda e estados de carregamento/vazio.
-// DOM incremental: os snapshots (até ~5/s) só marcam a UI como "suja"; tudo é reconciliado uma vez por quadro.
+// Habblaud interface (DOM panels over the office canvas).
+// Takes the OfficeStore (data) and the WorldApi (canvas) and builds: top bar with per-account usage,
+// sidebar, details drawer, feed, notifications, settings, help and loading/empty states.
+// Incremental DOM: snapshots (up to ~5/s) only mark the UI as "dirty"; everything is reconciled once per frame.
 import { access, onAccessChange } from '../net/access';
 import '@fontsource/pixelify-sans/400.css';
 import '@fontsource/pixelify-sans/500.css';
@@ -40,9 +40,9 @@ import { UpdateBanner } from './update';
 import { FreeArea } from './viewport';
 import { tr } from '../../../shared/i18n';
 
-/** Relógio dos tempos relativos ("há 5 s"). */
+/** Clock for relative times ("5 s ago"). */
 const CLOCK_MS = 5_000;
-/** Relógio do cronômetro dos shells ("12:31") e do prazo dos pedidos do Codex, ligado só enquanto há um dos dois. */
+/** Clock for the shell stopwatch ("12:31") and the Codex request deadline, running only while either exists. */
 const SHELL_CLOCK_MS = 1_000;
 const NARROW_QUERY = '(max-width: 900px)';
 
@@ -71,7 +71,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   let help: HelpDialog;
   let area: FreeArea;
   let timelapse: TimelapsePlayer;
-  /** A seleção em curso partiu da UI (lista, feed, aviso...), não de um clique no canvas. */
+  /** The current selection came from the UI (list, feed, notification...), not from a canvas click. */
   let uiSelecting = false;
 
   const ctx: UiContext = {
@@ -94,7 +94,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     select(sel, opts) {
       if (sel && opts?.focus) area.setIntent(sel);
       else area.clearIntent();
-      // A gaveta passa a contar na área livre ANTES do foco: o mundo centraliza já na parte visível.
+      // The drawer counts toward the free area BEFORE focusing: the world centers on the visible part right away.
       const prev = selection;
       selection = sel;
       area.selectingFromUi();
@@ -141,26 +141,26 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     toggleSettings: () => settings.toggle(topbar.settingsBtn),
     openAbout: () => settings.showAbout(topbar.settingsBtn),
     toggleTimelapse() {
-      // O terminal mostra a conversa de agora: não combina com o dia reproduzido.
+      // The terminal shows the current conversation: it doesn't go with the replayed day.
       if (!timelapse.isOpen && terminal.isOpen) terminal.close();
       timelapse.toggle();
     },
     isTimelapseOpen: () => timelapse.isOpen,
   };
 
-  // ---------------------------------------------------------------- componentes
+  // ---------------------------------------------------------------- components
   const sound = new SoundControl(ctx);
   const notifier = new Notifier(ctx, sound.board);
   topbar = new TopBar(ctx);
   sidebar = new Sidebar(ctx);
-  // Terminal interativo (Claude Code de verdade, dentro do navegador): abrir, assumir e encerrar sessões.
+  // Interactive terminal (real Claude Code, inside the browser): open, take over and end sessions.
   const pty = new PtyPanel(ctx);
   const terminal = new TerminalPanel(ctx, pty);
-  // Histórico de sessões (terminal): botão no grupo dos painéis da barra superior.
+  // Session history (terminal): button in the top bar's panel group.
   const history = new HistoryPopover(ctx, terminal);
   topbar.panelGroup.prepend(history.button);
-  // Terminal do agente: o interativo se a sessão roda aqui; senão o de leitura, com "Assumir daqui" para
-  // continuar nesta janela (sem o de leitura, o interativo mostra o aviso de "em outro terminal").
+  // The agent's terminal: the interactive one if the session runs here; otherwise the read-only one, with "Take over
+  // here" to continue in this window (without the read-only one, the interactive one shows the "in another terminal" notice).
   pty.onShow = () => terminal.close();
   const router: TerminalRouter = {
     get openAgentId() {
@@ -190,10 +190,10 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     },
   };
   ctx.terminals = router;
-  // Entregas: o que os agentes terminaram (primeiro botão do grupo: é o que mais se usa pelo celular).
+  // Deliveries: what the agents finished (first button in the group: the one used most from a phone).
   const deliveries = new Deliveries(ctx, terminal);
   topbar.panelGroup.prepend(deliveries.button);
-  // Links com ?agent= / ?delivery= (abrem o agente ou a entrega ao carregar).
+  // Links with ?agent= / ?delivery= (open the agent or the delivery on load).
   const openLink = (url: URL) => {
     const agent = url.searchParams.get('agent');
     const delivery = url.searchParams.get('delivery');
@@ -220,7 +220,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   help = new HelpDialog();
   const day = new DayLauncher(ctx, (el) => root.append(el));
   topbar.addPanelButton(day.button);
-  // Botão direito numa sala (lista lateral ou escritório): renomear.
+  // Right-click on a room (sidebar list or office): rename.
   const renamer = new RoomRenamer(ctx);
   ctx.renameRoom = (id, at) => renamer.open(id, at);
   world.onRoomContextMenu?.((id, at) => renamer.open(id, at));
@@ -244,7 +244,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
 
   const components: UiComponent[] = [topbar, sidebar, drawer, terminal, pty, history, deliveries, feed, toasts, settings, empty, banner, tip, notifier, splash, timelapse, sound, day, updateToaster];
 
-  // ---------------------------------------------------------------- renderização agrupada por quadro
+  // ---------------------------------------------------------------- rendering batched per frame
   let rafId = 0;
   let hiddenTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -254,14 +254,14 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
       try {
         c.render();
       } catch (err) {
-        console.error('[ui] falha ao renderizar', c.constructor.name, err);
+        console.error('[ui] render failed', c.constructor.name, err);
       }
     }
   }
 
   function invalidate(): void {
     if (document.hidden) {
-      // Com a aba oculta o navegador congela o rAF: mantém só título e alertas em dia.
+      // With the tab hidden the browser freezes rAF: keep only the title and alerts up to date.
       hiddenTimer ??= setTimeout(() => {
         hiddenTimer = null;
         notifier.render();
@@ -272,7 +272,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     if (!rafId) rafId = requestAnimationFrame(renderAll);
   }
 
-  /** Aplica as classes de layout e informa ao mundo a área livre (sem esperar as transições dos painéis). */
+  /** Applies the layout classes and tells the world the free area (without waiting for panel transitions). */
   function applyLayout(opts: { refocus?: boolean } = {}): void {
     root.classList.toggle('has-sidebar', panels.sidebar);
     root.classList.toggle('has-feed', panels.feed);
@@ -281,10 +281,10 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     area.sync(opts);
   }
 
-  // ---------------------------------------------------------------- eventos
+  // ---------------------------------------------------------------- events
   store.on('snapshot', (snap) => {
-    // Ao vivo, o "agora" da interface segue o relógio do servidor (o aparelho pode estar adiantado ou atrasado).
-    // No timelapse, quem manda é o instante reproduzido pelo player (parado quando pausado).
+    // Live, the interface's "now" follows the server clock (the device may be ahead or behind).
+    // In the timelapse, the instant replayed by the player rules (frozen while paused).
     if (store.connection === 'open' && !store.replaying) skew = snap.serverTime - Date.now();
     invalidate();
   });
@@ -293,7 +293,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   world.onSelect((sel) => {
     const prev = selection;
     selection = sel;
-    // Clique no canvas (ou agente que saiu): a gaveta espera a janela do duplo clique antes de mexer na câmera.
+    // Canvas click (or an agent that left): the drawer waits out the double-click window before moving the camera.
     if (!uiSelecting) area.selectionChangedExternally(prev, sel);
     applyLayout(uiSelecting ? { refocus: false } : {});
     invalidate();
@@ -316,7 +316,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     if (!document.hidden) invalidate();
   }, CLOCK_MS);
   setInterval(() => {
-    // Shells rodando (cronômetro) ou pedido do Codex esperando (prazo de segundos).
+    // Shells running (stopwatch) or a Codex request waiting (deadline in seconds).
     if (!document.hidden && (hasRunningShells(store.snapshot) || hasCodexPermission(store.snapshot))) invalidate();
   }, SHELL_CLOCK_MS);
 
@@ -325,8 +325,8 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   function onKey(e: KeyboardEvent): void {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape') {
-      if (help.isOpen || settings.isOpen || history.isOpen) return; // diálogo/popover tratam o próprio Esc
-      // O terminal flutua sobre tudo: fecha primeiro (a busca dele, depois ele; a gaveta continua aberta).
+      if (help.isOpen || settings.isOpen || history.isOpen) return; // the dialog/popover handles its own Esc
+      // The terminal floats above everything: close it first (its search, then itself; the drawer stays open).
       if (terminal.isOpen) {
         terminal.escape();
         e.preventDefault();
@@ -353,7 +353,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
       case 'F':
         e.preventDefault();
         if (selection?.type === 'agent') drawer.toggleFollow();
-        else ctx.announce(tr('Selecione um agente para seguir.'));
+        else ctx.announce(tr('Select an agent to follow.'));
         break;
       case 't':
       case 'T':
@@ -368,11 +368,11 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
         break;
       case 'p':
       case 'P': {
-        // Próximo pedido de permissão ou pergunta para responder pelo escritório (só leva até ele: nunca aprova).
+        // Next permission request or question to answer from the office (only takes you there: never approves).
         e.preventDefault();
         const next = nextPermissionAgent(store.snapshot?.agents ?? [], selection?.type === 'agent' ? selection.id : undefined);
         if (next) focusPermission(ctx, next.id);
-        else ctx.announce(tr('Nenhum pedido de permissão ou pergunta para responder agora.'));
+        else ctx.announce(tr('No permission requests or questions to answer right now.'));
         break;
       }
       case 'o':
@@ -397,20 +397,20 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   }
 
   /**
-   * Atalho T: abre a janela de terminal do agente selecionado (ver `router`) ou fecha a que estiver aberta.
+   * T shortcut: opens the terminal window of the selected agent (see `router`) or closes the one that is open.
    */
   function toggleTerminal(): void {
     const id = selection?.type === 'agent' ? selection.id : null;
     if (id !== null && pty.enabled && ctx.agent(id)?.kind === 'main') return router.toggle(id);
     if (id === null && pty.isOpen) return pty.close();
     if (terminal.isOpen && (id === null || terminal.agentId === id)) terminal.close();
-    else if (id === null) ctx.announce(tr('Selecione um agente para abrir o terminal.'));
+    else if (id === null) ctx.announce(tr('Select an agent to open the terminal.'));
     else if (!store.snapshot?.meta.terminal || !access().terminal) ctx.announce(`${TERMINAL_UNAVAILABLE_HINT}.`);
-    else if (!ctx.agent(id)) ctx.announce(tr('O agente já saiu do escritório.'));
+    else if (!ctx.agent(id)) ctx.announce(tr('The agent has already left the office.'));
     else terminal.open(id);
   }
 
-  // ---------------------------------------------------------------- início
+  // ---------------------------------------------------------------- startup
   world.setOptions(worldOptionsFrom(prefs));
   applyLayout();
   renderAll();

@@ -1,6 +1,6 @@
-// Personalidades dos personagens — funções PURAS e determinísticas (mesma semente = mesma pessoa em
-// qualquer navegador). Cada agente tem 2 ou 3 traços, que mudam o que prefere fazer quando está à toa,
-// com quem anda e o que fala; pares de agentes podem ter amizade ou rivalidade.
+// Character personalities — PURE, deterministic functions (same seed = same person in any
+// browser). Each agent has 2 or 3 traits, which change what they like to do when idle, who they
+// hang out with and what they say; pairs of agents can be friends or rivals.
 import { mulberry32 } from '../../../../shared/hash';
 import { IDLE_WEIGHTS, type IdleActivity } from '../sim/behavior';
 import { tr } from '../../../../shared/i18n';
@@ -10,32 +10,32 @@ import { TRAIT_IDS, traitsClash, type TraitId } from '../../../../shared/traits'
 // imported them from this module.
 export { TRAIT_IDS, TRAITS, type Trait, type TraitId } from '../../../../shared/traits';
 
-/** Bordões: cada um tem o seu (aparece de vez em quando nas falas). */
+/** Catchphrases: everyone has their own (it shows up in their lines now and then). */
 export const CATCHPHRASES = [
-  tr('Bora!'),
-  tr('Partiu!'),
-  tr('Tá pago!'),
-  tr('É hoje!'),
-  tr('Simbora!'),
-  tr('Bora codar!'),
-  tr('Deu bom!'),
-  tr('Que isso!'),
-  tr('Show de bola!'),
-  tr('Tamo junto!'),
-  tr('Sem estresse.'),
-  tr('Vai dar certo!'),
+  tr('Let\'s go!'),
+  tr('Off we go!'),
+  tr('Done and done!'),
+  tr('Today\'s the day!'),
+  tr('Let\'s go!'),
+  tr('Let\'s code!'),
+  tr('It worked!'),
+  tr('Come on!'),
+  tr('Awesome!'),
+  tr('Got your back!'),
+  tr('No stress.'),
+  tr('It\'ll work out!'),
 ] as const;
 
 export interface Persona {
   traits: TraitId[];
-  /** 0..1: vontade de entrar em rodas (timidez puxa para baixo; fofoca e piadas para cima). */
+  /** 0..1: eagerness to join gatherings (shyness pulls it down; gossip and jokes push it up). */
   sociability: number;
-  /** 0..1: sorte/habilidade em jogos (games e esporte puxam para cima). */
+  /** 0..1: luck/skill at games (gaming and sports push it up). */
   skill: number;
   catchphrase: string;
 }
 
-/** Mistura de 32 bits (sementes próximas viram sequências bem diferentes). */
+/** 32-bit mix (nearby seeds become very different sequences). */
 function mix(seed: number): number {
   let h = (seed ^ 0x5bd1e995) >>> 0;
   h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
@@ -45,7 +45,7 @@ function mix(seed: number): number {
 
 const cache = new Map<number, Persona>();
 
-/** Personalidade do agente com esta semente (2 ou 3 traços sem conflito). */
+/** Personality of the agent with this seed (2 or 3 non-clashing traits). */
 export function personaFor(seed: number): Persona {
   const hit = cache.get(seed);
   if (hit) return hit;
@@ -83,8 +83,8 @@ export function hasTrait(p: Persona, t: TraitId): boolean {
 export type Bond = 'amizade' | 'rivalidade';
 
 /**
- * Vínculo entre dois agentes (simétrico): ~22% amizade, ~12% rivalidade, o resto só colegas.
- * Competição dos dois lados puxa para rivalidade; fofoca/piadas para amizade.
+ * Bond between two agents (symmetric): ~22% friendship, ~12% rivalry, the rest just colleagues.
+ * Competitiveness on both sides pulls toward rivalry; gossip/jokes toward friendship.
  */
 export function bondBetween(seedA: number, seedB: number): Bond | null {
   if (seedA === seedB) return null;
@@ -100,7 +100,7 @@ export function bondBetween(seedA: number, seedB: number): Bond | null {
   return null;
 }
 
-/** Quanto cada traço multiplica a vontade de cada passeio sozinho. */
+/** How much each trait multiplies the appetite for each solo outing. */
 const SOLO_K: Partial<Record<TraitId, Partial<Record<IdleActivity, number>>>> = {
   cafeina: { coffee: 3 },
   vaidade: { mirror: 5, bathroom: 1.3 },
@@ -115,7 +115,7 @@ const SOLO_K: Partial<Record<TraitId, Partial<Record<IdleActivity, number>>>> = 
   economia: { snack: 0.4, water: 1.6 },
 };
 
-/** Pesos dos passeios sozinho para esta personalidade. */
+/** Solo outing weights for this personality. */
 export function soloWeights(p: Persona): Record<IdleActivity, number> {
   const out = { ...IDLE_WEIGHTS };
   for (const t of p.traits) for (const [k, v] of Object.entries(SOLO_K[t] ?? {})) out[k as IdleActivity] *= v as number;

@@ -1,89 +1,89 @@
-// Mensagens pelo escritório (Claude Code 2.1.287+): leva para a sessão o que você digita no Habblaud (no painel
-// do agente ou no terminal da tecla T), como se você tivesse digitado no terminal.
+// Messages from the office (Claude Code 2.1.287+): brings into the session what you type in Habblaud (in the agent
+// panel or in the T-key terminal), as if you had typed it in the terminal.
 //
-// O que faz, e `claude plugin validate` lista exatamente o que o módulo chama (a saída está no mod/README.md):
+// What it does, and `claude plugin validate` lists exactly what the module calls (the output is in mod/README.md):
 //
-// 1. A cada 2 s, só onde a sessão desenha (`$.session.surfaces()` vazia = `claude -p`/SDK: nada a fazer) ou numa
-//    sessão do app desktop (CLAUDE_CODE_ENTRYPOINT=claude-desktop: SDK por baixo, sem superfície fora da tela), pergunta
-//    ao Habblaud local se há mensagens para ela: POST http://127.0.0.1:<HABBLAUD_PORT ou 4747>/api/mod/inbox com
-//    {session, account}. A pergunta também marca a presença da sessão: é ela que acende, no escritório, a caixa de
-//    mensagem deste agente. Fora do ar, ou respondendo qualquer coisa que não seja 2xx (403 = mensagens desligadas
-//    no Habblaud; 404 = uma versão sem a rota), passa a perguntar a cada 30 s até ele voltar.
-// 2. Cada mensagem, na ordem, vai para a sessão por `$.prompt.submit({ text, asUser: true })`: o modelo a lê como
-//    sua, sem o "The habblaud-mensagens plugin sent a message" (o registro da sessão ainda nomeia o plugin). O
-//    texto vai exatamente como chegou. `{drop}` (um hook recusou) ou exceção = falha, com o motivo.
-//    Com a sessão no meio de um turno, o Claude Code guarda o prompt até ela ficar livre e a chamada pode demorar a
-//    voltar: a espera por mensagem é de no máximo 2 s. Passou disso, a mensagem está na fila da sessão e conta
-//    como entregue, e as seguintes da mesma rodada vão em seguida, na ordem, sem esperar. Assim a rodada nunca
-//    passa de uns poucos segundos: a presença (10 s no servidor) e a confirmação (30 s) não vencem por uma
-//    sessão ocupada. O preço: um hook que recuse a mensagem depois desses 2 s não chega ao escritório.
-// 3. Um único POST /api/mod/inbox/ack com {session, results: [{id, ok, error?}]}. Sem mensagens, sem ack.
+// 1. Every 2 s, only where the session draws (empty `$.session.surfaces()` = `claude -p`/SDK: nothing to do) or in a
+//    desktop app session (CLAUDE_CODE_ENTRYPOINT=claude-desktop: SDK underneath, no surface while off screen), it asks
+//    the local Habblaud whether there are messages for it: POST http://127.0.0.1:<HABBLAUD_PORT or 4747>/api/mod/inbox with
+//    {session, account}. The query also marks the session as present: that is what lights up, in the office, this
+//    agent's message box. When it is down, or answers anything other than 2xx (403 = messages turned off
+//    in Habblaud; 404 = a version without the route), it switches to asking every 30 s until it is back.
+// 2. Each message, in order, goes to the session through `$.prompt.submit({ text, asUser: true })`: the model reads it as
+//    yours, without the "The habblaud-mensagens plugin sent a message" (the session log still names the plugin). The
+//    text goes exactly as it arrived. `{drop}` (a hook rejected it) or an exception = failure, with the reason.
+//    With the session in the middle of a turn, Claude Code holds the prompt until it is free and the call may take a while
+//    to return: the wait per message is at most 2 s. Past that, the message is in the session's queue and counts
+//    as delivered, and the following ones in the same round go right after, in order, without waiting. That way the round never
+//    exceeds a few seconds: the presence (10 s on the server) and the acknowledgement (30 s) don't expire because of a
+//    busy session. The price: a hook that rejects the message after those 2 s doesn't reach the office.
+// 3. A single POST /api/mod/inbox/ack with {session, results: [{id, ok, error?}]}. No messages, no ack.
 //
-// Por que um plugin à parte do mod `habblaud`: aquele só observa (uso do plano, aviso embaixo do prompt,
-// /habblaud) e nunca muda o que a sessão faz. Este age: digita na sessão em seu nome. Separado, dá para ficar sem
-// ele (npm run mod:install -- --sem-mensagens) e a análise estática de cada um continua curta.
+// Why a plugin separate from the `habblaud` mod: that one only observes (plan usage, the notice under the prompt,
+// /habblaud) and never changes what the session does. This one acts: it types into the session on your behalf. Separate, you can
+// go without it (npm run mod:install -- --sem-mensagens) and each one's static analysis stays short.
 //
-// Regras: nenhum hook lança (um hook que lança é pulado, mas o que ele deixou pela metade fica): cada passo tem seu
-// try/catch e falha = silêncio. Uma rodada por vez (um Habblaud lento não acumula perguntas). Nada de $.process,
-// $.model, $.fs, leitura da conversa nem decisão de ferramenta; a rede é só 127.0.0.1. O estado fica em variáveis
-// do módulo: um hot reload recomeça do zero (uma mensagem buscada e não confirmada falha no servidor em 30 s).
-// O Claude Code pode carregar o plugin de uma cópia só dele: os ajudantes de caminho são cópias dos de
-// mod/habblaud/hooks/register.ts, não importações.
+// Rules: no hook throws (a hook that throws is skipped, but whatever it left half-done stays): each step has its own
+// try/catch and failure = silence. One round at a time (a slow Habblaud doesn't pile up queries). No $.process,
+// $.model, $.fs, reading the conversation or tool decisions; the network is only 127.0.0.1. The state lives in module
+// variables: a hot reload starts from scratch (a message fetched and not acknowledged fails on the server within 30 s).
+// Claude Code may load the plugin from a copy of its own: the path helpers are copies of the ones in
+// mod/habblaud/hooks/register.ts, not imports.
 //
-// Análise estática do Claude Code: cada chamada é escrita por extenso ($.noun.método), o nome do evento é
-// sempre uma string literal e `$` só é passado para funções declaradas no topo deste arquivo.
+// Claude Code's static analysis: each call is written out in full ($.noun.method), the event name is
+// always a string literal and `$` is only passed to functions declared at the top of this file.
 import type { EngineInterface, HttpResponse, Register } from 'claude-code'
 
-/** Porta padrão do Habblaud (a mesma do servidor, do mod e do docker-compose). */
+/** Habblaud's default port (the same as the server, the mod and docker-compose). */
 export const DEFAULT_PORT = 4747
-/** Intervalo das perguntas ao Habblaud; fora do ar, recua para o segundo até ele voltar. */
+/** Interval of the queries to Habblaud; when it is down, it backs off to the second one until it is back. */
 export const POLL_MS = 2_000
 export const OFFLINE_POLL_MS = 30_000
-/** Quanto esperar o Habblaud local responder (`$.http.fetch` não aceita AbortSignal: a corrida é com um timer). */
+/** How long to wait for the local Habblaud to answer (`$.http.fetch` doesn't take an AbortSignal: it races a timer). */
 export const FETCH_TIMEOUT_MS = 2_000
 /** The same deadline to a central server on another machine (network, TLS). */
 export const SERVER_FETCH_TIMEOUT_MS = 5_000
-/** Quanto esperar `$.prompt.submit` voltar antes de dar a mensagem como na fila da sessão. */
+/** How long to wait for `$.prompt.submit` to return before treating the message as queued in the session. */
 export const SUBMIT_WAIT_MS = 2_000
-/** Tamanho máximo do motivo de uma falha (vem de um hook ou de uma exceção; o texto da mensagem nunca é cortado). */
+/** Maximum length of a failure reason (it comes from a hook or an exception; the message text is never cut). */
 export const MAX_REASON = 500
 
-/** Mensagem como POST /api/mod/inbox entrega (shared/types.ts, InboxMessage). */
+/** A message as POST /api/mod/inbox delivers it (shared/types.ts, InboxMessage). */
 export interface InboxMessage {
   id: string
-  /** O texto como foi digitado; vazio quando o servidor mandou algo que não é texto. */
+  /** The text as it was typed; empty when the server sent something that isn't text. */
   text: string
 }
 
-/** Resultado de uma mensagem, como POST /api/mod/inbox/ack recebe. */
+/** Result of a message, as POST /api/mod/inbox/ack receives it. */
 export interface AckResult {
   id: string
   ok: boolean
   error?: string
 }
 
-/** Desfecho de um `$.prompt.submit`. */
+/** Outcome of a `$.prompt.submit`. */
 type Submitted = { ok: true } | { ok: false; error: string }
 
 interface ModEnv {
-  /** Id da conta (o nome da pasta, como o servidor chama); ausente sem HOME (ou USERPROFILE) nem CLAUDE_CONFIG_DIR. */
+  /** The account id (the folder name, as the server calls it); absent without HOME (or USERPROFILE) and CLAUDE_CONFIG_DIR. */
   accountId?: string
   port: number
   /** Central server on another machine (serverOf); absent = the local Habblaud. */
   server?: { base: string; token: string }
-  /** Sessão do app desktop do Claude (CLAUDE_CODE_ENTRYPOINT=claude-desktop): roda como SDK e só tem superfície
-   *  enquanto está na tela do app, mas é interativa e recebe prompts mesmo assim. */
+  /** A Claude desktop app session (CLAUDE_CODE_ENTRYPOINT=claude-desktop): runs as an SDK and only has a surface
+   *  while it is on the app screen, but it is interactive and gets prompts anyway. */
   desktop: boolean
 }
 
 // ---------------------------------------------------------------------------------------------
-// Funções puras (testadas em tests/habblaud-mensagens.test.ts)
+// Pure functions (tested in tests/habblaud-mensagens.test.ts)
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Normaliza um caminho (barras repetidas, `.`, `..` e a barra do fim): o ambiente do mod não tem node:path. Cópia
- * de mod/habblaud: caminhos do Windows (com drive ou UNC) saem com `/` e o drive conta como raiz; nos outros, `\`
- * é parte do nome.
+ * Normalises a path (repeated slashes, `.`, `..` and the trailing slash): the mod environment has no node:path. A copy
+ * of mod/habblaud: Windows paths (with a drive or UNC) come out with `/` and the drive counts as the root; on the others, `\`
+ * is part of the name.
  */
 export function normalizePath(p: string): string {
   const win = /^(?:[A-Za-z]:|\\\\)/.test(p)
@@ -105,19 +105,19 @@ export function normalizePath(p: string): string {
   return drive + (abs ? `/${joined}` : joined || (drive ? '' : '.'))
 }
 
-/** `~` no começo vira o HOME. */
+/** A leading `~` becomes HOME. */
 function expandHome(p: string, home: string | undefined): string {
   return home && /^~(?=[\\/]|$)/.test(p) ? home + p.slice(1) : p
 }
 
-/** Config dir da conta: o primeiro item de CLAUDE_CONFIG_DIR (com `~` expandido) ou ~/.claude. */
+/** The account's config dir: the first item of CLAUDE_CONFIG_DIR (with `~` expanded) or ~/.claude. */
 export function configDirOf(claudeConfigDir: string | undefined, home: string | undefined): string | undefined {
   const first = (claudeConfigDir ?? '').split(',')[0]?.trim() ?? ''
   if (first) return normalizePath(expandHome(first, home))
   return home ? normalizePath(`${home}/.claude`) : undefined
 }
 
-/** Id da conta = nome da pasta (AccountInfo.id do servidor, ex.: ".claude-conta2"). */
+/** Account id = folder name (the server's AccountInfo.id, e.g. ".claude-conta2"). */
 export function accountIdOf(configDir: string): string | undefined {
   const name = configDir.split('/').filter(Boolean).pop()
   return name && name !== '.' && name !== '..' ? name : undefined
@@ -144,20 +144,20 @@ export function serverOf(url: string | undefined, token: string | undefined): { 
   return { base: u, token: t }
 }
 
-/** Corpo de POST /api/mod/inbox: a conta só quando se sabe qual é. */
+/** Body of POST /api/mod/inbox: the account only when it is known. */
 export function inboxBody(session: string, account: string | undefined): string {
   return JSON.stringify(account ? { session, account } : { session })
 }
 
-/** Corpo de POST /api/mod/inbox/ack. */
+/** Body of POST /api/mod/inbox/ack. */
 export function ackBody(session: string, results: readonly AckResult[]): string {
   return JSON.stringify({ session, results })
 }
 
 /**
- * Lê a resposta de POST /api/mod/inbox; fora do formato = undefined (vale "fora do ar"). Item sem id fica de fora
- * (não há como confirmá-lo); com id e sem texto, entra com texto vazio, para ser confirmado como falha em vez de o
- * servidor esperar 30 s.
+ * Reads the POST /api/mod/inbox response; outside the format = undefined (counts as "down"). An item without an id is left out
+ * (there is no way to acknowledge it); with an id and no text, it goes in with empty text, to be acknowledged as a failure instead of the
+ * server waiting 30 s.
  */
 export function parseInbox(text: string): InboxMessage[] | undefined {
   let j: unknown
@@ -179,7 +179,7 @@ export function parseInbox(text: string): InboxMessage[] | undefined {
   return out
 }
 
-/** O motivo de uma falha numa linha só, com tamanho limitado: o texto de um `{drop}` ou a mensagem de uma exceção. */
+/** A failure reason on a single line, with a limited length: the text of a `{drop}` or the message of an exception. */
 export function reasonText(raw: unknown, fallback: string): string {
   const msg = typeof raw === 'string' ? raw : raw && typeof (raw as { message?: unknown }).message === 'string' ? (raw as { message: string }).message : ''
   const line = msg.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -188,19 +188,19 @@ export function reasonText(raw: unknown, fallback: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Estado do módulo (some num hot reload) e o que fala com o Claude Code
+// Module state (gone on a hot reload) and what talks to Claude Code
 // ---------------------------------------------------------------------------------------------
 
 let env: ModEnv | undefined
 let timer: { cancel: () => void } | undefined
 let timerMs = 0
-/** Uma rodada por vez: um Habblaud lento ou uma sessão ocupada não empilham rodadas. */
+/** One round at a time: a slow Habblaud or a busy session doesn't stack rounds. */
 let polling = false
 
-/** O ambiente da sessão, lido uma vez por carga (cada nome escrito por extenso, como a análise exige). */
+/** The session environment, read once per load (each name written out in full, as the analysis requires). */
 async function readEnv($: EngineInterface): Promise<ModEnv> {
   if (env) return env
-  // No Windows, HOME só existe se alguém o definir: vale o USERPROFILE (a mesma ordem do mod habblaud).
+  // On Windows, HOME only exists if someone sets it: USERPROFILE applies (the same order as the habblaud mod).
   const home = (await $.env.get('HOME'))?.trim() || (await $.env.get('USERPROFILE'))?.trim() || undefined
   const configDir = configDirOf(await $.env.get('CLAUDE_CONFIG_DIR'), home)
   const next: ModEnv = {
@@ -215,7 +215,7 @@ async function readEnv($: EngineInterface): Promise<ModEnv> {
   return next
 }
 
-/** O que `promise` resolver em até `ms`; passou disso, undefined (a promessa segue sozinha). */
+/** Whatever `promise` resolves to within `ms`; past that, undefined (the promise carries on by itself). */
 async function waitAtMost<T>($: EngineInterface, promise: Promise<T>, ms: number): Promise<T | undefined> {
   let wait: { cancel: () => void } | undefined
   const timeout = new Promise<undefined>((resolve) => {
@@ -234,7 +234,7 @@ async function waitAtMost<T>($: EngineInterface, promise: Promise<T>, ms: number
  */
 async function postJson($: EngineInterface, e: ModEnv, path: string, body: string): Promise<HttpResponse | undefined> {
   try {
-    // Sem o Content-Type, o guarda do servidor recusa o POST (415).
+    // Without the Content-Type, the server's guard rejects the POST (415).
     const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' }
     let url = `http://127.0.0.1:${e.port}${path}`
     if (e.server) {
@@ -248,25 +248,25 @@ async function postJson($: EngineInterface, e: ModEnv, path: string, body: strin
   }
 }
 
-/** Uma mensagem para a sessão, como se você a tivesse digitado. Nunca lança. */
+/** A message to the session, as if you had typed it. Never throws. */
 async function submitOne($: EngineInterface, text: string): Promise<Submitted> {
   try {
     const r = await $.prompt.submit({ text, asUser: true })
-    if (typeof r?.drop === 'string') return { ok: false, error: reasonText(r.drop, 'um hook da sessão recusou a mensagem') }
+    if (typeof r?.drop === 'string') return { ok: false, error: reasonText(r.drop, 'a session hook rejected the message') }
     return { ok: true }
   } catch (err) {
-    return { ok: false, error: reasonText(err, 'a sessão não aceitou a mensagem') }
+    return { ok: false, error: reasonText(err, 'the session did not accept the message') }
   }
 }
 
-/** Manda as mensagens à sessão, na ordem, e devolve o resultado de cada uma. Nunca lança. */
+/** Sends the messages to the session, in order, and returns the result of each one. Never throws. */
 async function deliver($: EngineInterface, messages: readonly InboxMessage[]): Promise<AckResult[]> {
   const results: AckResult[] = []
-  /** Uma chamada passou do prazo: a sessão está ocupada e as seguintes entram na fila atrás dela, sem esperar. */
+  /** A call went past the deadline: the session is busy and the following ones queue up behind it, without waiting. */
   let queued = false
   for (const m of messages) {
     if (!m.text.trim()) {
-      results.push({ id: m.id, ok: false, error: 'mensagem vazia' })
+      results.push({ id: m.id, ok: false, error: 'empty message' })
       continue
     }
     const submitted = submitOne($, m.text)
@@ -284,7 +284,7 @@ async function deliver($: EngineInterface, messages: readonly InboxMessage[]): P
   return results
 }
 
-/** (Re)agenda as rodadas: 2 s com o Habblaud no ar, 30 s fora do ar. */
+/** (Re)schedules the rounds: 2 s with Habblaud up, 30 s when it is down. */
 function schedule($: EngineInterface, ms: number): void {
   if (timer && timerMs === ms) return
   timer?.cancel()
@@ -294,7 +294,7 @@ function schedule($: EngineInterface, ms: number): void {
   })
 }
 
-/** Uma rodada: busca as mensagens desta sessão, manda cada uma e confirma. Nunca lança. */
+/** One round: fetches this session's messages, sends each one and acknowledges. Never throws. */
 async function round($: EngineInterface): Promise<void> {
   if (polling) return
   polling = true
@@ -312,10 +312,10 @@ async function round($: EngineInterface): Promise<void> {
     schedule($, POLL_MS)
     if (!messages.length) return
     const results = await deliver($, messages)
-    // Falhou a confirmação: o servidor dá as mensagens como falhas em 30 s ("a sessão não confirmou a entrega").
+    // The acknowledgement failed: the server marks the messages as failed within 30 s ("the session did not confirm delivery").
     await postJson($, e, '/api/mod/inbox/ack', ackBody(session, results))
   } catch {
-    // silêncio: a próxima rodada tenta de novo
+    // silence: the next round tries again
   } finally {
     polling = false
   }
@@ -326,7 +326,7 @@ export const register: Register = (on) => {
     try {
       schedule($, POLL_MS)
     } catch {
-      // sem as rodadas, a sessão segue como sempre
+      // without the rounds, the session carries on as usual
     }
     return next(e)
   })

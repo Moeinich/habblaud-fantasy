@@ -1,106 +1,106 @@
-// Protocolo compartilhado entre o servidor (Node) e o cliente (navegador).
-// Código puro: sem APIs de Node nem de DOM.
+// Protocol shared by the server (Node) and the client (browser).
+// Pure code: no Node or DOM APIs.
 //
-// Regra de evolução: mudanças aqui devem ser ADITIVAS (campos opcionais novos).
-// Renomear/remover campos quebra servidor, mundo e UI ao mesmo tempo.
+// Evolution rule: changes here must be ADDITIVE (new optional fields).
+// Renaming/removing fields breaks the server, the world and the UI at the same time.
 
 import type { AppearanceParts } from './appearance';
 
 export type AgentKind = 'main' | 'sub';
 
 /**
- * De qual ferramenta vem o agente (ou a conta, a fonte, a sessão, o pedido). Nos tipos do protocolo o campo
- * `provider` é opcional e AUSENTE quer dizer 'claude' (tudo o que existia antes do Codex continua igual).
+ * Which tool the agent (or the account, source, session, request) comes from. In the protocol types the `provider`
+ * field is optional and ABSENT means 'claude' (everything that existed before Codex stays the same).
  * - claude: Claude Code;
- * - codex: OpenAI Codex (CLI `codex` e o app desktop, que gravam no mesmo CODEX_HOME).
+ * - codex: OpenAI Codex (the `codex` CLI and the desktop app, which write to the same CODEX_HOME).
  */
 export type Provider = 'claude' | 'codex';
 
 /**
- * Estado de alto nível de um agente — é o que dirige o comportamento do personagem.
- * - working: processando um turno (ocupado). Fica na mesa digitando.
- * - waiting: precisa do usuário (permissão, pergunta, diálogo). Fica na mesa com a mão levantada.
- * - idle: terminou o turno e espera a próxima instrução. Circula pelo escritório (café, bebedouro...).
- * - shell: terminou o turno, mas há shell(s) rodando em segundo plano (ver `shells`); está esperando
- *   o shell terminar. Fica na mesa, de olho no terminal. (O registro do Claude Code grava "shell"
- *   quando a sessão está ociosa com shells em segundo plano.)
- * - done: subagente concluiu. Entrega o resultado ao agente principal e vai embora.
- * - offline: sessão encerrada. Vai embora (se for o último da sala, apaga a luz).
+ * High-level state of an agent — it drives the character's behavior.
+ * - working: processing a turn (busy). Stays at the desk typing.
+ * - waiting: needs the user (permission, question, dialog). Stays at the desk with a hand raised.
+ * - idle: finished the turn and waits for the next instruction. Wanders around the office (coffee, water cooler...).
+ * - shell: finished the turn, but there are shell(s) running in the background (see `shells`); it is waiting for the
+ *   shell to finish. Stays at the desk, watching the terminal. (Claude Code's registry records "shell" when the
+ *   session is idle with background shells.)
+ * - done: a subagent finished. Hands the result to the main agent and leaves.
+ * - offline: session ended. Leaves (if it was the last one in the room, turns off the light).
  */
 export type AgentStatus = 'working' | 'waiting' | 'idle' | 'shell' | 'done' | 'offline';
 
-/** Um comando de shell que o agente está esperando terminar. */
+/** A shell command the agent is waiting on. */
 export interface ShellJob {
-  /** Id da tarefa em segundo plano (ex.: "bo0ov3q3l") ou, em primeiro plano, o id do tool_use. */
+  /** Id of the background task (e.g. "bo0ov3q3l") or, in the foreground, the tool_use id. */
   id: string;
-  /** Texto curto em PT-BR: a descrição do Bash ou um resumo do comando (segredos mascarados). */
+  /** Short text in the server's language: the Bash description or a summary of the command (secrets masked). */
   label: string;
-  /** Comando completo (mascarado, até ~300 caracteres), quando houver. */
+  /** Full command (masked, up to ~300 characters), when there is one. */
   command?: string;
-  /** Epoch ms em que o comando começou. */
+  /** Epoch ms when the command started. */
   startedAt: number;
-  /** true = run_in_background (o agente encerrou o turno e espera a notificação); false = comando em primeiro plano ainda sem resultado. */
+  /** true = run_in_background (the agent ended its turn and waits for the notification); false = a foreground command with no result yet. */
   background: boolean;
-  /** 'monitor' = ferramenta Monitor (acompanha um processo); 'shell' = Bash. */
+  /** 'monitor' = the Monitor tool (follows a process); 'shell' = Bash. */
   kind: 'shell' | 'monitor';
 }
 
 export type ActivityKind =
-  | 'prompt' // recebeu nova instrução do usuário
-  | 'think' // pensando (bloco de thinking)
-  | 'respond' // escrevendo resposta em texto
+  | 'prompt' // got a new instruction from the user
+  | 'think' // thinking (thinking block)
+  | 'respond' // writing a text reply
   | 'read'
   | 'search'
   | 'edit'
   | 'write'
-  | 'run' // comando no terminal
+  | 'run' // terminal command
   | 'test'
   | 'git'
   | 'web'
   | 'browser'
-  | 'plan' // tarefas / planejamento
-  | 'delegate' // disparou subagente(s)
-  | 'communicate' // mensagem para outro agente / aviso
-  | 'ask' // pergunta ao usuário
+  | 'plan' // tasks / planning
+  | 'delegate' // launched subagent(s)
+  | 'communicate' // message to another agent / notice
+  | 'ask' // question to the user
   | 'mcp'
   | 'skill'
   | 'wait'
   | 'error'
-  | 'compact' // compactação de contexto
-  | 'done' // terminou o turno
+  | 'compact' // context compaction
+  | 'done' // finished the turn
   | 'other';
 
 export interface Activity {
-  /** Único por atividade (ex.: uuid da entrada + índice do bloco). */
+  /** Unique per activity (e.g. entry uuid + block index). */
   id: string;
   kind: ActivityKind;
-  /** Emoji que representa a atividade. */
+  /** Emoji that represents the activity. */
   icon: string;
-  /** Texto curto em PT-BR (até ~46 caracteres). Ex.: "Editando App.tsx". */
+  /** Short text in the server's language (up to ~46 characters). E.g. "Editing App.tsx". */
   text: string;
-  /** Detalhe opcional (comando completo, caminho, consulta...), até ~300 caracteres. */
+  /** Optional detail (full command, path, query...), up to ~300 characters. */
   detail?: string;
-  /** Nome bruto da ferramenta, quando houver. */
+  /** Raw tool name, when there is one. */
   tool?: string;
   /** Epoch ms. */
   at: number;
   durationMs?: number;
   error?: boolean;
-  /** Perguntas completas de um AskUserQuestion (kind 'ask'), para o escritório mostrar as opções. */
+  /** Full questions of an AskUserQuestion (kind 'ask'), so the office can show the options. */
   questions?: AskQuestion[];
 }
 
 /**
- * Uma pergunta do AskUserQuestion, já mascarada e cortada. Com o pedido no escritório (PermissionRequestInfo.questions),
- * dá para responder por lá; senão a resposta é dada no Claude Code.
+ * An AskUserQuestion question, already masked and truncated. With the request in the office
+ * (PermissionRequestInfo.questions) it can be answered there; otherwise the answer is given in Claude Code.
  */
 export interface AskQuestion {
-  /** Posição da pergunta em `tool_input.questions` (entradas inválidas são puladas, então pode haver saltos). */
+  /** Position of the question in `tool_input.questions` (invalid entries are skipped, so there may be gaps). */
   index: number;
   question: string;
   header?: string;
   multiSelect?: boolean;
-  /** `index` = posição da opção em `options` do original: é ela que volta na resposta (PermissionAnswer). */
+  /** `index` = position of the option in the original `options`: it is what comes back in the answer (PermissionAnswer). */
   options: Array<{ index: number; label: string; description?: string }>;
 }
 
@@ -110,7 +110,7 @@ export interface TaskItem {
   id: string;
   title: string;
   status: TaskStatus;
-  /** Forma no gerúndio ("Escrevendo testes"), quando disponível. */
+  /** Present-continuous form ("Writing tests"), when available. */
   activeForm?: string;
 }
 
@@ -122,67 +122,67 @@ export interface AgentStats {
   costUSD?: number;
   linesAdded?: number;
   linesRemoved?: number;
-  /** Total de subagentes disparados por este agente. */
+  /** Total subagents launched by this agent. */
   subagents: number;
 }
 
 export interface AgentInfo {
   /**
-   * Estável enquanto o agente existir. Claude Code: principal "<conta>:<pid>", sub "<sessionId>:<agentId>".
-   * Codex: principal e sub "<conta>:<threadId>" (o sub com `parentId`).
+   * Stable while the agent exists. Claude Code: main "<account>:<pid>", sub "<sessionId>:<agentId>".
+   * Codex: main and sub "<account>:<threadId>" (the sub with `parentId`).
    */
   id: string;
   kind: AgentKind;
-  /** Ferramenta do agente; ausente = 'claude'. */
+  /** The agent's tool; absent = 'claude'. */
   provider?: Provider;
-  /** Para subagentes: id do agente que o disparou. */
+  /** For subagents: id of the agent that launched it. */
   parentId?: string;
   roomId: string;
-  /** Nome humano único no escritório. Ex.: "Marina". */
+  /** Human name, unique in the office. E.g. "Marina". */
   name: string;
-  /** Dica de apresentação do nome (usada pela arte para variar o visual). */
+  /** Presentation hint for the name (used by the art to vary the look). */
   look: 'f' | 'm';
-  /** Papel. Principal: "Agente principal". Sub: tipo do subagente ("Explore", "Plan", "fork"...). */
+  /** Role. Main: "Main agent". Sub: the subagent type ("Explore", "Plan", "fork"...). */
   role: string;
-  /** Título da sessão (principal) ou descrição da tarefa (sub). */
+  /** Session title (main) or task description (sub). */
   title?: string;
   sessionId: string;
-  /** Conta de origem = AccountInfo.id (basename do config dir, ex.: ".claude", ".claude-conta2"). */
+  /** Source account = AccountInfo.id (basename of the config dir, e.g. ".claude", ".claude-conta2"). */
   account: string;
   status: AgentStatus;
-  /** Motivo em PT-BR quando status === 'waiting'. Ex.: "aprovar uma permissão". */
+  /** Reason, in the server's language, when status === 'waiting'. E.g. "approve a permission". */
   waitingFor?: string;
-  /** Atividade atual (ou a mais recente). */
+  /** Current (or most recent) activity. */
   activity?: Activity;
-  /** Últimas atividades, da mais antiga para a mais recente (máx. ~30). */
+  /** Latest activities, oldest to newest (max ~30). */
   recent: Activity[];
   tasks: TaskItem[];
-  /** Shells rodando que o agente espera: em segundo plano e o comando em primeiro plano ainda sem resultado. */
+  /** Running shells the agent is waiting on: background ones and the foreground command with no result yet. */
   shells?: ShellJob[];
   model?: string;
   gitBranch?: string;
   permissionMode?: string;
   startedAt: number;
   lastEventAt: number;
-  /** Quando o status mudou pela última vez (epoch ms). */
+  /** When the status last changed (epoch ms). */
   statusSince: number;
   stats: AgentStats;
-  /** Semente 32-bit para a aparência determinística do personagem. */
+  /** 32-bit seed for the character's deterministic appearance. */
   seed: number;
-  /** Peças escolhidas no editor do personagem, aplicadas por cima da aparência da `seed` (ver shared/appearance.ts). */
+  /** Parts picked in the character editor, applied on top of the `seed` appearance (see shared/appearance.ts). */
   parts?: AppearanceParts;
-  /** Usa o personagem escolhido para o projeto (a sala): o painel oferece "Voltar ao sorteio". */
+  /** Uses the character chosen for the project (the room): the panel offers going back to the random one. */
   custom?: true;
-  /** Subagente rodando em segundo plano. */
+  /** Subagent running in the background. */
   background?: boolean;
   /**
-   * Pedido de permissão que dá para responder pelo Habblaud (hook PermissionRequest; o mais antigo, se
-   * houver vários). Enquanto existe, o agente aparece como 'waiting'. Ver PermissionRequestInfo.
+   * Permission request that can be answered through Habblaud (PermissionRequest hook; the oldest, if there are
+   * several). While it exists, the agent shows as 'waiting'. See PermissionRequestInfo.
    */
   permission?: PermissionRequestInfo;
   /**
-   * Dá para mandar mensagem a este agente pelo Habblaud (só principais): a sessão tem o plugin habblaud-mensagens
-   * e perguntou pela caixa de entrada há pouco. Ver POST /api/messages.
+   * This agent can be messaged through Habblaud (main agents only): the session has the habblaud-mensagens plugin
+   * and polled its inbox recently. See POST /api/messages.
    */
   canMessage?: boolean;
   /**
@@ -209,139 +209,139 @@ export interface RoomInfo {
   id: string;
   /** Display name: the folder name of the room's most recent agent (this computer's first). */
   name: string;
-  /** Caminho completo do projeto. */
+  /** Full path of the project. */
   path: string;
   /**
-   * Ordem de chegada da sala, atribuída pelo servidor e estável enquanto a sala existir (um slot liberado só é
-   * reutilizado após um período de espera). O cliente usa só como ordem: no prédio, cada sala ocupa a primeira vaga
-   * livre e, quando uma vaga fica livre entre salas, a mais distante se muda para ela (client/src/world/sim/sim.ts,
-   * compact). Vaga no cliente: coluna = floor(vaga / 2); par = lado norte do corredor, ímpar = lado sul.
+   * Arrival order of the room, assigned by the server and stable while the room exists (a freed slot is only reused
+   * after a waiting period). The client uses it only as an order: in the building, each room takes the first free
+   * spot and, when a spot frees up between rooms, the farthest one moves into it (client/src/world/sim/sim.ts,
+   * compact). Spot on the client: column = floor(spot / 2); even = north side of the corridor, odd = south side.
    */
   slot: number;
-  /** Semente para cores/decoração determinísticas. */
+  /** Seed for deterministic colors/decoration. */
   seed: number;
   createdAt: number;
-  /** Efeito visual temporário na sala (eventos do GitHub detectados nos transcripts; ver shared/github.ts). */
+  /** Temporary visual effect in the room (GitHub events detected in the transcripts; see shared/github.ts). */
   effect?: RoomEffect;
   /** The room belongs to another machine (see AgentInfo.machine). */
   machine?: MachineRef;
 }
 
 /**
- * Efeito temporário numa sala de projeto, disparado por um evento do GitHub visto ao vivo:
- * - party: comemoração (PR aberto ou mergeado, release, CI verde depois de um alarme); dura ~12 s;
- * - alarm: CI vermelho; dura até um CI verde naquela sala ou expira em ~10 min.
+ * Temporary effect in a project room, triggered by a GitHub event seen live:
+ * - party: celebration (PR opened or merged, release, green CI after an alarm); lasts ~12 s;
+ * - alarm: red CI; lasts until a green CI in that room or expires after ~10 min.
  */
 export interface RoomEffect {
   kind: 'party' | 'alarm';
-  /** Faixa curta em PT-BR. Ex.: "PR #12 mergeado!", "CI falhou (feat/x)". */
+  /** Short banner in the server's language. E.g. "PR #12 merged!", "CI failed (feat/x)". */
   text: string;
-  /** Início (epoch ms, relógio do servidor): um efeito novo tem outro `at`. */
+  /** Start (epoch ms, server clock): a new effect has a different `at`. */
   at: number;
-  /** Fim previsto (epoch ms, relógio do servidor). */
+  /** Expected end (epoch ms, server clock). */
   until: number;
-  /** Agente responsável: quem abriu/mergeou (festa) ou quem viu o CI falhar (alarme, balão "!"). */
+  /** Responsible agent: who opened/merged (party) or who saw the CI fail (alarm, "!" bubble). */
   agentId?: string;
 }
 
 /**
- * Verificação de versão nova: o servidor consulta a release mais recente do repositório no GitHub
- * (server/updates/checker.ts) e compara com a versão em uso.
+ * New-version check: the server looks up the repository's latest release on GitHub (server/updates/checker.ts) and
+ * compares it with the version in use.
  */
 export interface UpdateStatus {
   /**
-   * - off: verificação desligada (HABBLAUD_UPDATE_CHECK=0 ou package.json sem repositório no GitHub);
-   * - pending: ainda não verificou;
-   * - ok: verificou (com ou sem release publicada);
-   * - error: a última tentativa falhou (sem internet, limite de consultas do GitHub...).
+   * - off: check disabled (HABBLAUD_UPDATE_CHECK=0 or package.json without a GitHub repository);
+   * - pending: not checked yet;
+   * - ok: checked (with or without a published release);
+   * - error: the last attempt failed (no internet, GitHub rate limit...).
    */
   state: 'off' | 'pending' | 'ok' | 'error';
-  /** Repositório consultado, "dono/nome". */
+  /** Repository checked, "owner/name". */
   repo?: string;
-  /** Última consulta que deu certo (epoch ms). */
+  /** Last successful check (epoch ms). */
   checkedAt?: number;
-  /** Versão da release mais recente, sem o "v" (ausente: nenhuma release publicada). */
+  /** Version of the latest release, without the "v" (absent: no published release). */
   latest?: string;
-  /** Página da release mais recente no GitHub. */
+  /** Page of the latest release on GitHub. */
   url?: string;
-  /** Publicação da release mais recente (epoch ms). */
+  /** When the latest release was published (epoch ms). */
   publishedAt?: number;
-  /** A release mais recente é mais nova que a versão em uso. */
+  /** The latest release is newer than the version in use. */
   available: boolean;
-  /** Motivo da falha (state "error"). */
+  /** Reason for the failure (state "error"). */
   error?: string;
 }
 
 export interface SourceInfo {
-  /** Rótulo da conta (basename do config dir). */
+  /** Account label (basename of the config dir). */
   label: string;
-  /** Ferramenta da fonte; ausente = 'claude'. */
+  /** The source's tool; absent = 'claude'. */
   provider?: Provider;
   path: string;
-  /** Sessões abertas detectadas nesta fonte. */
+  /** Open sessions detected in this source. */
   sessions: number;
   ok: boolean;
   error?: string;
 }
 
-/** Uma janela de limite de uso do plano (ex.: sessão de 5h, semana). */
+/** A plan usage-limit window (e.g. 5h session, week). */
 export interface UsageWindow {
-  /** Percentual usado, 0–100. */
+  /** Percentage used, 0–100. */
   utilization: number;
-  /** Quando a janela reinicia (epoch ms). */
+  /** When the window resets (epoch ms). */
   resetsAt?: number;
 }
 
 export interface AccountUsage {
-  /** Sessão de 5 horas. */
+  /** 5-hour session. */
   fiveHour?: UsageWindow;
-  /** Limite semanal (todos os modelos). */
+  /** Weekly limit (all models). */
   sevenDay?: UsageWindow;
   sevenDayOpus?: UsageWindow;
   sevenDaySonnet?: UsageWindow;
   /**
-   * Origem dos números (todas são arquivos locais gravados pela própria ferramenta):
-   * - 'statusline': capturado ao vivo e gravado em ~/.habblaud/usage/<conta>.json pelo mod do Habblaud
-   *   (mod/habblaud, recomendado) ou pelo scripts/statusline-tap.mjs (campo rate_limits do statusline);
-   * - 'cache': `cachedUsageUtilization` gravado pelo próprio Claude Code (atualiza quando alguém roda /usage);
-   * - 'codex': `rate_limits` dos arquivos de sessão do Codex (só se renovam enquanto alguma sessão roda).
+   * Where the numbers come from (all are local files written by the tool itself):
+   * - 'statusline': captured live and written to ~/.habblaud/usage/<account>.json by the Habblaud mod
+   *   (mod/habblaud, recommended) or by scripts/statusline-tap.mjs (the statusline's rate_limits field);
+   * - 'cache': `cachedUsageUtilization` written by Claude Code itself (updated when someone runs /usage);
+   * - 'codex': `rate_limits` from the Codex session files (only refreshed while some session is running).
    */
   source: 'cache' | 'statusline' | 'codex';
-  /** Quem gravou o arquivo ao vivo ('statusline'): o mod do Habblaud no Claude Code ou o tap de statusline. */
+  /** Who wrote the live file ('statusline'): the Habblaud mod in Claude Code or the statusline tap. */
   via?: 'mod' | 'tap';
   /**
-   * Conta sem cota nem créditos para usar agora (Codex: `rate_limits.primary` nulo, ex.: créditos do workspace
-   * esgotados). Não é "0% usado": as janelas ficam ausentes.
+   * Account with no quota or credits to use right now (Codex: null `rate_limits.primary`, e.g. workspace credits
+   * exhausted). It is not "0% used": the windows are absent.
    */
   noQuota?: boolean;
-  /** Quando os números foram obtidos na origem (epoch ms). */
+  /** When the numbers were obtained at the source (epoch ms). */
   fetchedAt: number;
 }
 
-/** Uma conta do Claude (um config dir: ~/.claude, ~/.claude-conta2, ...) ou do Codex (um CODEX_HOME: ~/.codex). */
+/** A Claude account (a config dir: ~/.claude, ~/.claude-conta2, ...) or a Codex one (a CODEX_HOME: ~/.codex). */
 export interface AccountInfo {
-  /** = AgentInfo.account (basename do config dir, ex.: ".claude"); único entre as contas de todas as ferramentas. */
+  /** = AgentInfo.account (basename of the config dir, e.g. ".claude"); unique across the accounts of every tool. */
   id: string;
-  /** Ferramenta da conta; ausente = 'claude'. */
+  /** The account's tool; absent = 'claude'. */
   provider?: Provider;
-  /** Rótulo curtíssimo (1–3 caracteres), ex.: "C" e "D" — atalhos detectados no shell — ou derivado. */
+  /** Very short label (1–3 characters), e.g. "C" and "D" — aliases detected in the shell — or derived. */
   short: string;
-  /** Nome amigável. Ex.: "Conta C". */
+  /** Friendly name. E.g. "Account C". */
   name: string;
   email?: string;
   organization?: string;
-  /** Plano, quando conhecido (ex.: "Max", "Pro"). */
+  /** Plan, when known (e.g. "Max", "Pro"). */
   plan?: string;
-  /** Cor de identificação da conta (hex). */
+  /** The account's identifying color (hex). */
   color: string;
   configDir: string;
-  /** Sessões abertas agora nesta conta. */
+  /** Sessions open right now in this account. */
   sessions: number;
   usage?: AccountUsage;
   /**
-   * - ok: números recentes;
-   * - stale: números antigos (ex.: cache do /usage de horas atrás);
-   * - disabled: sem números (tap de statusline não instalado e nenhum cache do /usage).
+   * - ok: recent numbers;
+   * - stale: old numbers (e.g. a /usage cache from hours ago);
+   * - disabled: no numbers (statusline tap not installed and no /usage cache).
    */
   usageStatus: 'ok' | 'stale' | 'disabled';
   /** The account lives on another machine (see AgentInfo.machine). */
@@ -349,14 +349,14 @@ export interface AccountInfo {
 }
 
 export interface OfficeSnapshot {
-  /** Incrementa a cada mudança. */
+  /** Incremented on every change. */
   rev: number;
   serverTime: number;
   rooms: RoomInfo[];
   agents: AgentInfo[];
-  /** Terminais interativos abertos pelo Habblaud (Claude Code rodando dentro do navegador). */
+  /** Interactive terminals opened by Habblaud (Claude Code running inside the browser). */
   ptys?: PtyInfo[];
-  /** Contas do Claude detectadas (com uso de 5h/semanal quando disponível). */
+  /** Detected Claude accounts (with 5h/weekly usage when available). */
   accounts: AccountInfo[];
   meta: {
     demo: boolean;
@@ -364,34 +364,34 @@ export interface OfficeSnapshot {
     startedAt: number;
     version: string;
     /**
-     * Identificador do build do cliente que o servidor está servindo (nome do bundle, ex.: "main-BFqheOCa").
-     * Uma página aberta com outro build está desatualizada e deve se recarregar. Ausente no modo dev.
+     * Id of the client build the server is serving (bundle name, e.g. "main-BFqheOCa").
+     * A page open with a different build is out of date and should reload. Absent in dev mode.
      */
     build?: string;
     /**
-     * Terminal (GET /api/agents/:id/terminal) disponível: só quando o Habblaud não fica
-     * exposto além do próprio computador (bind local). Ausente/false = recurso desligado.
+     * Terminal (GET /api/agents/:id/terminal) available: only when Habblaud is not exposed beyond this computer
+     * (local bind). Absent/false = feature off.
      */
     terminal?: boolean;
     /**
-     * Mensagens pelo escritório ligadas (POST /api/messages): a mesma trava do terminal e HABBLAUD_MENSAGENS sem
-     * desligar. Quem recebe agora diz AgentInfo.canMessage. Ausente/false = recurso desligado.
+     * Messages through the office enabled (POST /api/messages): the same lock as the terminal, and HABBLAUD_MENSAGENS
+     * not turned off. AgentInfo.canMessage says who can receive right now. Absent/false = feature off.
      */
     messages?: boolean;
     /**
-     * Terminal interativo (abrir/assumir sessões e encerrar agentes pelo escritório): só fora do Docker, com
-     * node-pty e acesso local. Ausente = recurso desligado.
+     * Interactive terminal (open/take over sessions and end agents from the office): only outside Docker, with
+     * node-pty and local access. Absent = feature off.
      */
     pty?: PtyStatus;
-    /** Verificação de versão nova no GitHub (ausente nos testes e no timelapse). */
+    /** New-version check on GitHub (absent in tests and in the timelapse). */
     updates?: UpdateStatus;
   };
 }
 
 /**
- * O que ESTA página pode fazer (GET /api/access): a porta local libera tudo pelo Host local; a porta remota com login
- * (server/http/remote.ts) só o que HABBLAUD_REMOTE_ALLOW liberar. `local` = aberta pelo próprio computador (editar
- * personagem e renomear salas, que nunca valem pela porta remota).
+ * What THIS page may do (GET /api/access): the local port allows everything through a local Host; the remote port with
+ * login (server/http/remote.ts) only what HABBLAUD_REMOTE_ALLOW allows. `local` = opened from this computer (editing
+ * characters and renaming rooms, which never work through the remote port).
  */
 export interface AccessInfo {
   remote: boolean;
@@ -399,7 +399,7 @@ export interface AccessInfo {
   permissions: boolean;
   messages: boolean;
   terminal: boolean;
-  /** Pode abrir agentes novos no app do Claude (POST /api/spawn). */
+  /** May open new agents in the Claude app (POST /api/spawn). */
   spawn: boolean;
 }
 
@@ -409,7 +409,7 @@ export interface FeedItem {
   roomId: string;
   agentName: string;
   roomName: string;
-  /** Conta do agente (= AccountInfo.id). */
+  /** The agent's account (= AccountInfo.id). */
   account?: string;
   activity: Activity;
 }
@@ -426,37 +426,37 @@ export interface Notice {
 }
 
 /**
- * Mensagens do servidor via SSE em GET /api/stream.
- * Cada mensagem chega como um evento SSE nomeado (`event: snapshot|feed|notice`) cujo `data` é o JSON de `data`.
- * Ao conectar, o servidor envia um `snapshot` completo e um `feed` com os itens recentes.
+ * Server messages over SSE on GET /api/stream.
+ * Each message arrives as a named SSE event (`event: snapshot|feed|notice`) whose `data` is the JSON of `data`.
+ * On connect, the server sends a full `snapshot` and a `feed` with the recent items.
  */
 export type ServerMessage =
   | { type: 'snapshot'; data: OfficeSnapshot }
   | { type: 'feed'; data: FeedItem[] }
   | { type: 'notice'; data: Notice };
 
-/** Resposta de GET /api/agents/:id */
+/** Response of GET /api/agents/:id */
 export interface AgentDetail {
   agent: AgentInfo;
-  /** Histórico mais longo (máx. ~200), do mais antigo para o mais recente. */
+  /** Longer history (max ~200), oldest to newest. */
   history: Activity[];
 }
 
-// ------------------------------------------------------------------ mod do Claude Code
+// ------------------------------------------------------------------ Claude Code mod
 
 /**
- * Resposta de GET /api/mod/summary: o mínimo que o mod do Claude Code (mod/habblaud) precisa para a linha
- * "precisa de você" embaixo do prompt e para o comando /habblaud. Só agentes reais (o demo fica de fora)
- * e presentes (sem quem já encerrou ou entregou); com `?session=` (e `?account=`), sem a própria sessão
- * de quem pergunta: o agente principal dela e os subagentes.
+ * Response of GET /api/mod/summary: the minimum the Claude Code mod (mod/habblaud) needs for the "needs you" line
+ * under the prompt and for the /habblaud command. Only real agents (the demo is left out) that are present (not those
+ * that ended or delivered); with `?session=` (and `?account=`), without the asking session itself: its main agent and
+ * its subagents.
  */
 export interface ModSummary {
-  /** Versão do Habblaud em uso. */
+  /** Habblaud version in use. */
   version: string;
-  /** Agentes presentes e quantos estão trabalhando. */
+  /** Agents present and how many are working. */
   agents: number;
   working: number;
-  /** Quem precisa de você, de quem espera há mais tempo para quem espera há menos. */
+  /** Who needs you, from the longest-waiting to the most recent. */
   waiting: ModWaitingAgent[];
 }
 
@@ -464,137 +464,135 @@ export interface ModWaitingAgent {
   /** = AgentInfo.id. */
   id: string;
   name: string;
-  /** Nome exibido da sala (projeto). */
+  /** Display name of the room (project). */
   room: string;
   /** = AccountInfo.id. */
   account: string;
-  /** Motivo em PT-BR (AgentInfo.waitingFor), ex.: "aprovar uma permissão". */
+  /** Reason in the server's language (AgentInfo.waitingFor), e.g. "approve a permission". */
   waitingFor: string;
-  /** Desde quando espera (epoch ms). */
+  /** Waiting since (epoch ms). */
   since?: number;
-  /** Há pedido de permissão para responder pelo escritório (AgentInfo.permission). */
+  /** There is a permission request to answer through the office (AgentInfo.permission). */
   answerable: boolean;
 }
 
 // ------------------------------------------------------------------ terminal
 
 /**
- * Como exibir o `input` de uma chamada de ferramenta:
- * - command: comando de shell; diff: linhas "- antiga" / "+ nova" (Edit/Write); json: argumentos brutos; text: texto livre.
+ * How to show the `input` of a tool call:
+ * - command: shell command; diff: "- old" / "+ new" lines (Edit/Write); json: raw arguments; text: free text.
  */
 export type TerminalInputKind = 'command' | 'diff' | 'json' | 'text';
 
 /**
- * Uma entrada do terminal: a conversa da sessão reconstruída do transcript JSONL,
- * no formato em que o Claude Code a mostra. Todo texto já vem com segredos mascarados e truncado.
- * Entradas só são acrescentadas (nunca editadas): o resultado de uma ferramenta chega depois, numa
- * entrada 'result' que aponta para a 'tool' pelo `toolUseId`.
+ * A terminal entry: the session's conversation rebuilt from the JSONL transcript, in the format Claude Code shows it.
+ * All text arrives with secrets masked and truncated. Entries are only appended (never edited): a tool's result
+ * arrives later, in a 'result' entry that points to the 'tool' through `toolUseId`.
  */
 export type TerminalEntry =
-  /** Prompt do usuário ou comando de barra (ex.: "/model"). */
+  /** User prompt or slash command (e.g. "/model"). */
   | { kind: 'user'; id: string; at: number; text: string }
-  /** Texto da resposta do agente (markdown). */
+  /** Text of the agent's reply (markdown). */
   | { kind: 'assistant'; id: string; at: number; text: string }
-  /** Bloco de raciocínio; `text` ausente quando o transcript só guarda a assinatura. */
+  /** Reasoning block; `text` absent when the transcript only keeps the signature. */
   | { kind: 'thinking'; id: string; at: number; text?: string }
   /**
-   * Chamada de ferramenta. `id` = id do tool_use. `title` no estilo do Claude Code: "Bash(npm test)",
-   * "Read(server/index.ts)". `input` = argumentos relevantes (comando, diff...), quando houver.
+   * Tool call. `id` = the tool_use id. `title` in Claude Code style: "Bash(npm test)", "Read(server/index.ts)".
+   * `input` = the relevant arguments (command, diff...), when there are any.
    */
   | { kind: 'tool'; id: string; at: number; tool: string; title: string; input?: string; inputKind?: TerminalInputKind }
-  /** Resultado de uma ferramenta. `truncated` = o texto foi cortado (resultado longo demais). */
+  /** A tool's result. `truncated` = the text was cut (result too long). */
   | { kind: 'result'; id: string; at: number; toolUseId: string; text: string; error?: boolean; truncated?: boolean }
-  /** Evento da sessão: compactação, interrupção, resultado em segundo plano, erro da API... */
+  /** Session event: compaction, interruption, background result, API error... */
   | { kind: 'system'; id: string; at: number; text: string; detail?: string; level?: 'info' | 'warn' | 'error' };
 
-/** Evento `init` do stream do terminal: a conversa recente (substitui tudo o que o cliente tiver). */
+/** `init` event of the terminal stream: the recent conversation (replaces whatever the client has). */
 export interface TerminalInit {
   agentId: string;
-  /** Da mais antiga para a mais recente. */
+  /** Oldest to newest. */
   entries: TerminalEntry[];
-  /** Há conversa anterior que não foi carregada (o transcript é maior do que a janela lida). */
+  /** There is earlier conversation that was not loaded (the transcript is larger than the window read). */
   truncated: boolean;
 }
 
 /**
- * Stream do terminal (Server-Sent Events) em GET /api/agents/:id/terminal.
- * Ao conectar (e a cada reconexão, ou se o transcript for truncado/substituído) chega um `init`;
- * depois, `append` com as entradas novas. Erros antes do stream respondem JSON `{error}`:
- * 403 (recurso desligado ou acesso que não é local), 404 (agente/transcript desconhecido),
- * 429 (terminais abertos demais).
+ * Terminal stream (Server-Sent Events) on GET /api/agents/:id/terminal.
+ * On connect (and on every reconnect, or if the transcript is truncated/replaced) an `init` arrives; then `append`
+ * with the new entries. Errors before the stream respond with JSON `{error}`: 403 (feature off or non-local access),
+ * 404 (unknown agent/transcript), 429 (too many open terminals).
  */
 export type TerminalMessage = { type: 'init'; data: TerminalInit } | { type: 'append'; data: TerminalEntry[] };
 
 /**
- * Uma sessão recente (aberta ou já encerrada) no histórico do terminal, em
- * GET /api/sessions/recent. A conversa de uma sessão encerrada sai, com o mesmo protocolo do terminal
- * do agente (TerminalMessage), de GET /api/sessions/:conta/:sessionId/terminal.
+ * A recent session (open or already ended) in the terminal history, on GET /api/sessions/recent. The conversation of
+ * an ended session comes, with the same protocol as the agent terminal (TerminalMessage), from
+ * GET /api/sessions/:account/:sessionId/terminal.
  */
 export interface RecentSession {
   /** = AccountInfo.id. */
   account: string;
-  /** Ferramenta da sessão; ausente = 'claude'. */
+  /** The session's tool; absent = 'claude'. */
   provider?: Provider;
   sessionId: string;
-  /** Caminho do projeto (o `cwd` das primeiras linhas do transcript); ausente se não deu para descobrir. */
+  /** Project path (the `cwd` of the transcript's first lines); absent if it could not be found. */
   project?: string;
-  /** Nome da pasta do projeto em `projects/` (o cwd codificado), para quando `project` falta. */
+  /** Name of the project folder under `projects/` (the encoded cwd), for when `project` is missing. */
   projectDir: string;
-  /** Título como o do agente: /rename > nome do agente > título automático > último prompt (ou o primeiro). */
+  /** Title like the agent's: /rename > agent name > automatic title > last prompt (or the first). */
   title?: string;
-  /** Primeira e última atividade com horário (epoch ms); `lastAt` cai no mtime do arquivo sem horário no fim. */
+  /** First and last timestamped activity (epoch ms); `lastAt` falls back to the file mtime with no timestamp at the end. */
   firstAt?: number;
   lastAt: number;
-  /** Tamanho do transcript em bytes. */
+  /** Transcript size in bytes. */
   size: number;
-  /** A sessão ainda está aberta: `agentId` é o agente principal dela no escritório. */
+  /** The session is still open: `agentId` is its main agent in the office. */
   open: boolean;
   agentId?: string;
 }
 
-// ------------------------------------------------------------------ entregas
+// ------------------------------------------------------------------ deliveries
 
-/** Tipo de um anexo de entrega, para escolher o visualizador. */
+/** Type of a delivery attachment, to pick the viewer. */
 export type DeliveryAttachmentKind = 'image' | 'pdf' | 'video' | 'page' | 'text' | 'file';
 
-/** Arquivo que o agente entregou (SendUserFile, link na resposta) ou uma tela capturada no fim do trabalho. */
+/** A file the agent delivered (SendUserFile, a link in the reply) or a screen captured at the end of the work. */
 export interface DeliveryAttachment {
-  /** Id opaco para GET /api/deliveries/file/:id (nunca o caminho). */
+  /** Opaque id for GET /api/deliveries/file/:id (never the path). */
   id: string;
   name: string;
   kind: DeliveryAttachmentKind;
-  /** Legenda do agente (SendUserFile) ou "Tela capturada". */
+  /** The agent's caption (SendUserFile) or "Screen capture". */
   caption?: string;
-  /** Captura de tela que veio dentro da conversa (não é um arquivo do computador). */
+  /** A screenshot that came inside the conversation (not a file on the computer). */
   capture?: boolean;
 }
 
 /**
- * Uma entrega: o fim de um pedido em que o agente trabalhou (usou ferramentas) e respondeu. Montada do transcript
- * (server/deliveries/deliveries.ts), do jeito que um BA receberia: manchete, resumo, pedido e anexos.
+ * A delivery: the end of a request the agent worked on (used tools) and answered. Built from the transcript
+ * (server/deliveries/deliveries.ts) the way a BA would receive it: headline, summary, request and attachments.
  */
 export interface DeliveryInfo {
-  /** "<conta>:<sessão>:<entrada do pedido>". */
+  /** "<account>:<session>:<request entry>". */
   id: string;
   account: string;
   provider?: Provider;
   sessionId: string;
-  /** Agente ainda no escritório (para o avatar e o "abrir terminal"). */
+  /** Agent still in the office (for the avatar and "open terminal"). */
   agentId?: string;
-  /** Nome do agente (o do escritório) ou o título da sessão. */
+  /** Agent name (the office one) or the session title. */
   agentName?: string;
   project?: string;
-  /** O que foi pedido (uma linha). */
+  /** What was asked (one line). */
   request: string;
-  /** Primeira frase da resposta, sem markdown. */
+  /** First sentence of the reply, without markdown. */
   headline: string;
-  /** Parágrafo em linguagem simples (o último da resposta), quando há. */
+  /** Plain-language paragraph (the last one of the reply), when there is one. */
   summary?: string;
-  /** A resposta inteira (markdown). */
+  /** The full reply (markdown). */
   text: string;
   startedAt: number;
   finishedAt: number;
-  /** Ferramentas usadas e arquivos alterados no pedido. */
+  /** Tools used and files changed in the request. */
   tools: number;
   edited: number;
   attachments: DeliveryAttachment[];
@@ -604,140 +602,140 @@ export interface DeliveriesResponse {
   deliveries: DeliveryInfo[];
 }
 
-/** Resposta de GET /api/sessions/recent: da atividade mais recente para a mais antiga. */
+/** Response of GET /api/sessions/recent: most recent activity first. */
 export interface RecentSessionsResponse {
   sessions: RecentSession[];
-  /** Janela da listagem (dias) e máximo de sessões. */
+  /** Listing window (days) and maximum sessions. */
   days: number;
   limit: number;
 }
 
-// ------------------------------------------------------------------ responder pelo escritório
+// ------------------------------------------------------------------ answering through the office
 
-/** Regra "sempre permitir" sugerida pelo Claude Code para um pedido (permission_suggestions do hook). */
+/** "Always allow" rule suggested by Claude Code for a request (the hook's permission_suggestions). */
 export interface PermissionSuggestionInfo {
-  /** Posição na lista que o hook recebeu: é ela que volta na decisão (o hook aplica a sugestão original). */
+  /** Position in the list the hook received: it is what comes back in the decision (the hook applies the original suggestion). */
   index: number;
-  /** Regras no formato das permissões do Claude Code, ex.: "Bash(npm test:*)". */
+  /** Rules in Claude Code permission format, e.g. "Bash(npm test:*)". */
   rules: string[];
-  /** Onde a regra fica guardada: 'session', 'localSettings', 'projectSettings' ou 'userSettings'. */
+  /** Where the rule is stored: 'session', 'localSettings', 'projectSettings' or 'userSettings'. */
   destination: string;
 }
 
 /**
- * Pedido de permissão pendente que dá para responder pelo Habblaud: o hook PermissionRequest do Claude Code
- * (mod/habblaud-permissoes/hooks/permission-hook.mjs) o registra e fica esperando a decisão. Só existe com bind local (a mesma
- * trava do terminal) e com alguma página do Habblaud aberta.
- * No snapshot vai sem `input` (os argumentos completos só saem por GET /api/permissions/:id, com acesso
- * local); os pedidos fictícios do demo já vêm com ele.
+ * Pending permission request that can be answered through Habblaud: Claude Code's PermissionRequest hook
+ * (mod/habblaud-permissoes/hooks/permission-hook.mjs) registers it and waits for the decision. It only exists with a
+ * local bind (the same lock as the terminal) and with some Habblaud page open.
+ * In the snapshot it goes without `input` (the full arguments only come from GET /api/permissions/:id, with local
+ * access); the demo's fake requests already include it.
  */
 export interface PermissionRequestInfo {
   id: string;
-  /** Ferramenta de quem pediu; ausente = 'claude'. */
+  /** The requester's tool; absent = 'claude'. */
   provider?: Provider;
-  /** Nome bruto da ferramenta (ex.: "Bash", "Edit", "mcp__github__create_issue"). */
+  /** Raw tool name (e.g. "Bash", "Edit", "mcp__github__create_issue"). */
   tool: string;
-  /** Título no estilo do Claude Code: "Bash(npm test)", "Edit(src/app.ts)". Mascarado e cortado. */
+  /** Title in Claude Code style: "Bash(npm test)", "Edit(src/app.ts)". Masked and truncated. */
   title: string;
-  /** Resumo em PT-BR (ex.: "Rodando os testes") e o ícone da atividade. */
+  /** Summary in the server's language (e.g. "Running the tests") and the activity icon. */
   text: string;
   icon: string;
-  /** Argumentos (comando, diff, JSON...), mascarados e truncados. */
+  /** Arguments (command, diff, JSON...), masked and truncated. */
   input?: string;
   inputKind?: TerminalInputKind;
-  /** Pedido de um subagente que o Habblaud ainda não mostra: o tipo dele (ex.: "Explore"). */
+  /** Request from a subagent Habblaud doesn't show yet: its type (e.g. "Explore"). */
   subagent?: string;
-  /** Regras "sempre permitir" que podem ser aplicadas junto com a aprovação. */
+  /** "Always allow" rules that can be applied along with the approval. */
   suggestions?: PermissionSuggestionInfo[];
   /**
-   * Pedido do AskUserQuestion: as perguntas, para responder pelo escritório (decisão `answer`). Vai também no
-   * snapshot (sem elas o cartão não tem o que mostrar).
+   * AskUserQuestion request: the questions, to answer through the office (the `answer` decision). Also included in
+   * the snapshot (without them the card has nothing to show).
    */
   questions?: AskQuestion[];
-  /** Outros pedidos do mesmo agente esperando depois deste. */
+  /** Other requests from the same agent waiting after this one. */
   queued?: number;
   createdAt: number;
-  /** Quando o hook desiste de esperar e o pedido passa a valer só no terminal. */
+  /** When the hook gives up waiting and the request can only be answered in the terminal. */
   expiresAt: number;
 }
 
 /**
- * Resposta a uma pergunta do AskUserQuestion, por POSIÇÃO (AskQuestion.index e o `index` das opções): o hook troca
- * as posições pelos textos originais que recebeu do Claude Code (a página só vê os textos mascarados e cortados).
+ * Answer to an AskUserQuestion question, by POSITION (AskQuestion.index and the options' `index`): the hook swaps the
+ * positions for the original texts it got from Claude Code (the page only sees the masked, truncated texts).
  */
 export interface PermissionAnswer {
   /** AskQuestion.index. */
   question: number;
-  /** Posições das opções escolhidas (uma só sem multiSelect). */
+  /** Positions of the chosen options (just one without multiSelect). */
   options?: number[];
-  /** Texto livre ("Outro"). Sem multiSelect, vale no lugar de uma opção. */
+  /** Free text ("Other"). Without multiSelect, it counts instead of an option. */
   other?: string;
 }
 
-/** Corpo de POST /api/permissions/:id/decision (vindo da página). */
+/** Body of POST /api/permissions/:id/decision (from the page). */
 export interface PermissionDecision {
   /**
-   * allow = aprovar; deny = recusar; terminal = devolver o pedido ao terminal (o hook sai sem decidir);
-   * answer = responder as perguntas de um AskUserQuestion (`answers`).
+   * allow = approve; deny = refuse; terminal = hand the request back to the terminal (the hook exits without deciding);
+   * answer = answer the questions of an AskUserQuestion (`answers`).
    */
   behavior: 'allow' | 'deny' | 'terminal' | 'answer';
-  /** Recusa: motivo repassado ao agente. */
+  /** Refusal: reason passed on to the agent. */
   message?: string;
-  /** Recusa: interrompe o agente (ele para e espera você). */
+  /** Refusal: interrupts the agent (it stops and waits for you). */
   interrupt?: boolean;
-  /** Aprovação: aplica junto a sugestão desta posição (PermissionSuggestionInfo.index). */
+  /** Approval: also applies the suggestion at this position (PermissionSuggestionInfo.index). */
   suggestion?: number;
-  /** Resposta (`answer`): uma por pergunta do pedido. */
+  /** Answer (`answer`): one per question of the request. */
   answers?: PermissionAnswer[];
 }
 
-// ------------------------------------------------------------------ mensagens pelo escritório
+// ------------------------------------------------------------------ messages through the office
 
 /**
- * Situação de uma mensagem mandada pela página a um agente (GET /api/messages/:id):
- * queued = esperando a sessão buscar; sent = a sessão buscou e está entregando; delivered = entrou na sessão (ou
- * na fila dela, se o agente estava ocupado); failed = não entrou (`error` diz por quê).
+ * Status of a message sent from the page to an agent (GET /api/messages/:id):
+ * queued = waiting for the session to fetch it; sent = the session fetched it and is delivering it; delivered = it went
+ * into the session (or its queue, if the agent was busy); failed = it didn't go in (`error` says why).
  */
 export type OutboxStatus = 'queued' | 'sent' | 'delivered' | 'failed';
 
 export interface OutboxMessage {
   id: string;
-  /** AgentInfo.id do destinatário (sempre um principal). */
+  /** AgentInfo.id of the recipient (always a main agent). */
   agentId: string;
   status: OutboxStatus;
   error?: string;
   createdAt: number;
-  /** Última mudança de status. */
+  /** Last status change. */
   updatedAt: number;
 }
 
-/** Estado do terminal interativo (OfficeSnapshot.meta.pty). */
+/** State of the interactive terminal (OfficeSnapshot.meta.pty). */
 export interface PtyStatus {
   enabled: boolean;
-  /** Por que está desligado. */
+  /** Why it is off. */
   reason?: string;
 }
 
-/** Terminal interativo aberto pelo Habblaud (node-pty no servidor, xterm.js no navegador). */
+/** Interactive terminal opened by Habblaud (node-pty on the server, xterm.js in the browser). */
 export interface PtyInfo {
   id: string;
-  /** PID do Claude Code: o agente correspondente é `${account}:${pid}` (= agentId). */
+  /** Claude Code PID: the matching agent is `${account}:${pid}` (= agentId). */
   pid: number;
   cwd: string;
   account: string;
   agentId: string;
-  /** Sessão retomada (`claude --resume`), quando o terminal assumiu uma sessão que já existia. */
+  /** Resumed session (`claude --resume`), when the terminal took over an existing session. */
   resumed?: string;
-  /** Agente que este terminal assumiu (o id antigo, do processo encerrado). */
+  /** Agent this terminal took over (the old id, of the ended process). */
   fromAgent?: string;
   startedAt: number;
   exitedAt?: number;
   exitCode?: number;
 }
 
-/** Mensagem entregue ao plugin habblaud-mensagens (POST /api/mod/inbox). */
+/** Message delivered to the habblaud-mensagens plugin (POST /api/mod/inbox). */
 export interface InboxMessage {
   id: string;
-  /** O texto como foi digitado: o plugin o manda à sessão como se você o tivesse digitado. */
+  /** The text as typed: the plugin sends it to the session as if you had typed it. */
   text: string;
 }

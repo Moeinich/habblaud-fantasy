@@ -1,4 +1,4 @@
-// Montagem do prédio: núcleo + corredor + salas de projeto -> grade de caminhabilidade e spots.
+// Building assembly: core + corridor + project rooms -> walkability grid and spots.
 import { FURNITURE } from '../../art/api';
 import { BLOCKED, FREE, SEAT, WalkGrid } from '../path/grid';
 import { furnitureBlocks, furnitureIsSeat } from './builder';
@@ -27,7 +27,7 @@ export interface BuildingLayout {
 
 let coreCache: AreaLayout[] | null = null;
 
-/** Áreas fixas do núcleo (calculadas uma vez). */
+/** Fixed areas of the core (computed once). */
 export function coreAreas(): AreaLayout[] {
   if (!coreCache) {
     coreCache = [layoutReception(), layoutRestroom(), layoutCafe(), layoutLounge()];
@@ -37,7 +37,7 @@ export function coreAreas(): AreaLayout[] {
   return coreCache;
 }
 
-/** Marca na grade as células caminháveis de uma área, os bloqueios e os assentos. */
+/** Marks an area's walkable cells, blocked cells and seats on the grid. */
 export function paintArea(grid: WalkGrid, area: AreaLayout): void {
   for (const r of area.walkable) grid.fill(r.x, r.y, r.w, r.h, FREE);
   for (const r of area.blocked ?? []) grid.fill(r.x, r.y, r.w, r.h, BLOCKED);

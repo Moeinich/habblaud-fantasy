@@ -11,7 +11,7 @@ export type Accessory = (typeof ACCESSORIES)[number];
 export type FacialHair = (typeof FACIAL_HAIR)[number];
 export type BottomStyle = (typeof BOTTOM_STYLES)[number];
 
-/** Aparência completa (o mesmo formato de `Appearance` em client/src/art/api.ts; o cliente confere que não se separam). */
+/** Full appearance (the same shape as `Appearance` in client/src/art/api.ts; the client checks they don't drift apart). */
 export interface SeedAppearance {
   skin: string;
   hair: string;
@@ -24,7 +24,7 @@ export interface SeedAppearance {
   shoes: string;
   accessory: Accessory;
   accessoryColor: string;
-  /** Crachá/cordão no pescoço (subagentes). null = sem crachá. */
+  /** Badge/lanyard around the neck (subagents). null = no badge. */
   lanyard: string | null;
   look: 'f' | 'm';
   facialHair?: FacialHair;
@@ -34,16 +34,16 @@ export interface SeedAppearance {
 export const SKINS = ['#ffe2cc', '#f6cfb0', '#eab894', '#d69f78', '#bd8560', '#9a6444', '#7a4a31', '#5a3623'] as const;
 
 export const HAIR_NATURAL: readonly (readonly [string, number])[] = [
-  ['#2b2530', 5], // preto
-  ['#3f2c22', 5], // castanho-escuro
-  ['#5f3c28', 4], // castanho
-  ['#87593a', 2.5], // castanho-claro
-  ['#b0703c', 1.2], // ruivo-acobreado
-  ['#8e3b2b', 1], // acaju
-  ['#d6ae68', 1.8], // loiro
-  ['#ebdcb0', 0.7], // platinado
-  ['#8f929b', 0.7], // grisalho
-  ['#d9dbe0', 0.5], // branco
+  ['#2b2530', 5], // black
+  ['#3f2c22', 5], // dark brown
+  ['#5f3c28', 4], // brown
+  ['#87593a', 2.5], // light brown
+  ['#b0703c', 1.2], // copper red
+  ['#8e3b2b', 1], // mahogany
+  ['#d6ae68', 1.8], // blond
+  ['#ebdcb0', 0.7], // platinum
+  ['#8f929b', 0.7], // gray
+  ['#d9dbe0', 0.5], // white
 ];
 export const HAIR_FUN = ['#e47aa8', '#5b8fe0', '#8f6ad8', '#3fb3a0', '#e0584e', '#7cc45a', '#f0a24a'] as const;
 
@@ -105,7 +105,7 @@ const BOTTOM_W: Record<'f' | 'm', Weights<BottomStyle>> = {
   f: { pants: 62, shorts: 10, skirt: 28 },
 };
 
-/** Mistura a semente (sementes consecutivas viram sequências bem diferentes). */
+/** Scrambles the seed (consecutive seeds give very different sequences). */
 function scramble(seed: number): number {
   let h = (seed ^ 0x9e3779b9) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -129,7 +129,7 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
   const weightedPair = (arr: readonly (readonly [string, number])[]): string =>
     weighted(Object.fromEntries(arr) as Weights<string>);
 
-  // A ordem dos sorteios é fixa: mudar a ordem muda todas as aparências.
+  // The draw order is fixed: changing it changes every appearance.
   const lookRoll = rnd();
   const look: 'f' | 'm' = opts.look ?? (lookRoll < 0.5 ? 'f' : 'm');
   const skin = pick(SKINS);
@@ -164,7 +164,7 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
   const bottom = weightedPair(BOTTOMS);
   const shoes = weightedPair(SHOES);
   let accessory = weighted(ACC_W[look]);
-  // Bonés e gorros não combinam com penteados volumosos no topo.
+  // Caps and beanies don't go with hairstyles that are bulky on top.
   if ((accessory === 'cap' || accessory === 'beanie') && (hairStyle === 'afro' || hairStyle === 'bun' || hairStyle === 'mohawk' || hairStyle === 'pigtails')) {
     accessory = 'glasses';
   }
@@ -174,7 +174,7 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
   const facialRoll = weighted(FACIAL_W);
   const facialHair: FacialHair = look === 'm' ? facialRoll : 'none';
   const bottomStyle = weighted(BOTTOM_W[look]);
-  // Cabelos raros e grisalhos pedem menos careca/raspado em looks femininos.
+  // Fewer bald heads on feminine looks.
   if (look === 'f' && hairStyle === 'bald') hairStyle = 'buzz';
 
   const a: SeedAppearance = {
@@ -194,8 +194,8 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
     facialHair,
     bottomStyle,
   };
-  // Peças escolhidas no editor (por cima do sorteio, sem mudar a ordem dos sorteios). Um undefined explícito não
-  // apaga a peça sorteada.
+  // Parts picked in the editor (on top of the draw, without changing the draw order). An explicit undefined does not
+  // erase the drawn part.
   const parts = opts.parts;
   if (!parts) return a;
   const chosen = Object.fromEntries(PART_KEYS.filter((k) => parts[k] !== undefined).map((k) => [k, parts[k]])) as AppearanceParts;

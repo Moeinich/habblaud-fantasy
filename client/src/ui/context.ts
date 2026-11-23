@@ -1,32 +1,32 @@
-// Contexto compartilhado entre os componentes da interface.
+// Context shared between the interface components.
 import type { AccountInfo, AgentInfo } from '../../../shared/types';
 import type { OfficeStore } from '../net/store';
 import type { Selection, WorldApi } from '../world/api';
 import type { UiPrefs } from './prefs';
 
 export interface UiComponent {
-  /** Chamado no máximo uma vez por quadro, quando algo mudou (snapshot, seleção, relógio...). */
+  /** Called at most once per frame, when something changed (snapshot, selection, clock...). */
   render(): void;
 }
 
 export type PanelName = 'sidebar' | 'feed';
 
 /**
- * Uma janela de terminal só, por agente: o interativo quando a sessão roda dentro do Habblaud (pty); senão o
- * de leitura (com "Assumir daqui" para passar a ser interativo). Montado em ui/index.ts.
+ * A single terminal window per agent: the interactive one when the session runs inside Habblaud (pty); otherwise
+ * the read-only one (with "Take over here" to become interactive). Built in ui/index.ts.
  */
 export interface TerminalRouter {
-  /** Agente com o terminal aberto (qualquer um dos dois), ou null. */
+  /** Agent whose terminal is open (either kind), or null. */
   readonly openAgentId: string | null;
   open(agentId: string, opener?: HTMLElement | null): void;
   toggle(agentId: string, opener?: HTMLElement | null): void;
-  /** O terminal deste agente seria o interativo. */
+  /** This agent's terminal would be the interactive one. */
   interactive(agentId: string): boolean;
-  /** Dá para abrir algum terminal agora (acesso local, fora do timelapse). */
+  /** Some terminal can be opened right now (local access, outside the timelapse). */
   readonly available: boolean;
-  /** Terminal interativo ligado (abrir sessões novas, assumir, encerrar). */
+  /** Interactive terminal enabled (open new sessions, take over, end). */
   readonly interactiveEnabled: boolean;
-  /** Sessão nova do Claude Code na pasta, aberta no terminal interativo. */
+  /** New Claude Code session in the folder, opened in the interactive terminal. */
   newSession(cwd: string, account?: string): Promise<void>;
 }
 
@@ -34,44 +34,44 @@ export type HelpSection = 'usage' | 'codex';
 
 export interface UiContext {
   readonly store: OfficeStore;
-  /** Janela de terminal (definida depois que os painéis existem). */
+  /** Terminal window (set once the panels exist). */
   terminals?: TerminalRouter;
   readonly world: WorldApi;
   readonly root: HTMLElement;
   readonly prefs: Readonly<UiPrefs>;
   updatePrefs(patch: Partial<UiPrefs>): void;
-  /** Relógio do servidor (corrige a diferença entre o relógio local e o do servidor). */
+  /** Server clock (corrects the difference between the local clock and the server's). */
   now(): number;
   account(id: string): AccountInfo | undefined;
   agent(id: string): AgentInfo | undefined;
   selection(): Selection;
   /**
-   * Seleciona no mundo (a UI se sincroniza pelo onSelect). Com `focus`, a câmera vai até o alvo dentro da
-   * área livre (fora dos painéis) e o foco é refeito quando painéis abrem/fecham, até o usuário mexer na câmera.
+   * Selects in the world (the UI syncs through onSelect). With `focus`, the camera moves to the target within the
+   * free area (outside the panels) and refocuses when panels open/close, until the user moves the camera.
    */
   select(sel: Selection, opts?: { focus?: boolean }): void;
-  /** Leva a câmera de novo até a seleção atual (botão Centralizar). */
+  /** Moves the camera back to the current selection (Center button). */
   focusSelection(): void;
-  /** Comandos de câmera dos botões/atalhos da UI (cancelam o foco mantido). */
+  /** Camera commands from the UI buttons/shortcuts (they cancel the held focus). */
   camera(action: 'overview' | 'zoomIn' | 'zoomOut'): void;
-  /** Agenda uma renderização no próximo quadro. */
+  /** Schedules a render on the next frame. */
   invalidate(): void;
-  /** Abre/fecha um painel (sem argumento: alterna). */
+  /** Opens/closes a panel (no argument: toggles). */
   togglePanel(name: PanelName, open?: boolean): void;
   isPanelOpen(name: PanelName): boolean;
-  /** Tela estreita: painéis viram gavetas sobrepostas. */
+  /** Narrow screen: panels become overlaid drawers. */
   isNarrow(): boolean;
-  /** Anuncia um texto para leitores de tela. */
+  /** Announces a text to screen readers. */
   announce(text: string): void;
   focusSearch(): void;
-  /** Abre a ajuda; com `section`, rola até ela (ex.: "usage" = Contas e uso). */
+  /** Opens the help; with `section`, scrolls to it (e.g. "usage" = Accounts and usage). */
   openHelp(section?: HelpSection): void;
   toggleSettings(): void;
-  /** Abre o campo de renomear a sala perto do ponto (px da janela); botão direito na sala (ui/roomrename.ts). */
+  /** Opens the room-rename field near the point (window px); right-click on the room (ui/roomrename.ts). */
   renameRoom?(roomId: string, at: { x: number; y: number }): void;
-  /** Abre as configurações na seção "Sobre" (versão em uso e versão nova). */
+  /** Opens the settings at the "About" section (current version and new version). */
   openAbout(): void;
-  /** Abre/fecha o timelapse do dia (ui/timelapse.ts). */
+  /** Opens/closes the day's timelapse (ui/timelapse.ts). */
   toggleTimelapse(): void;
   isTimelapseOpen(): boolean;
 }

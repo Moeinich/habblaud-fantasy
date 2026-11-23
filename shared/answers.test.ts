@@ -1,28 +1,28 @@
-// Respostas do AskUserQuestion pelo escritório: conferência contra as perguntas (por posição) e o resumo.
+// AskUserQuestion answers given through the office: validation against the questions (by position) and the summary.
 import { describe, expect, it } from 'vitest';
 import { answerSummary, checkAnswers } from './answers';
 import type { AskQuestion } from './types';
 
-// Posições do original: a pergunta 1 era inválida (pulada) e a opção 1 da primeira também.
+// Original positions: question 1 was invalid (skipped), and so was option 1 of the first question.
 const QS: AskQuestion[] = [
-  { index: 0, header: 'Banco', question: 'Qual banco usar?', options: [{ index: 0, label: 'Postgres' }, { index: 2, label: 'SQLite' }] },
-  { index: 2, question: 'Quais testes rodar antes do commit?', multiSelect: true, options: [{ index: 0, label: 'Unidade' }, { index: 1, label: 'E2E' }] },
+  { index: 0, header: 'Database', question: 'Which database should we use?', options: [{ index: 0, label: 'Postgres' }, { index: 2, label: 'SQLite' }] },
+  { index: 2, question: 'Which tests to run before committing?', multiSelect: true, options: [{ index: 0, label: 'Unit' }, { index: 1, label: 'E2E' }] },
 ];
 
 describe('checkAnswers', () => {
-  it('normaliza: ordem das perguntas, opções em ordem crescente, texto aparado, sem campos vazios', () => {
+  it('normalizes: question order, ascending options, trimmed text, no empty fields', () => {
     expect(checkAnswers(QS, [{ question: 2, options: [1, 0], other: '  lint  ' }, { question: 0, options: [2], other: '   ' }])).toEqual([
       { question: 0, options: [2] },
       { question: 2, options: [0, 1], other: 'lint' },
     ]);
-    // Sem multiSelect, o texto livre vale no lugar de uma opção; com multiSelect, sozinho também.
-    expect(checkAnswers(QS, [{ question: 0, other: 'MySQL' }, { question: 2, other: 'nenhum' }])).toEqual([
+    // Without multiSelect, free text counts instead of an option; with multiSelect, it counts on its own too.
+    expect(checkAnswers(QS, [{ question: 0, other: 'MySQL' }, { question: 2, other: 'none' }])).toEqual([
       { question: 0, other: 'MySQL' },
-      { question: 2, other: 'nenhum' },
+      { question: 2, other: 'none' },
     ]);
   });
 
-  it('cada pergunta exatamente uma vez', () => {
+  it('each question exactly once', () => {
     expect(checkAnswers(QS, [{ question: 0, options: [0] }])).toBeUndefined();
     expect(checkAnswers(QS, [{ question: 0, options: [0] }, { question: 0, options: [2] }])).toBeUndefined();
     expect(checkAnswers(QS, [{ question: 0, options: [0] }, { question: 1, options: [0] }])).toBeUndefined();
@@ -31,15 +31,15 @@ describe('checkAnswers', () => {
     expect(checkAnswers([], [])).toBeUndefined();
   });
 
-  it('escolha única: exatamente uma opção OU o texto livre', () => {
+  it('single choice: exactly one option OR the free text', () => {
     const multi = { question: 2, options: [0] };
     expect(checkAnswers(QS, [{ question: 0, options: [0, 2] }, multi])).toBeUndefined();
-    expect(checkAnswers(QS, [{ question: 0, options: [0], other: 'e mais' }, multi])).toBeUndefined();
+    expect(checkAnswers(QS, [{ question: 0, options: [0], other: 'and more' }, multi])).toBeUndefined();
     expect(checkAnswers(QS, [{ question: 0 }, multi])).toBeUndefined();
     expect(checkAnswers(QS, [{ question: 0, options: [] }, multi])).toBeUndefined();
   });
 
-  it('várias: ao menos uma escolha; opções que a pergunta não mostra ou repetidas não valem', () => {
+  it('multiple: at least one choice; options the question does not show, or repeated ones, are rejected', () => {
     const single = { question: 0, options: [0] };
     expect(checkAnswers(QS, [single, { question: 2 }])).toBeUndefined();
     expect(checkAnswers(QS, [{ question: 0, options: [1] }, { question: 2, options: [0] }])).toBeUndefined();
@@ -50,12 +50,12 @@ describe('checkAnswers', () => {
 });
 
 describe('answerSummary', () => {
-  it('cabeçalho (ou a pergunta) e os rótulos escolhidos; texto livre entre aspas e mascarado', () => {
-    expect(answerSummary(QS, [{ question: 0, options: [2] }, { question: 2, options: [0, 1], other: 'pode rodar' }])).toBe(
-      'Banco: SQLite · Quais testes rodar antes do commit?: Unidade, E2E, “pode rodar”',
+  it('header (or the question) and the chosen labels; free text quoted and masked', () => {
+    expect(answerSummary(QS, [{ question: 0, options: [2] }, { question: 2, options: [0, 1], other: 'go ahead' }])).toBe(
+      'Database: SQLite · Which tests to run before committing?: Unit, E2E, “go ahead”',
     );
     const secret = answerSummary(QS, [{ question: 0, other: 'token ghp_abcdefghijklmnopqrstuvwxyz0123456789' }]);
-    expect(secret).toMatch(/^Banco: “token .+”$/);
+    expect(secret).toMatch(/^Database: “token .+”$/);
     expect(secret).not.toContain('abcdefghijklmnop');
   });
 });

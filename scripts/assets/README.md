@@ -24,15 +24,15 @@ Requirements: Node 24, the `OPENROUTER_KEY` variable exported (only for generati
 numpy (on this machine's macOS, `/usr/bin/python3` already has both in the user site-packages).
 
 ```sh
-node scripts/assets/generate.mjs models            # modelos com saída de imagem
-node scripts/assets/generate.mjs list              # assets e estado do cache
-node scripts/assets/generate.mjs gen               # gera o que falta em .cache/raw/
-node scripts/assets/generate.mjs gen poster-cat --force                          # nova tomada
-node scripts/assets/generate.mjs gen logo-mark --model openai/gpt-5.4-image-2 --as gpt   # tomada alternativa
-node scripts/assets/generate.mjs pick logo-mark gpt                              # adota a tomada alternativa
-python3 -E scripts/assets/postprocess.py           # gera client/public/assets/** + manifest + folha de contato
-python3 -E scripts/assets/postprocess.py --only painting-cat --out /tmp/teste    # testa um asset isolado
-python3 -E scripts/assets/test_pixelops.py         # testes (grade/desampliação, chroma key, moda, fonte, marks)
+node scripts/assets/generate.mjs models            # models with image output
+node scripts/assets/generate.mjs list              # assets and cache state
+node scripts/assets/generate.mjs gen               # generates what is missing in .cache/raw/
+node scripts/assets/generate.mjs gen poster-cat --force                          # new take
+node scripts/assets/generate.mjs gen logo-mark --model openai/gpt-5.4-image-2 --as gpt   # alternative take
+node scripts/assets/generate.mjs pick logo-mark gpt                              # adopts the alternative take
+python3 -E scripts/assets/postprocess.py           # generates client/public/assets/** + manifest + contact sheet
+python3 -E scripts/assets/postprocess.py --only painting-cat --out /tmp/test     # tests a single asset
+python3 -E scripts/assets/test_pixelops.py         # tests (grid/de-upscaling, chroma key, mode, font, marks)
 ```
 
 - `gen` uses up to 2 retries per asset, runs with `--concurrency` (default 3) and refuses to go over the
@@ -142,8 +142,8 @@ Decision:
   "illustrations": { "emptyOffice": { "file": "illustrations/empty-office.png", "w": 960, "h": 540, "scale": 2 } },
   "wallArt": [
     { "id": "painting-mountains", "kind": "painting", "file": "art/painting-mountains.png", "w": 26, "h": 16,
-      "tiles": 2, "title": "Montanhas ao amanhecer", "framed": { "file": "art/framed/painting-mountains.png", "w": 32, "h": 22 } },
-    { "id": "poster-coffee", "kind": "poster", "variant": "coffee", "file": "art/poster-coffee.png", "w": 12, "h": 16, "tiles": 1, "title": "Café" }
+      "tiles": 2, "title": "Mountains at dawn", "framed": { "file": "art/framed/painting-mountains.png", "w": 32, "h": 22 } },
+    { "id": "poster-coffee", "kind": "poster", "variant": "coffee", "file": "art/poster-coffee.png", "w": 12, "h": 16, "tiles": 1, "title": "Coffee" }
   ],
   "og": "og-image.png"
 }

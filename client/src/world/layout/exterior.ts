@@ -17,18 +17,18 @@ function grow(r: TileRect, x: number, top: number, bottom: number): TileRect {
 export const EXTERIOR_WALL: WallStyle = { base: '#8f897d', trim: '#4e4a40', pattern: 'brick', exterior: true };
 
 export interface ExteriorLayout {
-  /** Limites da área desenhada (tiles). */
+  /** Bounds of the drawn area (tiles). */
   bounds: TileRect;
   floors: FloorPatch[];
   props: ExteriorProp[];
-  /** Faixas da rua (y em px) e sentido (+1 = leste, -1 = oeste). */
+  /** Street lanes (y in px) and direction (+1 = east, -1 = west). */
   lanes: { y: number; dir: 1 | -1 }[];
   /** Top of the dirt road and its height (px); the renderer paints the wheel ruts from these. */
   streetY: number;
   streetH: number;
 }
 
-/** Fechamento do corredor e pátio de um slot sem sala. */
+/** Corridor closure and patio of a slot without a room. */
 export interface SlotShell {
   slot: number;
   side: Side;
@@ -78,7 +78,7 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
     }
   }
   props.push({ kind: 'bench', x: px(wx - 4), y: px(CORRIDOR_Y + 3) + 6, seed: 1 });
-  // totem com a marca na entrada principal (oeste)
+  // brand totem at the main entrance (west)
   props.push({ kind: 'totem', x: px(wx - 3) + 6, y: px(CORRIDOR_Y + 1), seed: 2 });
 
   // no road any more: nothing drives here
@@ -92,7 +92,7 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
   };
 }
 
-/** Parede externa + jardim de um slot vazio: deck de madeira com mesas e guarda-sóis, canteiros e caminho. */
+/** Outer wall + garden of an empty slot: wooden deck with tables and parasols, flower beds and a path. */
 export function slotShell(cell: Cell): SlotShell {
   const { slot, col, side, strip } = cell;
   const lastColumn = cell.last;
@@ -108,14 +108,14 @@ export function slotShell(cell: Cell): SlotShell {
   const W = COL_W * TILE;
   const T = (n: number) => n * TILE;
   const seed = () => Math.floor(rng() * 1e9);
-  /** Deck de madeira com borda de pedra (tiles locais). */
+  /** Wooden deck with a stone border (local tiles). */
   const deck = (lx: number, ly: number, w: number, h: number) => {
     floors.push({ kind: 'sidewalk', x: x0 + T(lx), y: T(rect.y + ly), w: T(w), h: T(h), seed: slot + 7 });
     floors.push({ kind: 'wood', x: x0 + T(lx) + 4, y: T(rect.y + ly) + 4, w: T(w) - 8, h: T(h) - 8, seed: slot + 8 });
   };
 
   if (side === 'north') {
-    // fachada com janelas fechando o corredor (linhas 10–11)
+    // façade with windows closing off the corridor (rows 10–11)
     const fy = (corridorY - 2) * TILE;
     walls.push({ kind: 'face', x: x0, y: fy, w: W, style: EXTERIOR_WALL });
     [3, 8, 13].forEach((cx, i) =>
@@ -123,7 +123,7 @@ export function slotShell(cell: Cell): SlotShell {
     );
     if (lastColumn) walls.push({ kind: 'cap', x: x0 + W - TILE / 2, y: fy, w: TILE / 2, h: 2 * TILE, style: EXTERIOR_WALL });
     if (cell.first) walls.push({ kind: 'cap', x: x0, y: fy, w: TILE / 2, h: 2 * TILE, style: EXTERIOR_WALL });
-    // caminho do gramado até o deck, deck no meio e canteiros sob as janelas
+    // path from the lawn to the deck, deck in the middle and flower beds under the windows
     floors.push({ kind: 'sidewalk', x: x0 + T(7), y: T(rect.y), w: T(2), h: T(3), seed: slot });
     deck(3, 3, 10, 5);
     props.push({ kind: 'parasol', x: x0 + T(5.5), y: T(rect.y + 6) + 4, seed: seed(), slot });
@@ -136,12 +136,12 @@ export function slotShell(cell: Cell): SlotShell {
     props.push({ kind: 'bush', x: x0 + T(1) + 8, y: T(rect.y + 8), seed: seed(), slot });
     props.push({ kind: 'bush', x: x0 + T(15) - 8, y: T(rect.y + 8), seed: seed(), slot });
   } else {
-    // mureta externa fechando o corredor (linha 17) e jardim abaixo, ligado à calçada da rua
+    // low outer wall closing off the corridor (row 17) and a garden below, joined to the street's sidewalk
     walls.push({ kind: 'south', x: x0, y: southY * TILE, w: W, style: EXTERIOR_WALL });
     if (lastColumn) walls.push({ kind: 'cap', x: x0 + W - TILE / 2, y: southY * TILE, w: TILE / 2, h: TILE, style: EXTERIOR_WALL });
     if (cell.first) walls.push({ kind: 'cap', x: x0, y: southY * TILE, w: TILE / 2, h: TILE, style: EXTERIOR_WALL });
     floors.push({ kind: 'sidewalk', x: x0 + T(7), y: T(rect.y + 1), w: T(2), h: T(rect.h - 1), seed: slot });
-    // trecho entre a fachada e a calçada: só existe enquanto o slot está vazio (a cerca viva fecha)
+    // stretch between the façade and the sidewalk: only exists while the slot is empty (the hedge closes it)
     deck(3, 3.5, 10, 5);
     props.push({ kind: 'parasol', x: x0 + T(5.5), y: T(rect.y + 6.5) + 4, seed: seed(), slot });
     props.push({ kind: 'parasol', x: x0 + T(10.5), y: T(rect.y + 6.5) + 4, seed: seed(), slot });

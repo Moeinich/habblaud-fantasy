@@ -1,5 +1,5 @@
-// Ícones da interface em pixel art (mapas de pixels -> SVG com bordas nítidas), coerentes com o escritório.
-// Cada '#' é um pixel pintado com currentColor; renderizados a 2 px de tela por pixel.
+// Pixel-art interface icons (pixel maps -> SVG with crisp edges), consistent with the office.
+// Each '#' is a pixel painted with currentColor; rendered at 2 screen px per pixel.
 import { wordmarkRows } from './wordmark';
 
 function pixelPaths(rows: readonly string[], palette: Readonly<Record<string, string>>): string {
@@ -7,7 +7,7 @@ function pixelPaths(rows: readonly string[], palette: Readonly<Record<string, st
   for (const [ch, color] of Object.entries(palette)) {
     let d = '';
     rows.forEach((row, y) => {
-      // Agrupa pixels consecutivos da linha num único retângulo.
+      // Merges consecutive pixels of the row into a single rectangle.
       let x = 0;
       while (x < row.length) {
         if (row[x] !== ch) {
@@ -260,7 +260,7 @@ export const ICONS = {
     '..######..',
     '..........',
   ]),
-  // Ampulheta (esperando o shell): moldura na cor do texto e areia âmbar caindo.
+  // Hourglass (waiting on the shell): frame in the text color and amber sand falling.
   hourglass: pixelIcon(
     [
       '#########',
@@ -276,7 +276,7 @@ export const ICONS = {
     ],
     { '#': 'currentColor', s: '#f7c76b' },
   ),
-  // Janela de terminal com o prompt ">_".
+  // Terminal window with the ">_" prompt.
   terminal: pixelIcon([
     '##########',
     '#........#',
@@ -288,7 +288,7 @@ export const ICONS = {
     '#........#',
     '##########',
   ]),
-  /** Pessoa com um +: novo agente (o + sozinho já é o "aproximar" da câmera). */
+  /** Person with a +: new agent (the + alone is already the camera's "zoom in"). */
   newAgent: pixelIcon(['..##......', '.####.....', '.####...#.', '..##...###', '........#.', '.####.....', '######....', '######....']),
   delivery: pixelIcon(['...####...', '..#....#..', '.#......#.', '##########', '#....#...#', '#...###..#', '#....#...#', '#........#', '##########']),
   chevronLeft: pixelIcon(['....##', '...##.', '..##..', '.##...', '..##..', '...##.', '....##']),
@@ -304,7 +304,7 @@ export const ICONS = {
 
 export type IconKey = keyof typeof ICONS;
 
-/** Marca do Habblaud em pixels (usada quando /assets/brand/logo-mark.png não existe): casa de madeira com janelas à luz de tocha. */
+/** Habblaud pixel mark (used when /assets/brand/logo-mark.png does not exist): wooden house with torchlit windows. */
 export const FALLBACK_MARK = pixelIcon(
   [
     '.....######.....',

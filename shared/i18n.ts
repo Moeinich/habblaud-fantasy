@@ -1,6 +1,6 @@
-// Idiomas da interface. O português (pt-BR) continua sendo a língua de origem: cada texto é escrito em PT
-// e passa por tr(), que devolve a tradução do idioma ativo ou, na falta dela, o próprio texto em PT.
-// Assim nada muda para quem usa em português, e uma tradução incompleta nunca quebra a interface.
+// Interface languages. English is the source language: every text is written in English and goes through tr(),
+// which returns the active language's translation or, without one, the English text itself, so an incomplete
+// translation never breaks the interface.
 //
 // Locale selection (once, when this module loads):
 // - browser: the saved preference (Settings > Language), else the browser languages, else English;
@@ -9,33 +9,31 @@
 // Activity texts are built by the server, so they follow the server's locale.
 import { DICTIONARIES } from './locales/all';
 
-export type Locale = 'pt-BR' | 'en' | 'es' | 'fr';
+export type Locale = 'en' | 'es' | 'fr';
 
-/** Na ordem do seletor; o nome de cada idioma vai na própria língua, para quem não entende o idioma atual. */
+/** In picker order; each language is named in itself, for whoever doesn't read the current one. */
 export const LOCALES: { id: Locale; name: string }[] = [
-  { id: 'pt-BR', name: 'Português' },
   { id: 'en', name: 'English' },
   { id: 'es', name: 'Español' },
   { id: 'fr', name: 'Français' },
 ];
 
-/** Chave da preferência salva no navegador. */
+/** Key of the preference saved in the browser. */
 export const LOCALE_STORAGE_KEY = 'habblaud:locale';
 
-/** Dicionários disponíveis (o PT não tem: é a língua de origem). No navegador começa vazio: ver registerDictionary. */
+/** Available dictionaries (English has none: it is the source). Empty in the browser at first: see registerDictionary. */
 const DICTS: Partial<Record<Locale, Readonly<Record<string, string>>>> = { ...DICTIONARIES };
 
-/** O navegador carrega só o dicionário do idioma ativo e o registra aqui antes de montar a interface. */
+/** The browser loads only the active language's dictionary and registers it here before mounting the interface. */
 export function registerDictionary(l: Locale, dict: Readonly<Record<string, string>>): void {
   DICTS[l] = dict;
 }
 
-/** "fr-FR", "fr_CA.UTF-8", "pt", "pt_BR"... -> idioma suportado; undefined se não for nenhum deles. */
+/** "fr-FR", "fr_CA.UTF-8", "es_MX"... -> a supported language; undefined if it's none of them. */
 export function normalizeLocale(v: string | null | undefined): Locale | undefined {
   const s = (v ?? '').trim().toLowerCase().replace('_', '-');
   if (!s) return undefined;
   if (s === 'fr' || s.startsWith('fr-')) return 'fr';
-  if (s === 'pt' || s.startsWith('pt-')) return 'pt-BR';
   if (s === 'en' || s.startsWith('en-')) return 'en';
   if (s === 'es' || s.startsWith('es-')) return 'es';
   return undefined;
@@ -44,7 +42,7 @@ export function normalizeLocale(v: string | null | undefined): Locale | undefine
 /**
  * Server locale (activities, notices, logs). HABBLAUD_LANG wins; then the first supported system language (LC_ALL,
  * LC_MESSAGES, LANG and, last, Intl). A system in an unsupported language (Danish, German, `C.UTF-8`...) falls back to
- * English, never to the Portuguese source text.
+ * English.
  */
 export function serverLocale(env: Record<string, string | undefined>, intl?: string): Locale {
   const own = normalizeLocale(env.HABBLAUD_LANG);
@@ -68,7 +66,7 @@ function detect(): Locale {
       const saved = normalizeLocale(g.localStorage?.getItem(LOCALE_STORAGE_KEY));
       if (saved) return saved;
     } catch {
-      // localStorage bloqueado (modo privado, iframe): segue para os idiomas do navegador.
+      // localStorage blocked (private mode, iframe): go on to the browser languages.
     }
     for (const l of g.navigator?.languages ?? [g.navigator?.language ?? '']) {
       const n = normalizeLocale(l);
@@ -77,8 +75,8 @@ function detect(): Locale {
     return 'en';
   }
   const env = g.process?.env ?? {};
-  // Os testes comparam textos em PT: ficam em PT mesmo numa máquina em outro idioma.
-  if (env.VITEST) return normalizeLocale(env.HABBLAUD_LANG_TEST) ?? 'pt-BR';
+  // Tests compare English texts: they stay in English even on a machine set to another language.
+  if (env.VITEST) return normalizeLocale(env.HABBLAUD_LANG_TEST) ?? 'en';
   let intl: string | undefined;
   try {
     intl = Intl.DateTimeFormat().resolvedOptions().locale;
@@ -94,14 +92,14 @@ export function getLocale(): Locale {
   return current;
 }
 
-/** Troca o idioma ativo (testes; no navegador, a troca pela interface recarrega a página). */
+/** Switches the active language (tests; in the browser, switching from the interface reloads the page). */
 export function setLocale(l: Locale): void {
   current = l;
 }
 
 /**
- * Traduz um texto escrito em PT. Lacunas numeradas ({0}, {1}...) recebem `args` na ordem; a tradução pode
- * reordená-las. Sem tradução para o idioma ativo, devolve o texto original.
+ * Translates an English text. Numbered gaps ({0}, {1}...) receive `args` in order; a translation may reorder them.
+ * Without a translation for the active language, returns the English text.
  */
 export function tr(src: string, args?: readonly unknown[]): string {
   const dict = DICTS[current];
@@ -110,7 +108,7 @@ export function tr(src: string, args?: readonly unknown[]): string {
   return s.replace(/\{(\d+)\}/g, (m, i: string) => (Number(i) < args.length ? String(args[Number(i)]) : m));
 }
 
-/** Idioma no formato do Intl (datas, números). */
+/** Language in Intl's format (dates, numbers). */
 export function intlLocale(): string {
-  return current === 'fr' ? 'fr-FR' : current === 'en' ? 'en-US' : current === 'es' ? 'es' : 'pt-BR';
+  return current === 'fr' ? 'fr-FR' : current === 'es' ? 'es' : 'en-US';
 }

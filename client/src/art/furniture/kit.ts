@@ -1,37 +1,37 @@
-// Kit de desenho de móveis (puro): materiais, caixas 3/4, sombras de contato e pequenos objetos.
-// Convenção 3/4: topo mais claro (lt) com aresta frontal brilhante (hi), face frontal em base/dk,
-// luz vindo de cima/esquerda (lado direito mais escuro).
+// Furniture drawing kit (pure): materials, 3/4 boxes, contact shadows and small objects.
+// 3/4 convention: lighter top (lt) with a bright front edge (hi), front face in base/dk,
+// light coming from the top/left (right side darker).
 import { mulberry32 } from '../../../../shared/hash';
 import { mix, ramp, shade, type Ramp } from '../core/color';
 import type { PixelBuf } from '../core/pixbuf';
 
 export const M = {
-  // Acampamento de fantasia: madeira bruta, pedra, ferro, couro, pergaminho e ouro.
+  // Fantasy camp: rough wood, stone, iron, leather, parchment and gold.
   oak: ramp('#b98a55', 0.07),
   oakDark: ramp('#8a6239', 0.07),
-  white: ramp('#d9cba8', 0.05), // bétula/pergaminho
+  white: ramp('#d9cba8', 0.05), // birch/parchment
   walnut: ramp('#5e3f27', 0.07),
-  steel: ramp('#8f949a', 0.07), // ferro forjado
+  steel: ramp('#8f949a', 0.07), // wrought iron
   steelDark: ramp('#4f5459', 0.07),
   graphite: ramp('#3b3530', 0.065),
-  plastic: ramp('#cdb48a', 0.05), // couro claro
+  plastic: ramp('#cdb48a', 0.05), // light leather
   stone: ramp('#a8a49a', 0.05),
   terracotta: ramp('#a8582f', 0.07),
-  ceramic: ramp('#b89a72', 0.06), // barro cozido
+  ceramic: ramp('#b89a72', 0.06), // fired clay
   leaf: ramp('#4f7d3a', 0.08),
   leafDark: ramp('#2f5528', 0.07),
-  cardboard: ramp('#a7804f', 0.06), // caixote
-  blueFabric: ramp('#7a2e25', 0.07), // tecido vermelho tribal
-  orange: ramp('#e08a2c', 0.07), // brasa
+  cardboard: ramp('#a7804f', 0.06), // crate
+  blueFabric: ramp('#7a2e25', 0.07), // tribal red cloth
+  orange: ramp('#e08a2c', 0.07), // ember
   gold: ramp('#e0b23c', 0.08),
   leather: ramp('#7b4f2c', 0.07),
   moss: ramp('#5f7a3a', 0.07),
 } as const;
 
-/** Cores de acento (estandartes, livros, objetos): tons terrosos e tribais. */
+/** Accent colours (banners, books, objects): earthy, tribal tones. */
 export const ACCENTS = ['#9c2f25', '#d48a2c', '#5f8a3a', '#2f7a78', '#e0b23c', '#6a4a8a', '#b8572c', '#8a6239'] as const;
 
-/** Fundo padrão da "tela" (laje rúnica apagada) e o brilho das runas. */
+/** Default "screen" background (dimmed runic slab) and the glow of the runes. */
 export const SCREEN_BG = '#2c3a2e';
 export const SCREEN_GLOW = '#7fe0a0';
 
@@ -45,14 +45,14 @@ export function pick<T>(r: Rng, arr: readonly T[]): T {
   return arr[Math.floor(r() * arr.length) % arr.length];
 }
 
-/** Face de cima (tampo): base clara, aresta de trás um pouco mais escura e aresta frontal brilhante. */
+/** Top face (tabletop): light base, back edge a little darker and a bright front edge. */
 export function topFace(b: PixelBuf, x: number, y: number, w: number, h: number, m: Ramp): void {
   b.rect(x, y, w, h, m.lt);
   if (h > 2) b.hline(x, x + w - 1, y, m.base);
   b.hline(x, x + w - 1, y + h - 1, m.hi);
 }
 
-/** Face frontal: base, com a última linha escura e bordas laterais sombreadas. */
+/** Front face: base, with a dark last row and shaded side edges. */
 export function frontFace(b: PixelBuf, x: number, y: number, w: number, h: number, m: Ramp): void {
   b.rect(x, y, w, h, m.base);
   b.hline(x, x + w - 1, y + h - 1, m.dk);
@@ -60,7 +60,7 @@ export function frontFace(b: PixelBuf, x: number, y: number, w: number, h: numbe
   if (h > 1) b.hline(x, x + w - 1, y, m.base);
 }
 
-/** Textura sutil de veios de madeira num retângulo (linhas horizontais interrompidas). */
+/** Subtle wood-grain texture in a rectangle (broken horizontal lines). */
 export function woodGrain(b: PixelBuf, x: number, y: number, w: number, h: number, m: Ramp, seed: number, vertical = false): void {
   const r = rngOf(seed, 7);
   if (vertical) {
@@ -78,7 +78,7 @@ export function woodGrain(b: PixelBuf, x: number, y: number, w: number, h: numbe
   }
 }
 
-/** Sombra de contato retangular arredondada, composta por baixo. */
+/** Rounded rectangular contact shadow, composited underneath. */
 export function contact(b: PixelBuf, x: number, y: number, w: number, h: number, alpha = 0.2): void {
   const c = `rgba(36,24,14,${alpha})`;
   const c2 = `rgba(36,24,14,${alpha * 0.55})`;
@@ -92,12 +92,12 @@ export function contact(b: PixelBuf, x: number, y: number, w: number, h: number,
   }
 }
 
-/** Retângulo composto por baixo do que já existe (sombras em áreas vazadas). */
+/** Rectangle composited under what is already there (shadows in hollow areas). */
 export function underRect(b: PixelBuf, x: number, y: number, w: number, h: number, c: string): void {
   for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) b.under(xx, yy, c);
 }
 
-/** Vidro translúcido azulado com reflexos diagonais. */
+/** Translucent bluish glass with diagonal reflections. */
 export function glass(
   b: PixelBuf,
   x: number,
@@ -109,7 +109,7 @@ export function glass(
   const a = opts.alpha ?? 0.42;
   b.rect(x, y, w, h, `rgba(196,214,190,${a})`);
   if (opts.streaks === false) return;
-  // Reflexos: faixas diagonais (de baixo/esquerda para cima/direita).
+  // Reflections: diagonal bands (from bottom/left to top/right).
   const period = opts.period ?? 9;
   for (let k = -h + (opts.offset ?? 0); k < w; k += period) {
     for (let i = 0; i < h; i++) {
@@ -122,20 +122,20 @@ export function glass(
   b.hline(x, x + w - 1, y, 'rgba(255,255,255,0.35)');
 }
 
-// ------------------------------------------------------------------ objetos pequenos
+// ------------------------------------------------------------------ small objects
 
-/** Sombra suave de objeto pousado numa superfície (1px, à direita/abaixo). */
+/** Soft shadow of an object resting on a surface (1px, to the right/below). */
 const SURFACE_SHADOW = 'rgba(60,40,40,0.2)';
-/** Sombra de contato mais firme para objetos sobre tampo branco (senão eles "somem" no branco). */
+/** Firmer contact shadow for objects on a white top (otherwise they "vanish" into the white). */
 const SURFACE_SHADOW_LIGHT = 'rgba(40,46,70,0.3)';
 
 /**
- * Tom dos objetos de mesa: 'light' (padrão, sobre madeira), 'onLight' (um degrau mais escuro e com
- * sombra mais firme, para tampo branco) ou 'dark'.
+ * Tone of desk objects: 'light' (default, on wood), 'onLight' (one step darker and with a
+ * firmer shadow, for a white top) or 'dark'.
  */
 export type DeskItemTone = 'light' | 'onLight' | 'dark';
 
-/** Caneco de madeira com cinta de ferro e espuma (4x4). `color` tinge levemente a madeira. */
+/** Wooden tankard with an iron band and foam (4x4). `color` lightly tints the wood. */
 export function mug(b: PixelBuf, x: number, y: number, color: string): void {
   const wood = mix('#8a6239', color, 0.18);
   b.hline(x + 1, x + 3, y + 3, SURFACE_SHADOW);
@@ -148,7 +148,7 @@ export function mug(b: PixelBuf, x: number, y: number, color: string): void {
   b.set(x + 3, y + 2, shade(wood, -0.22));
 }
 
-/** Pergaminhos: folha de baixo deslocada e folha de cima com linhas de tinta e ponta enrolada. */
+/** Scrolls: bottom sheet offset and top sheet with ink lines and a curled corner. */
 export function papers(b: PixelBuf, x: number, y: number, w = 6, h = 4, tone: DeskItemTone = 'light'): void {
   const on = tone === 'onLight';
   b.hline(x + 1, x + w, y + h, on ? SURFACE_SHADOW_LIGHT : SURFACE_SHADOW);
@@ -160,7 +160,7 @@ export function papers(b: PixelBuf, x: number, y: number, w = 6, h = 4, tone: De
   for (let i = 1; i < h - 1; i++) b.hline(x + 1, x + 1 + Math.max(1, w - 3 - (i % 2)), y + i, '#7a5a3a');
 }
 
-/** Tábua rúnica de pedra (onde o trabalhador "digita"): pedra com runas entalhadas. */
+/** Stone rune tablet (where the worker "types"): stone with carved runes. */
 export function keyboard(b: PixelBuf, x: number, y: number, w = 10, tone: DeskItemTone = 'light'): void {
   const pal =
     tone === 'dark'
@@ -176,7 +176,7 @@ export function keyboard(b: PixelBuf, x: number, y: number, w = 10, tone: DeskIt
   b.hline(x, x + w - 1, y + 2, pal.edge);
 }
 
-/** Pedra rúnica pequena (2x2) ao lado da tábua. */
+/** Small runestone (2x2) beside the tablet. */
 export function mouse(b: PixelBuf, x: number, y: number, tone: DeskItemTone = 'light'): void {
   const dark = tone === 'dark';
   b.hline(x + 1, x + 2, y + 2, tone === 'onLight' ? SURFACE_SHADOW_LIGHT : SURFACE_SHADOW);
@@ -193,7 +193,7 @@ export function mouse(b: PixelBuf, x: number, y: number, tone: DeskItemTone = 'l
  */
 export type Faction = 'horde' | 'alliance' | 'elf';
 
-/** Paletas das facções (rampas prontas para os móveis). */
+/** Faction palettes (ready-made ramps for the furniture). */
 export const FACTION = {
   horde: {
     red: ramp('#9c2f25', 0.08),
@@ -225,13 +225,13 @@ export const FACTION = {
   },
 } as const;
 
-/** Rebite de ferro (2 px: brilho em cima à esquerda, sombra embaixo). */
+/** Iron rivet (2 px: highlight at the top left, shadow below). */
 export function rivet(b: PixelBuf, x: number, y: number, light = '#9a9aa2', dark = '#2a2a2e'): void {
   b.set(x, y, light);
   b.set(x + 1, y + 1, dark);
 }
 
-/** Cinta de ferro horizontal com rebites nas pontas (sobre madeira). */
+/** Horizontal iron band with rivets at the ends (on wood). */
 export function ironBand(b: PixelBuf, x0: number, x1: number, y: number, rivets = true): void {
   b.hline(x0, x1, y, '#3a3a40');
   if (rivets) {
@@ -241,8 +241,8 @@ export function ironBand(b: PixelBuf, x0: number, x1: number, y: number, rivets 
 }
 
 /**
- * Presa/chifre de osso curvo: nasce em (x, y) e sobe `len` px, entortando para `dir` (-1 esquerda,
- * 1 direita). Aresta clara à esquerda, sombra à direita e ponta mais clara.
+ * Curved bone tusk/horn: starts at (x, y) and rises `len` px, bending towards `dir` (-1 left,
+ * 1 right). Light edge on the left, shadow on the right and a lighter tip.
  */
 export function tusk(b: PixelBuf, x: number, y: number, len: number, dir: -1 | 1): void {
   const bone = FACTION.horde.bone;
@@ -256,7 +256,7 @@ export function tusk(b: PixelBuf, x: number, y: number, len: number, dir: -1 | 1
   }
 }
 
-/** Vela de sebo (2 px de largura) com chama; `h` = altura da cera. */
+/** Tallow candle (2 px wide) with a flame; `h` = height of the wax. */
 export function candle(b: PixelBuf, x: number, y: number, h = 3): void {
   b.rect(x, y - h + 1, 2, h, '#efe6cc');
   b.vline(x + 1, y - h + 1, y, '#cfc2a0');
@@ -266,7 +266,7 @@ export function candle(b: PixelBuf, x: number, y: number, h = 3): void {
   b.set(x + 1, y - h, '#e07a2a');
 }
 
-/** Caveira cartunesca (5x4) com vela derretida em cima. (x, y) = canto superior esquerdo do crânio. */
+/** Cartoon skull (5x4) with a melted candle on top. (x, y) = top-left corner of the skull. */
 export function skullCandle(b: PixelBuf, x: number, y: number): void {
   const bone = FACTION.horde.bone;
   b.rect(x, y, 5, 3, bone.lt);
@@ -278,14 +278,14 @@ export function skullCandle(b: PixelBuf, x: number, y: number): void {
   b.set(x + 2, y + 2, bone.dk);
   b.set(x + 1, y + 3, '#2a1d14');
   b.set(x + 3, y + 3, '#2a1d14');
-  // Vela.
+  // Candle.
   b.rect(x + 1, y - 2, 2, 2, '#efe6cc');
   b.set(x + 3, y - 1, '#efe6cc');
   b.set(x + 1, y - 3, '#f6a63a');
   b.set(x + 1, y - 4, '#ffe08a');
 }
 
-/** Machado de mão deitado (lâmina de ferro à direita). (x, y) = ponta do cabo. */
+/** Hand axe lying down (iron blade on the right). (x, y) = end of the handle. */
 export function handAxe(b: PixelBuf, x: number, y: number): void {
   b.hline(x, x + 6, y, '#8a6239');
   b.hline(x, x + 6, y + 1, '#5a3c22');
@@ -295,7 +295,7 @@ export function handAxe(b: PixelBuf, x: number, y: number): void {
   b.set(x + 6, y - 2, '#8a8a94');
 }
 
-/** Tinteiro de ouro com pena branca (Aliança). (x, y) = base. */
+/** Gold inkwell with a white quill (Alliance). (x, y) = base. */
 export function quillInk(b: PixelBuf, x: number, y: number): void {
   b.rect(x, y - 1, 3, 2, '#2a2a3a');
   b.hline(x, x + 2, y - 2, '#e0b23c');
@@ -306,8 +306,8 @@ export function quillInk(b: PixelBuf, x: number, y: number): void {
 }
 
 /**
- * Pano/estandarte pendurado (desenha por cima, sem apagar o fundo): barra inferior recortada em "V"
- * (`notch`, padrão) e franja opcional na barra.
+ * Hanging cloth/banner (draws on top, without erasing the background): bottom edge cut in a "V"
+ * (`notch`, default) and an optional fringe on the edge.
  */
 export function drape(
   b: PixelBuf,
@@ -322,7 +322,7 @@ export function drape(
   const mid = (w - 1) / 2;
   for (let i = 0; i < w; i++) {
     const xx = x + i;
-    // Comprimento da coluna: no "V", o meio é 2 px mais curto que as pontas.
+    // Column length: in the "V", the middle is 2 px shorter than the ends.
     const cut = notch ? Math.max(0, 2 - Math.round(Math.abs(i - mid) * (4 / Math.max(2, w)))) : 0;
     const bottom = y + h - 1 - cut;
     const c = i === 0 ? cloth.lt : i === w - 1 ? cloth.dk : cloth.base;
@@ -332,10 +332,10 @@ export function drape(
   }
 }
 
-/** Estilo da laje/espelho de "tela": pedra neutra (padrão), Horda (laje com presas) ou Aliança (espelho dourado). */
+/** Style of the "screen" slab/mirror: neutral stone (default), Horde (slab with tusks) or Alliance (golden mirror). */
 export type ScreenStyle = 'stone' | Faction;
 
-/** Laje rúnica de pedra num cavalete de madeira, vista de frente: moldura de pedra, "tela" (retângulo retornado), pés. */
+/** Stone runic slab on a wooden easel, seen from the front: stone frame, "screen" (returned rectangle), legs. */
 export function monitorFront(
   b: PixelBuf,
   x: number,
@@ -354,20 +354,20 @@ export function monitorFront(
   b.vline(x, y, y + h - 1, '#7c766a');
   b.hline(x, x + w - 1, y + h - 1, '#4a453e');
   b.vline(x + w - 1, y, y + h - 1, '#55504a');
-  // Lascas na pedra.
+  // Chips in the stone.
   b.set(x + 2, y, '#55504a');
   b.set(x + w - 4, y + h - 1, '#3a3630');
   const sx = x + 1;
   const sy = y + 1;
   const sw = w - 2;
   const sh = h - 2;
-  // Fundo padrão = runas apagadas (o mundo desenha o conteúdo animado por cima).
+  // Default background = dimmed runes (the world draws the animated content on top).
   b.rect(sx, sy, sw, sh, SCREEN_BG);
   b.rect(sx, sy, sw, 1, '#344636');
   for (let i = 0; i < sh; i++) b.set(sx + sw - 3 - i, sy + i, '#36493a');
-  // Cristal aceso no canto (equivalente ao LED).
+  // Lit crystal in the corner (the equivalent of the LED).
   b.set(x + w - 2, y + h - 1, '#7fe0a0');
-  // Cavalete de madeira: duas pernas e travessa.
+  // Wooden easel: two legs and a crossbar.
   const cx = x + Math.floor(w / 2) - 1;
   b.vline(cx - 2, y + h, y + h + 2, '#6b4a2b');
   b.vline(cx + 3, y + h, y + h + 2, '#6b4a2b');
@@ -375,7 +375,7 @@ export function monitorFront(
   return { x: sx, y: sy, w: sw, h: sh };
 }
 
-/** Fundo apagado da "tela" (runas mortas), comum aos estilos. */
+/** Dimmed "screen" background (dead runes), shared by the styles. */
 function screenBg(b: PixelBuf, sx: number, sy: number, sw: number, sh: number): void {
   b.rect(sx, sy, sw, sh, SCREEN_BG);
   b.rect(sx, sy, sw, 1, '#344636');
@@ -383,19 +383,19 @@ function screenBg(b: PixelBuf, sx: number, sy: number, sw: number, sh: number): 
 }
 
 /**
- * Horda: laje rúnica numa moldura grossa de madeira escura, amarrada com couro, presas de osso nos
- * cantos de cima, rebites e um cristal-brasa embaixo; cavalete em "X" de troncos.
+ * Horde: runic slab in a thick dark-wood frame, bound with leather, bone tusks on the
+ * top corners, rivets and an ember crystal below; an "X" easel of logs.
  */
 function hordeTablet(b: PixelBuf, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
   const t = FACTION.horde.timber;
   b.hline(x + 3, x + w - 2, y + h + 3, SURFACE_SHADOW);
-  // Cavalete em X com amarração.
+  // X-shaped easel with lashing.
   const cx = x + Math.floor(w / 2) - 1;
   b.line(cx - 3, y + h + 2, cx + 2, y + h - 1, t.base);
   b.line(cx + 4, y + h + 2, cx - 1, y + h - 1, t.lt);
   b.set(cx, y + h, '#c9a46a');
   b.set(cx + 1, y + h, '#c9a46a');
-  // Moldura.
+  // Frame.
   b.rect(x, y, w, h, t.base);
   b.hline(x, x + w - 1, y, t.lt);
   b.vline(x, y, y + h - 1, t.lt);
@@ -406,23 +406,23 @@ function hordeTablet(b: PixelBuf, x: number, y: number, w: number, h: number): {
   const sw = w - 2;
   const sh = h - 2;
   screenBg(b, sx, sy, sw, sh);
-  // Amarras de couro nas laterais (sobre a moldura).
+  // Leather lashings on the sides (over the frame).
   for (const yy of [y + 2, y + h - 3]) {
     b.set(x, yy, '#c9a46a');
     b.set(x + w - 1, yy, '#a8844e');
   }
-  // Presas de osso curvando para fora nos cantos de cima.
+  // Bone tusks curving outwards on the top corners.
   tusk(b, x, y - 1, 4, -1);
   tusk(b, x + w - 2, y - 1, 4, 1);
-  // Brasa (equivalente ao LED) no meio da barra de baixo.
+  // Ember (the equivalent of the LED) in the middle of the bottom bar.
   b.set(x + Math.floor(w / 2), y + h - 1, '#ff6a2a');
   b.set(x + Math.floor(w / 2) - 1, y + h - 1, '#b8402e');
   return { x: sx, y: sy, w: sw, h: sh };
 }
 
 /**
- * Aliança: espelho de vidência numa moldura de ouro com crista em arco e gema azul no topo, pinhas
- * douradas nos cantos e pedestal de carvalho com pé dourado.
+ * Alliance: scrying mirror in a gold frame with an arched crest and a blue gem on top, golden
+ * finials in the corners and an oak pedestal with a golden foot.
  */
 function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
   const g = FACTION.alliance.gold;
@@ -434,13 +434,13 @@ function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number)
   b.set(cx, y + h, oak.lt);
   b.hline(cx - 2, cx + 3, y + h + 2, g.base);
   b.set(cx - 2, y + h + 2, g.lt);
-  // Moldura de ouro.
+  // Gold frame.
   b.rect(x, y, w, h, g.base);
   b.hline(x, x + w - 1, y, g.hi);
   b.vline(x, y, y + h - 1, g.lt);
   b.hline(x, x + w - 1, y + h - 1, g.dk);
   b.vline(x + w - 1, y, y + h - 1, g.dk);
-  // Crista em arco com gema azul.
+  // Arched crest with a blue gem.
   const mx = x + Math.floor(w / 2);
   b.hline(mx - 3, mx + 2, y - 1, g.lt);
   b.hline(mx - 2, mx + 1, y - 2, g.base);
@@ -448,7 +448,7 @@ function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number)
   b.set(mx, y - 2, '#2f4f9c');
   b.set(mx - 1, y - 3, g.hi);
   b.set(mx, y - 3, g.lt);
-  // Pinhas nos cantos.
+  // Finials in the corners.
   b.set(x, y - 1, g.lt);
   b.set(x + w - 1, y - 1, g.dk);
   const sx = x + 1;
@@ -456,7 +456,7 @@ function allianceMirror(b: PixelBuf, x: number, y: number, w: number, h: number)
   const sw = w - 2;
   const sh = h - 2;
   screenBg(b, sx, sy, sw, sh);
-  // Gema de status no meio da barra de baixo.
+  // Status gem in the middle of the bottom bar.
   b.set(mx, y + h - 1, '#7fc0ff');
   return { x: sx, y: sy, w: sw, h: sh };
 }
@@ -584,19 +584,19 @@ function elfMoonpaneBack(b: PixelBuf, x: number, y: number, w: number, h: number
   b.set(x + w - 1, y, e.leaf.dk);
 }
 
-/** Conteúdo estático de uma tela secundária (2º monitor / notebook). */
+/** Static content of a secondary screen (2nd monitor / laptop). */
 export type StaticScreen = 'sheet' | 'ide' | 'chart';
 
 /**
- * Tela secundária "ligada" com conteúdo fixo um pouco escurecido (~60–75% do brilho da principal):
- * planilha, editor ou painel com gráfico. Quebra o bloco escuro das ilhas de mesas sem competir
- * com a tela animada principal.
+ * Secondary screen "on" with fixed, slightly dimmed content (~60–75% of the main one's brightness):
+ * spreadsheet, editor or dashboard with a chart. Breaks up the dark block of the desk islands without competing
+ * with the main animated screen.
  */
 export function staticScreen(b: PixelBuf, r: { x: number; y: number; w: number; h: number }, kind: StaticScreen, seed: number): void {
   const { x, y, w, h } = r;
   const rnd = rngOf(seed, 41);
   if (kind === 'sheet') {
-    // Livro-razão de pergaminho: cabeçalho vermelho, colunas de tinta e marcas de ouro.
+    // Parchment ledger: red header, ink columns and gold marks.
     b.rect(x, y, w, h, '#d8c79c');
     b.hline(x, x + w - 1, y, '#9c2f25');
     b.vline(x, y + 1, y + h - 1, '#b8a272');
@@ -610,7 +610,7 @@ export function staticScreen(b: PixelBuf, r: { x: number; y: number; w: number; 
     return;
   }
   if (kind === 'chart') {
-    // Pilhas de ouro crescendo sobre a pedra escura.
+    // Piles of gold growing over the dark stone.
     b.rect(x, y, w, h, '#2c3328');
     b.hline(x + 1, x + Math.max(1, Math.floor(w / 2)), y + 1, '#8a9a7a');
     const base = y + h - 1;
@@ -622,7 +622,7 @@ export function staticScreen(b: PixelBuf, r: { x: number; y: number; w: number; 
     }
     return;
   }
-  // Runas brilhando em linhas, em tons esmaecidos de verde, âmbar e violeta.
+  // Runes glowing in rows, in faded tones of green, amber and violet.
   const syn = ['#5fae7a', '#8ac0a0', '#b8a05a', '#7a9a5a', '#9a7ab0', '#6ab0a8'];
   b.rect(x, y, w, h, '#26302a');
   b.vline(x, y, y + h - 1, '#2e3a32');
@@ -638,8 +638,8 @@ export function staticScreen(b: PixelBuf, r: { x: number; y: number; w: number; 
 }
 
 /**
- * Verso da laje rúnica (para desk_back): pedra lisa com cinta de couro, entalhe central e cavalete.
- * Nunca escura como a face — o verso tem que ler como verso.
+ * Back of the runic slab (for desk_back): smooth stone with a leather band, a central carving and an easel.
+ * Never dark like the face — the back has to read as the back.
  */
 export function monitorBack(
   b: PixelBuf,
@@ -659,11 +659,11 @@ export function monitorBack(
       : { hi: '#c4bcae', lt: '#b2ab9e', base: '#a09a8e', dk: '#857f74', line: '#4f4a42' };
   const cx = x + Math.floor(w / 2);
   b.hline(x + 2, x + w - 1, y + h + 3, SURFACE_SHADOW_LIGHT);
-  // Cavalete.
+  // Easel.
   b.vline(cx - 3, y + h - 1, y + h + 2, '#6b4a2b');
   b.vline(cx + 2, y + h - 1, y + h + 2, '#6b4a2b');
   b.hline(cx - 3, cx + 2, y + h + 1, '#8a6239');
-  // Pedra.
+  // Stone.
   b.rect(x, y, w, h, p.base);
   b.hline(x + 1, x + w - 2, y + 1, p.lt);
   b.vline(x + 1, y + 1, y + h - 2, p.lt);
@@ -673,7 +673,7 @@ export function monitorBack(
   b.vline(x, y + 1, y + h - 1, p.line);
   b.vline(x + w - 1, y + 1, y + h - 1, p.line);
   b.hline(x, x + w - 1, y + h - 1, p.line);
-  // Cinta de couro atravessando e entalhe (marca do clã) no meio.
+  // Leather band across it and a carving (clan mark) in the middle.
   b.hline(x + 1, x + w - 2, y + h - 4, '#6b4423');
   b.hline(x + 1, x + w - 2, y + h - 3, '#5a381c');
   b.set(cx - 1, y + 2, p.line);
@@ -681,7 +681,7 @@ export function monitorBack(
   b.set(cx + 1, y + 2, p.line);
 }
 
-/** Verso da laje da Horda: couro cru esticado na moldura escura, costura em X, presas e marca de garra vermelha. */
+/** Back of the Horde slab: rawhide stretched on the dark frame, X stitching, tusks and a red claw mark. */
 function hordeTabletBack(b: PixelBuf, x: number, y: number, w: number, h: number): void {
   const t = FACTION.horde.timber;
   const hide = FACTION.horde.hide;
@@ -693,24 +693,24 @@ function hordeTabletBack(b: PixelBuf, x: number, y: number, w: number, h: number
   b.hline(x, x + w - 1, y, t.lt);
   b.hline(x, x + w - 1, y + h - 1, t.dd);
   b.vline(x + w - 1, y, y + h - 1, t.dk);
-  // Couro esticado (claro: o verso tem que ler como verso).
+  // Stretched leather (light: the back has to read as the back).
   b.rect(x + 1, y + 1, w - 2, h - 2, hide.lt);
   b.hline(x + 1, x + w - 2, y + 1, hide.hi);
   b.vline(x + w - 2, y + 1, y + h - 2, hide.base);
   b.hline(x + 1, x + w - 2, y + h - 2, hide.base);
-  // Costura em X nas bordas.
+  // X stitching on the edges.
   for (let yy = y + 2; yy < y + h - 2; yy += 2) {
     b.set(x + 1, yy, hide.dk);
     b.set(x + w - 2, yy + 1, hide.dk);
   }
-  // Marca de garra (três riscos vermelhos) à direita do centro.
+  // Claw mark (three red scratches) to the right of the centre.
   for (let k = 0; k < 3; k++) b.line(cx - 1 + k * 2, y + 2, cx + k * 2, y + h - 4, '#9c2f25');
-  // Pontas de osso nos cantos, rentes à moldura (nada acima dela: não cobre o colo de quem senta atrás).
+  // Bone points in the corners, flush with the frame (nothing above it: it must not cover the lap of whoever sits behind).
   b.set(x, y, FACTION.horde.bone.lt);
   b.set(x + w - 1, y, FACTION.horde.bone.dk);
 }
 
-/** Verso do espelho da Aliança: painel de carvalho claro com aro dourado e escudo azul no meio. */
+/** Back of the Alliance mirror: light oak panel with a golden rim and a blue shield in the middle. */
 function allianceMirrorBack(b: PixelBuf, x: number, y: number, w: number, h: number): void {
   const g = FACTION.alliance.gold;
   const panel = ramp('#c9a06a', 0.06);
@@ -726,17 +726,17 @@ function allianceMirrorBack(b: PixelBuf, x: number, y: number, w: number, h: num
   b.hline(x + 1, x + w - 2, y + 1, panel.hi);
   b.vline(x + w - 2, y + 1, y + h - 2, panel.base);
   b.hline(x + 1, x + w - 2, y + h - 2, panel.base);
-  // Escudo azul com aro de ouro.
+  // Blue shield with a gold rim.
   b.rect(cx, y + 2, 3, 3, '#2f4f9c');
   b.set(cx, y + 2, '#3d63b8');
   b.set(cx + 1, y + 5, '#2f4f9c');
   b.set(cx + 1, y + 3, g.hi);
-  // Pinhas nos cantos (sem crista no meio: não pode cobrir o colo de quem senta atrás).
+  // Finials in the corners (no crest in the middle: it must not cover the lap of whoever sits behind).
   b.set(x, y - 1, g.lt);
   b.set(x + w - 1, y - 1, g.dk);
 }
 
-/** Tinteiro com penas. */
+/** Inkwell with quills. */
 export function pencilCup(b: PixelBuf, x: number, y: number): void {
   b.set(x, y - 3, '#e8e2d0');
   b.set(x + 1, y - 2, '#e8e2d0');
@@ -745,7 +745,7 @@ export function pencilCup(b: PixelBuf, x: number, y: number): void {
   b.set(x, y - 1, '#5a554c');
 }
 
-/** Cogumelo de chapéu vermelho numa tigela de barro. */
+/** Red-capped mushroom in a clay bowl. */
 export function smallSucculent(b: PixelBuf, x: number, y: number): void {
   b.rect(x, y, 4, 3, '#a8582f');
   b.set(x + 3, y + 1, '#7e3f20');
@@ -756,7 +756,7 @@ export function smallSucculent(b: PixelBuf, x: number, y: number): void {
   b.set(x + 2, y - 3, '#f0e6d0');
 }
 
-/** Vela num castiçal de ferro. */
+/** Candle in an iron candlestick. */
 export function photoFrame(b: PixelBuf, x: number, y: number): void {
   b.rect(x, y + 3, 4, 1, '#3a3630');
   b.rect(x + 1, y + 1, 2, 2, '#efe6cc');
@@ -773,9 +773,9 @@ export function book(b: PixelBuf, x: number, y: number, w: number, h: number, co
 }
 
 /**
- * Copa/folhagem em "bolhas" (estilo tileset): massa escura de fundo e bolhas de folhas desenhadas
- * de cima para baixo, cada uma com aro claro no alto/esquerda e sombra embaixo/direita. As bolhas
- * de baixo ficam mais escuras, dando volume.
+ * Canopy/foliage in "bubbles" (tileset style): a dark background mass and leaf bubbles drawn
+ * from top to bottom, each with a light rim at the top/left and a shadow at the bottom/right. The lower
+ * bubbles are darker, giving volume.
  */
 export function foliage(b: PixelBuf, cx: number, cy: number, rx: number, ry: number, m: Ramp, seed: number): void {
   const r = rngOf(seed, 3);
@@ -811,9 +811,9 @@ export function foliage(b: PixelBuf, cx: number, cy: number, rx: number, ry: num
 }
 
 /**
- * Folha grande de (x0,y0) até a ponta (x1,y1). Antes do preenchimento desenha um anel escuro
- * (borda) para separar folhas sobrepostas. `cuts`: 'monstera' (3 recortes largos) ou 'pinnate'
- * (folíolos: recortes alternados ao longo de toda a lâmina, como fronde de palmeira).
+ * Large leaf from (x0,y0) to the tip (x1,y1). Before filling it draws a dark ring
+ * (edge) to separate overlapping leaves. `cuts`: 'monstera' (3 wide cuts) or 'pinnate'
+ * (leaflets: alternating cuts along the whole blade, like a palm frond).
  */
 export function bigLeaf(
   b: PixelBuf,
@@ -862,7 +862,7 @@ export function bigLeaf(
   }
 }
 
-/** Folha alongada (lâmina) de (x0,y0) até a ponta (x1,y1), com nervura central. */
+/** Elongated leaf (blade) from (x0,y0) to the tip (x1,y1), with a midrib. */
 export function leafBlade(b: PixelBuf, x0: number, y0: number, x1: number, y1: number, width: number, m: Ramp, light: boolean): void {
   const len = Math.hypot(x1 - x0, y1 - y0);
   const steps = Math.ceil(len * 2);
@@ -878,7 +878,7 @@ export function leafBlade(b: PixelBuf, x0: number, y0: number, x1: number, y1: n
   b.line(x0, y0, Math.round(x0 + (x1 - x0) * 0.85), Math.round(y0 + (y1 - y0) * 0.85), m.dk);
 }
 
-/** Vaso de cerâmica/terracota (topo com aro, corpo afunilado) — (x, y) = canto superior esquerdo. */
+/** Ceramic/terracotta pot (rim on top, tapered body) — (x, y) = top-left corner. */
 export function pot(b: PixelBuf, x: number, y: number, w: number, h: number, m: Ramp = M.terracotta): void {
   b.rect(x, y, w, 2, m.lt);
   b.hline(x, x + w - 1, y, m.hi);

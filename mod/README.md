@@ -24,20 +24,20 @@ installation is covered in the main README.
   10 s ago are not rewritten; a write failure is silent.
 - **"Needs you" below the prompt:** every 5 s it asks the local Habblaud
   (`GET http://127.0.0.1:<HABBLAUD_PORT or 4747>/api/mod/summary`) who is waiting, already excluding this session and its
-  subagents, and shows `🏢 Valentina precisa de você em loja-virtual` or
-  `🏢 2 precisam de você: Valentina (loja-virtual), Elias (app-mobile)` (up to 3 names, then "and N more").
+  subagents, and shows `🏢 Valentina needs you in loja-virtual` or
+  `🏢 2 need you: Valentina (loja-virtual), Elias (app-mobile)` (up to 3 names, then "and N more").
   Nobody waiting or Habblaud down: the line disappears; while it is down, the queries drop to every 30 s until
   it is back. Only in sessions that draw a UI (`claude -p` queries nothing).
 - **`/habblaud`:** a summary of the whole office, answered by the mod itself (it does not call the model and uses no quota):
 
   ```
-  Habblaud 0.3.0 em http://localhost:4747
-  7 agentes · 3 trabalhando · 2 precisam de você
-  ✋ Valentina (loja-virtual): aprovar uma permissão · dá para responder pelo escritório
-  ✋ Elias (app-mobile): responder no terminal
+  Habblaud 0.3.0 at http://localhost:4747
+  7 agents · 3 working · 2 need you
+  ✋ Valentina (loja-virtual): approve a permission · can be answered from the office
+  ✋ Elias (app-mobile): answer in the terminal
   ```
 
-  When it is down: `O Habblaud não respondeu em http://localhost:4747. Para subir: npm run docker:up na pasta do Habblaud.`
+  When it is down: `Habblaud didn't answer at http://localhost:4747. To start it: npm run docker:up in the Habblaud folder.`
 
 ### What it accesses
 
@@ -61,7 +61,7 @@ writes a single file (the usage one), talks only to `127.0.0.1` and reads five e
 A plain `PermissionRequest` hook (no mod), in `habblaud-permissoes/hooks/hooks.json`:
 
 ```json
-{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/permission-hook.mjs\"", "timeout": 86430, "statusMessage": "Aguardando resposta no Habblaud" }] }
+{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/permission-hook.mjs\"", "timeout": 86430, "statusMessage": "Waiting for an answer in Habblaud" }] }
 ```
 
 The `hooks/permission-hook.mjs` script is the same one `npm run hooks:install` installs (single source; plain Node, only
@@ -126,12 +126,12 @@ can send a message to the sessions that have the plugin: hence the local lock.
 ## Development
 
 ```bash
-claude --plugin-dir mod/habblaud                     # carrega o mod numa sessão, sem instalar (recarrega ao salvar)
-claude -p "/habblaud" --plugin-dir mod/habblaud      # testa o comando sem sessão interativa (não chama o modelo)
-cd mod/habblaud && claude plugin test                # testes do mod (tests/*.test.ts), sem sessão, login nem rede
-cd mod/habblaud-mensagens && claude plugin test      # idem para o plugin de mensagens
-claude plugin validate --strict mod/habblaud         # análise estática + manifesto (idem para as outras pastas e .)
-npx tsc -p mod/habblaud                              # tipos (depois de carregar o mod uma vez com --plugin-dir)
+claude --plugin-dir mod/habblaud                     # loads the mod in a session, without installing (reloads on save)
+claude -p "/habblaud" --plugin-dir mod/habblaud      # tests the command without an interactive session (doesn't call the model)
+cd mod/habblaud && claude plugin test                # mod tests (tests/*.test.ts), no session, login or network
+cd mod/habblaud-mensagens && claude plugin test      # same for the messages plugin
+claude plugin validate --strict mod/habblaud         # static analysis + manifest (same for the other folders and .)
+npx tsc -p mod/habblaud                              # types (after loading the mod once with --plugin-dir)
 ```
 
 When a mod is loaded, Claude Code writes the types for the installed version to `<folder>/.claude-plugin/types/` and a

@@ -1,14 +1,14 @@
-# Habblaud no Docker local.
+# Habblaud on local Docker.
 #
-# Suba com `npm run docker:up`: o script detecta as contas do Claude Code no host e gera o
-# docker-compose.override.yml (fora do controle de versão) com:
-#   - montagens SOMENTE LEITURA de <conta>/projects e <conta>/sessions em /claude/<conta>/...
-#     (nunca a pasta inteira da conta: lá ficam credenciais e configurações) e de ~/.habblaud/usage
-#     (uso de 5h/semanal capturado pelo tap de statusline) em /usage;
-#   - do Codex, SOMENTE <pasta>/sessions, <pasta>/archived_sessions e <pasta>/thread-writer-locks em
-#     /codex/<conta>/... (nunca auth.json, config.toml, history.jsonl, logs nem os bancos SQLite);
-#   - HABBLAUD_CLAUDE_DIRS, HABBLAUD_CODEX_DIRS, HABBLAUD_ACCOUNTS e HABBLAUD_USAGE_DIR.
-# O Compose mescla o override automaticamente em qualquer `docker compose ...` rodado nesta pasta.
+# Start it with `npm run docker:up`: the script detects the Claude Code accounts on the host and writes
+# docker-compose.override.yml (not under version control) with:
+#   - READ-ONLY mounts of <account>/projects and <account>/sessions at /claude/<account>/...
+#     (never the whole account folder: credentials and settings live there) and of ~/.habblaud/usage
+#     (5-hour/weekly usage captured by the mod or the statusline tap) at /usage;
+#   - for Codex, ONLY <folder>/sessions, <folder>/archived_sessions and <folder>/thread-writer-locks at
+#     /codex/<account>/... (never auth.json, config.toml, history.jsonl, logs or the SQLite databases);
+#   - HABBLAUD_CLAUDE_DIRS, HABBLAUD_CODEX_DIRS, HABBLAUD_ACCOUNTS and HABBLAUD_USAGE_DIR.
+# Compose merges the override automatically into any `docker compose ...` run in this folder.
 name: habblaud
 
 services:
@@ -17,36 +17,36 @@ services:
     image: habblaud:local
     container_name: habblaud
     restart: unless-stopped
-    # Os transcripts são sensíveis: por padrão a porta é publicada SÓ na interface local do host
-    # (HABBLAUD_BIND=0.0.0.0 no .env libera a rede local; veja o README).
+    # Transcripts are sensitive: by default the port is published ONLY on the host's local interface
+    # (HABBLAUD_BIND=0.0.0.0 in .env opens it to the local network; see the README).
     ports:
       - "${HABBLAUD_BIND:-127.0.0.1}:${HABBLAUD_PORT:-4747}:4747"
-      # A porta do acesso pelo celular (com login) só é publicada depois do npm run remote:setup: quem a junta é o
-      # docker-compose.override.yml que o docker:up gera.
+      # The port for phone access (with login) is only published after npm run remote:setup: the
+      # docker-compose.override.yml that docker:up writes adds it.
     volumes:
       - habblaud-data:/data
-    # Opções que podem vir do .env (ou do ambiente) para dentro do container.
+    # Options that may come from .env (or the environment) into the container.
     environment:
       HABBLAUD_ALLOWED_HOSTS: ${HABBLAUD_ALLOWED_HOSTS:-}
       HABBLAUD_DEMO: ${HABBLAUD_DEMO:-}
-      # O mesmo valor da porta publicada acima: o terminal (e o que age sobre as sessões) só liga com bind local.
+      # The same value as the published port above: the terminal (and anything acting on sessions) only turns on with a local bind.
       HABBLAUD_BIND: ${HABBLAUD_BIND:-127.0.0.1}
       HABBLAUD_TERMINAL: ${HABBLAUD_TERMINAL:-}
-      # 0 desliga as mensagens pelo escritório (mandar mensagens aos agentes pela página e pelo terminal).
+      # 0 turns off messages from the office (sending messages to agents from the page and the terminal).
       HABBLAUD_MENSAGENS: ${HABBLAUD_MENSAGENS:-}
-      # 0 desliga a verificação de versão nova (consulta às releases no GitHub a cada 6 h).
+      # 0 turns off the new-version check (a look at the GitHub releases every 6 h).
       HABBLAUD_UPDATE_CHECK: ${HABBLAUD_UPDATE_CHECK:-}
       HABBLAUD_LANG: ${HABBLAUD_LANG:-}
       # White-labeling: the name shown in the page title, the pixel logo, the home-screen app and the login page
       # (1-24 characters; anything else falls back to Habblaud). HABBLAUD_BRAND_SHORT: the home-screen label.
       HABBLAUD_BRAND_NAME: ${HABBLAUD_BRAND_NAME:-Habblaud}
       HABBLAUD_BRAND_SHORT: ${HABBLAUD_BRAND_SHORT:-}
-      # 0 desliga as sessões do Codex no escritório.
+      # 0 leaves Codex sessions out of the office.
       HABBLAUD_CODEX: ${HABBLAUD_CODEX:-}
-      # 1 liga o Novo agente pelo escritório (no Docker, quem começa a sessão é o auxiliar do host, npm run
-      # codex:bridge; o terminal interativo em si não roda no container).
+      # 1 turns on New agent from the office (in Docker, the host helper, npm run codex:bridge, starts the
+      # session; the interactive terminal itself doesn't run in the container).
       HABBLAUD_PTY: ${HABBLAUD_PTY:-}
-      # Acesso remoto com login (server/http/remote.ts).
+      # Remote access with login (server/http/remote.ts).
       HABBLAUD_REMOTE_USER: ${HABBLAUD_REMOTE_USER:-}
       HABBLAUD_REMOTE_PASSWORD_HASH: ${HABBLAUD_REMOTE_PASSWORD_HASH:-}
       HABBLAUD_REMOTE_ALLOW: ${HABBLAUD_REMOTE_ALLOW:-}
@@ -54,16 +54,16 @@ services:
       HABBLAUD_REMOTE_INSECURE_HTTP: ${HABBLAUD_REMOTE_INSECURE_HTTP:-}
       # 1 lets other machines send their Claude Code sessions here (server/ingest/; remote port with HTTPS only).
       HABBLAUD_INGEST: ${HABBLAUD_INGEST:-}
-    # Endurecimento: sistema de arquivos só leitura (exceto /data e /tmp), sem capabilities extras.
+    # Hardening: read-only file system (except /data and /tmp), no extra capabilities.
     read_only: true
-    # /tmp em memória, com teto: sem `size` o Docker deixa usar metade da RAM do host.
+    # /tmp in memory, with a cap: without `size` Docker allows half of the host's RAM.
     tmpfs:
       - /tmp:size=64m
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
-    # Processo init mínimo: repassa sinais e recolhe processos órfãos.
+    # Minimal init process: forwards signals and reaps orphaned processes.
     init: true
 
 volumes:

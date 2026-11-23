@@ -1,6 +1,5 @@
-// Notificações (opt-in): Notification do navegador para alertas com a aba oculta, sons de aviso
-// (sino de "precisa de você", estalo de conclusão; pela mesa de som da UI) e o contador no título da
-// aba quando há agentes esperando você.
+// Notifications (opt-in): the browser Notification for alerts while the tab is hidden, notice sounds ("needs you"
+// chime, completion pop; through the UI sound board) and the counter in the tab title when agents are waiting on you.
 import type { Notice } from '../../../shared/types';
 import type { SoundBoard } from '../audio/board';
 import type { UiComponent, UiContext } from './context';
@@ -26,7 +25,7 @@ export class Notifier implements UiComponent {
     ctx.store.on('notice', (n) => this.onNotice(n));
   }
 
-  /** Pede permissão de notificação ao ligar a opção. Devolve o estado final. */
+  /** Asks for notification permission when the option is turned on. Returns the final state. */
   async enableBrowserNotifications(): Promise<NotificationState> {
     const state = notificationState();
     if (state === 'unsupported' || state === 'denied' || state === 'granted') return state;
@@ -38,7 +37,7 @@ export class Notifier implements UiComponent {
   }
 
   render(): void {
-    // Ao vivo, mesmo durante o timelapse: o título da aba avisa quem precisa de você agora.
+    // Live, even during the timelapse: the tab title tells who needs you now.
     const waiting = computeCounters(this.ctx.store.liveSnapshot).waiting;
     const base = brandName();
     const title = waiting > 0 ? `(${waiting}) ${base}` : base;
@@ -50,12 +49,12 @@ export class Notifier implements UiComponent {
 
   private onNotice(n: Notice): void {
     const prefs = this.ctx.prefs;
-    // o sino toca mesmo com a aba oculta (é ele que chama você de volta); o estalo, só com ela à vista
+    // the chime plays even with the tab hidden (it is what calls you back); the pop, only while it is visible
     if (n.level === 'alert') this.sounds.play('chime');
     else if (n.level === 'success') this.sounds.play('pop');
     if (n.level === 'alert' && prefs.browserNotifications && document.hidden && notificationState() === 'granted') {
       try {
-        const notification = new Notification(tr('Habblaud — precisa de você').replace('Habblaud', brandName()), {
+        const notification = new Notification(tr('Habblaud — needs you').replace('Habblaud', brandName()), {
           body: n.text,
           tag: n.agentId ?? n.id,
           icon: '/assets/brand/favicon-32.png',
@@ -66,7 +65,7 @@ export class Notifier implements UiComponent {
           notification.close();
         };
       } catch {
-        // Alguns navegadores só permitem notificações via service worker; o toast continua aparecendo.
+        // Some browsers only allow notifications through a service worker; the toast still shows.
       }
     }
   }

@@ -11,7 +11,7 @@ const SIG_KEYS = [
 ] as const;
 const sig = (a: SeedAppearance) => SIG_KEYS.map((k) => String(a[k] ?? '-')).join('|');
 
-/** [semente, sem opções, look 'f', look 'm' + sub, look 'f' + peças] — saída do módulo antigo. */
+/** [seed, no options, look 'f', look 'm' + sub, look 'f' + parts] — output of the old module. */
 const GOLDEN: Array<[number, string, string, string, string]> = [
   [0, "#eab894|#3f2c22|buzz|#5a3b22|#4a6a8a|#e8e3d6|jacket|#5f6845|pants|#6b4630|none|#2b2b33|mustache|-|m", "#eab894|#3f2c22|curly|#5a3b22|#f2d16b|#f1efe9|blouse|#2c2c35|skirt|#3f63a8|glasses|#2b2b33|none|-|f", "#eab894|#3f2c22|buzz|#5a3b22|#4a6a8a|#e8e3d6|jacket|#5f6845|pants|#6b4630|none|#2b2b33|mustache|#f2b33d|m", "#eab894|#3f2c22|bob|#5a3b22|#4a86d8|#f1efe9|blouse|#2c2c35|skirt|#3f63a8|cap|#2b2b33|none|-|f"],
   [1, "#5a3623|#3f2c22|wavy|#2b2236|#dfe3e8|#c0392b|shirt_tie|#3f5f8c|pants|#2b2b33|cap|#4bab72|none|-|m", "#5a3623|#3f2c22|wavy|#2b2236|#c9713f|#4bab72|sweater|#3f5f8c|skirt|#2b2b33|earrings|#f2c14e|none|-|f", "#5a3623|#3f2c22|wavy|#2b2236|#dfe3e8|#c0392b|shirt_tie|#3f5f8c|pants|#2b2b33|cap|#4bab72|none|#4bab72|m", "#5a3623|#3f2c22|bob|#2b2236|#4a86d8|#4bab72|sweater|#3f5f8c|skirt|#2b2b33|cap|#f2c14e|none|-|f"],
@@ -36,13 +36,13 @@ const GOLDEN: Array<[number, string, string, string, string]> = [
 ];
 
 describe('appearanceFromSeed (moved to shared/)', () => {
-  it('as mesmas aparências do módulo antigo em 20 sementes', () => {
+  it('the same appearances as the old module for 20 seeds', () => {
     expect(GOLDEN).toHaveLength(20);
     for (const [seed, plain, f, mSub, parts] of GOLDEN) {
-      expect(sig(appearanceFromSeed(seed)), `semente ${seed}`).toBe(plain);
-      expect(sig(appearanceFromSeed(seed, { look: 'f' })), `semente ${seed} f`).toBe(f);
-      expect(sig(appearanceFromSeed(seed, { look: 'm', sub: true })), `semente ${seed} m sub`).toBe(mSub);
-      expect(sig(appearanceFromSeed(seed, { look: 'f', parts: { hairStyle: 'bob', top: '#4a86d8', accessory: 'cap' } })), `semente ${seed} peças`).toBe(parts);
+      expect(sig(appearanceFromSeed(seed)), `seed ${seed}`).toBe(plain);
+      expect(sig(appearanceFromSeed(seed, { look: 'f' })), `seed ${seed} f`).toBe(f);
+      expect(sig(appearanceFromSeed(seed, { look: 'm', sub: true })), `seed ${seed} m sub`).toBe(mSub);
+      expect(sig(appearanceFromSeed(seed, { look: 'f', parts: { hairStyle: 'bob', top: '#4a86d8', accessory: 'cap' } })), `seed ${seed} parts`).toBe(parts);
     }
   });
 });

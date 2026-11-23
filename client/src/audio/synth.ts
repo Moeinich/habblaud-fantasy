@@ -1,20 +1,20 @@
-// Sons sintetizados com WebAudio (sem arquivos de áudio nem amostras gravadas): curtos, baixos e
-// com timbre de acampamento — machado na lenha, bigorna, trompa grave, corda e roldana rangendo.
+// Sounds synthesized with WebAudio (no audio files or recorded samples): short, quiet and with a
+// camp timbre — axe on firewood, anvil, low horn, creaking rope and pulley.
 import type { SoundKind } from './scheduler';
 
 export interface VoiceOpts {
-  /** Ganho final (já com o volume mestre). */
+  /** Final gain (master volume already applied). */
   gain: number;
-  /** -1 .. 1 (esquerda .. direita). */
+  /** -1 .. 1 (left .. right). */
   pan?: number;
-  /** Trabalho: golpes na rajada. */
+  /** Work: strikes in the burst. */
   count?: number;
   rng: () => number;
-  /** Ruído branco curto (golpes, rangidos e o "hup"). */
+  /** Short white noise (strikes, creaks and the "hup"). */
   noise: AudioBuffer | null;
 }
 
-/** Envelope percussivo: ataque curto e queda exponencial. */
+/** Percussive envelope: short attack and exponential decay. */
 function env(g: GainNode, t: number, peak: number, attack: number, decay: number): void {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + attack);
@@ -33,7 +33,7 @@ function tone(ac: AudioContext, out: AudioNode, type: OscillatorType, freq: numb
   o.stop(t + attack + decay + 0.05);
 }
 
-/** Estalo de ruído filtrado (madeira, palha, raspão). */
+/** Filtered noise snap (wood, straw, scrape). */
 function noiseHit(ac: AudioContext, out: AudioNode, noise: AudioBuffer, t: number, type: BiquadFilterType, freq: number, q: number, peak: number, decay: number, offset: number): void {
   const src = ac.createBufferSource();
   src.buffer = noise;
@@ -47,7 +47,7 @@ function noiseHit(ac: AudioContext, out: AudioNode, noise: AudioBuffer, t: numbe
   src.start(t, offset, decay + 0.03);
 }
 
-/** Corda dedilhada: dente de serra com o filtro fechando depressa (alaúde rústico). */
+/** Plucked string: sawtooth with the filter closing quickly (rustic lute). */
 function pluck(ac: AudioContext, out: AudioNode, freq: number, t: number, peak: number, decay: number): void {
   const o = ac.createOscillator();
   o.type = 'sawtooth';
@@ -64,7 +64,7 @@ function pluck(ac: AudioContext, out: AudioNode, freq: number, t: number, peak: 
   o.stop(t + decay + 0.05);
 }
 
-/** Cria um buffer de ruído branco (base dos golpes, do rangido e do "hup"). */
+/** Creates a white-noise buffer (the basis of the strikes, the creak and the "hup"). */
 export function makeNoise(ac: AudioContext): AudioBuffer | null {
   try {
     const len = Math.floor(ac.sampleRate * 0.25);
@@ -77,7 +77,7 @@ export function makeNoise(ac: AudioContext): AudioBuffer | null {
   }
 }
 
-/** Toca `kind` em `t` (tempo do AudioContext) na saída `dest`. */
+/** Plays `kind` at `t` (AudioContext time) on the `dest` output. */
 export function playVoice(ac: AudioContext, dest: AudioNode, kind: SoundKind, t: number, o: VoiceOpts): void {
   let out: AudioNode = dest;
   if (o.pan && typeof ac.createStereoPanner === 'function') {
@@ -89,11 +89,11 @@ export function playVoice(ac: AudioContext, dest: AudioNode, kind: SoundKind, t:
   const g = o.gain;
   switch (kind) {
     case 'chime':
-      // "precisa de você": trompa grave chamando duas vezes
+      // "needs you": a low horn calling twice
       horn(ac, out, t, g);
       return;
     case 'pop':
-      // tarefa concluída: pancada de malho num tronco ("thok" de madeira)
+      // task done: a mallet blow on a log (wooden "thok")
       tone(ac, out, 'triangle', 520, t, 0.13 * g, 0.004, 0.14, 210);
       tone(ac, out, 'sine', 150, t, 0.09 * g, 0.004, 0.12, 95);
       if (o.noise) noiseHit(ac, out, o.noise, t, 'bandpass', 1400, 1.2, 0.05 * g, 0.03, 0);
@@ -105,15 +105,15 @@ export function playVoice(ac: AudioContext, dest: AudioNode, kind: SoundKind, t:
       work(ac, out, t, o);
       return;
     case 'pingpong':
-      // malho de madeira batendo na bola: "tok" oco com a altura caindo
+      // wooden mallet hitting the ball: hollow "tok" with falling pitch
       tone(ac, out, 'triangle', 820, t, 0.09 * g, 0.002, 0.07, 560);
       return;
     case 'table':
-      // quique no tampo da mesa de tábuas: mais grave e abafado
+      // bounce on the plank tabletop: lower and muffled
       tone(ac, out, 'sine', 420, t, 0.07 * g, 0.002, 0.06, 260);
       return;
     case 'arcade': {
-      // "fliperama" da taverna: três notas de alaúde numa escala pentatônica
+      // the tavern "arcade": three lute notes on a pentatonic scale
       const scale = [220, 246.9, 293.7, 329.6, 392, 440];
       for (let i = 0; i < 3; i++) {
         const f = scale[Math.floor(o.rng() * scale.length)];
@@ -124,7 +124,7 @@ export function playVoice(ac: AudioContext, dest: AudioNode, kind: SoundKind, t:
   }
 }
 
-/** Trompa grave: dois dentes de serra levemente desafinados, filtro abrindo devagar, duas chamadas. */
+/** Low horn: two slightly detuned sawtooths, a slowly opening filter, two calls. */
 function horn(ac: AudioContext, out: AudioNode, t: number, gain: number): void {
   const blow = (at: number, freq: number, len: number, peak: number) => {
     const lp = ac.createBiquadFilter();
@@ -143,7 +143,7 @@ function horn(ac: AudioContext, out: AudioNode, t: number, gain: number): void {
       const osc = ac.createOscillator();
       osc.type = 'sawtooth';
       osc.detune.value = detune;
-      // entra um pouco abaixo e sobe para a nota, como um sopro
+      // starts a little flat and rises to the note, like a breath
       osc.frequency.setValueAtTime(freq * 0.94, at);
       osc.frequency.exponentialRampToValueAtTime(freq, at + 0.07);
       osc.connect(lp);
@@ -155,7 +155,7 @@ function horn(ac: AudioContext, out: AudioNode, t: number, gain: number): void {
   blow(t + 0.42, 146.8, 0.8, 0.08 * gain);
 }
 
-/** Corda e roldana rangendo: trem de estalos num filtro estreito que oscila, e o baque da plataforma. */
+/** Creaking rope and pulley: a click train through a narrow wobbling filter, and the platform's thud. */
 function creak(ac: AudioContext, out: AudioNode, t: number, o: VoiceOpts): void {
   const len = 0.65;
   const osc = ac.createOscillator();
@@ -177,14 +177,14 @@ function creak(ac: AudioContext, out: AudioNode, t: number, o: VoiceOpts): void 
   osc.connect(bp).connect(g).connect(out);
   osc.start(t);
   osc.stop(t + len + 0.05);
-  // a plataforma de tábuas encosta: baque grave de madeira
+  // the plank platform lands: a low wooden thud
   tone(ac, out, 'sine', 130, t + len - 0.04, 0.1 * o.gain, 0.004, 0.18, 80);
   if (o.noise) noiseHit(ac, out, o.noise, t + len - 0.04, 'lowpass', 900, 0.7, 0.05 * o.gain, 0.06, 0.05);
 }
 
 /**
- * Trabalho: rajada de machadadas na lenha (ou, às vezes, marteladas na bigorna) com intervalos
- * irregulares; de vez em quando o trabalhador solta um "hup" curto antes do primeiro golpe.
+ * Work: a burst of axe blows on firewood (or, sometimes, hammer blows on the anvil) at irregular
+ * intervals; now and then the worker lets out a short "hup" before the first strike.
  */
 function work(ac: AudioContext, out: AudioNode, t: number, o: VoiceOpts): void {
   if (!o.noise) return;
@@ -203,14 +203,14 @@ function work(ac: AudioContext, out: AudioNode, t: number, o: VoiceOpts): void {
   }
 }
 
-/** Machadada: estalo seco de madeira (ruído em banda média) com um corpo grave curto. */
+/** Axe blow: a dry wooden snap (mid-band noise) with a short low body. */
 function chop(ac: AudioContext, out: AudioNode, t: number, v: number, o: VoiceOpts): void {
   if (!o.noise) return;
   noiseHit(ac, out, o.noise, t, 'bandpass', 800 + o.rng() * 500, 1.6, 0.11 * v, 0.045 + o.rng() * 0.02, o.rng() * 0.1);
   tone(ac, out, 'sine', 190 + o.rng() * 40, t, 0.06 * v, 0.002, 0.07, 110);
 }
 
-/** Martelada na bigorna: parciais inarmônicas agudas, com o brilho morrendo antes do corpo. */
+/** Hammer on the anvil: high inharmonic partials, with the shimmer dying before the body. */
 function clink(ac: AudioContext, out: AudioNode, t: number, v: number, rng: () => number): void {
   const base = 1500 + rng() * 250;
   tone(ac, out, 'sine', base, t, 0.04 * v, 0.001, 0.35);
@@ -218,7 +218,7 @@ function clink(ac: AudioContext, out: AudioNode, t: number, v: number, rng: () =
   tone(ac, out, 'sine', base * 5.4, t, 0.01 * v, 0.001, 0.07);
 }
 
-/** "Hup": ruído filtrado com um formante subindo, como um grunhido de esforço. Curto e baixo. */
+/** "Hup": filtered noise with a rising formant, like a grunt of effort. Short and quiet. */
 function hup(ac: AudioContext, out: AudioNode, t: number, o: VoiceOpts): void {
   if (!o.noise) return;
   const src = ac.createBufferSource();

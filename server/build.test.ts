@@ -8,7 +8,7 @@ const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })));
 
 describe('createBuildReader', () => {
-  it('lê o nome do bundle do index.html e acompanha um build novo', () => {
+  it('reads the bundle name from index.html and follows a new build', () => {
     const root = mkdtempSync(join(tmpdir(), 'habblaud-build-'));
     dirs.push(root);
     const read = createBuildReader(root);

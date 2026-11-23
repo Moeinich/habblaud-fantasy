@@ -1,6 +1,6 @@
-// Pisos gerados em blocos ("chunks") de 8x8 tiles a partir de coordenadas de MUNDO (puro).
-// Assim tábuas de madeira, veios de mármore e manchas do cimento continuam de um tile para o
-// outro sem emendas, e o cache fica limitado ao tamanho do mundo (não ao formato das áreas).
+// Floors generated in 8x8-tile blocks ("chunks") from WORLD coordinates (pure).
+// That way wooden planks, marble veins and cement stains continue from one tile to the
+// next without seams, and the cache is bounded by the world size (not by the shape of the areas).
 import { TILE, type FloorKind } from '../api';
 import { mix, parseColor, ramp, shade, type RGBA } from '../core/color';
 import { PixelBuf } from '../core/pixbuf';
@@ -9,7 +9,7 @@ import { themeRace } from '../theme';
 export const CHUNK_TILES = 8;
 export const CHUNK_PX = CHUNK_TILES * TILE;
 
-/** Hash inteiro determinístico de até 3 coordenadas + semente. */
+/** Deterministic integer hash of up to 3 coordinates + seed. */
 export function h3(a: number, b: number, c = 0, seed = 0): number {
   let h = Math.imul(a | 0, 0x9e3779b1) ^ Math.imul(b | 0, 0x85ebca77) ^ Math.imul(c | 0, 0xc2b2ae3d) ^ Math.imul(seed | 0, 0x27d4eb2f);
   h ^= h >>> 15;
@@ -24,7 +24,7 @@ function rnd01(a: number, b: number, c = 0, seed = 0): number {
   return h3(a, b, c, seed) / 4294967296;
 }
 
-/** Ruído de valor suave (bilinear) em coordenadas de mundo, 0..1. */
+/** Smooth value noise (bilinear) in world coordinates, 0..1. */
 function noise(x: number, y: number, cell: number, seed: number): number {
   const gx = Math.floor(x / cell);
   const gy = Math.floor(y / cell);
@@ -45,7 +45,7 @@ export interface FloorOpts {
   tint2?: string;
 }
 
-/** Gera o bloco (cx, cy) — em unidades de chunk — de um tipo de piso. */
+/** Generates block (cx, cy) — in chunk units — of a floor type. */
 export function floorChunk(kind: FloorKind, cx: number, cy: number, o: FloorOpts): PixelBuf {
   const b = new PixelBuf(CHUNK_PX, CHUNK_PX);
   const x0 = cx * CHUNK_PX;
@@ -80,14 +80,14 @@ export function floorChunk(kind: FloorKind, cx: number, cy: number, o: FloorOpts
   return b;
 }
 
-// ------------------------------------------------------------------ pisos por tile
+// ------------------------------------------------------------------ per-tile floors
 
 function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: FloorOpts): void {
   const r = (i: number) => rnd01(tx, ty, i, o.seed);
   switch (kind) {
     case 'carpet': {
-      // Esteira de palha trançada: fiapos curtos em direções alternadas (xadrez de trama) e algumas
-      // hastes soltas mais claras.
+      // Woven straw mat: short fibres in alternating directions (checkered weave) and a few
+      // lighter loose stalks.
       // Theme tints only colour the straw lightly (dyed rushes), so it always reads as a hay mat.
       const c1 = o.tint ? mix(o.tint, '#b89a62', 0.6) : '#b89a62';
       const c2 = o.tint2 ? mix(o.tint2, '#a98c56', 0.6) : shade(c1, -0.04);
@@ -118,7 +118,7 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
       break;
     }
     case 'tile_check': {
-      // Lajes de pedra irregulares (2 a 4 por tile) com rejunte de terra.
+      // Irregular stone slabs (2 to 4 per tile) with earth grout.
       const grout = '#5a4a38';
       b.rect(0, 0, TILE, TILE, grout);
       const split = 5 + Math.floor(r(1) * 6);
@@ -137,7 +137,7 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
       break;
     }
     case 'tile_white': {
-      // Ardósia escura em placas quadradas (casa de banhos).
+      // Dark slate in square plates (bathhouse).
       const col = '#6a6e6a';
       const grout = '#4a4c48';
       b.rect(0, 0, TILE, TILE, col);
@@ -267,7 +267,7 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
       break;
     }
     case 'street': {
-      // Estrada de terra batida com sulcos de carroça e pedrinhas.
+      // Packed-dirt road with cart ruts and pebbles.
       const n = noise(tx * TILE, ty * TILE, 64, o.seed + 9);
       const col = mix('#7a6248', '#8a7054', n);
       b.rect(0, 0, TILE, TILE, col);
@@ -280,14 +280,14 @@ function paintTile(b: PixelBuf, kind: FloorKind, tx: number, ty: number, o: Floo
   }
 }
 
-// ------------------------------------------------------------------ pisos contínuos
+// ------------------------------------------------------------------ continuous floors
 
-/** Tabela de cores (RGBA) pré-calculada para escrita rápida. */
+/** Precomputed colour table (RGBA) for fast writes. */
 function rgba(c: string): RGBA {
   return parseColor(c);
 }
 
-// Tábuas rústicas, mais escuras e com mais variação de tom.
+// Rustic planks, darker and with more tone variation.
 const WOOD_TONES = ['#9a6c42', '#8e6239', '#a6784c', '#86603a'] as const;
 /** [tone][0 normal, 1 top, 2 bottom, 3 grain, 4 joint, 5 after joint, 6 knot, 7 iron nail]. */
 const WOOD: readonly (readonly RGBA[])[] = WOOD_TONES.map((t) =>

@@ -5,9 +5,9 @@ const texts = (src: string) => stringLiterals(src).map((l) => ({ text: l.text, t
 
 describe('i18n-check: string literals', () => {
   it('finds quoted and template text, marking tr() arguments', () => {
-    expect(texts(`log('Olá'); tr('Pensando'); x = \`a \${b} ção\`;`)).toEqual([
+    expect(texts(`log('Olá'); tr('Thinking'); x = \`a \${b} ção\`;`)).toEqual([
       { text: 'Olá', trArg: false },
-      { text: 'Pensando', trArg: true },
+      { text: 'Thinking', trArg: true },
       { text: 'a   ção', trArg: false },
     ]);
   });

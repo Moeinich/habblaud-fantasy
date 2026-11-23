@@ -1,5 +1,5 @@
-// Representação visual das áreas: caches estáticos (piso, paredes, itens de parede fixos) e
-// listas de móveis/itens dinâmicos prontos para o desenho por frame.
+// Visual representation of the areas: static caches (floor, walls, fixed wall items) and lists of
+// dynamic furniture/items ready to be drawn each frame.
 import { FURNITURE, TILE, type ArtModule, type FurnitureKind, type FurnitureSprites, type Sprite } from '../../art/api';
 import { hash32 } from '../../../../shared/hash';
 import type { AreaLayout, WallItemPlacement, WallSegment } from '../layout/types';
@@ -10,11 +10,13 @@ import { decorateRaceWall } from './race-decor';
 import { raceOfSeed } from '../../../../shared/race';
 import { areaTheme, decorateSeasonalRug, decorateSeasonalWall, seasonalRugColor, seasonalWallStyle } from './seasonal';
 
-/** Margem acima da área no cache de paredes (itens que passam do topo da face). */
-/** Room above a room's own rectangle in its cached wall layer (decorations lifted onto a hall's ring). */
+/**
+ * Room above a room's own rectangle in its cached wall layer (items that stick out above the top of the
+ * face, decorations lifted onto a hall's ring).
+ */
 export const WALL_MARGIN = 48;
 
-/** Itens de parede redesenhados a cada frame (o resto vai para o cache). */
+/** Wall items redrawn every frame (the rest goes into the cache). */
 const DYNAMIC_WALL: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>(['window', 'clock', 'whiteboard', 'tv', 'elevator', 'light_switch', 'sign', 'mirror']);
 
 export interface FurnVis {
@@ -22,14 +24,14 @@ export interface FurnVis {
   kind: FurnitureKind;
   variant?: string;
   seed: number;
-  /** Âncora no mundo (centro inferior do footprint + deslocamento). */
+  /** Anchor in the world (bottom centre of the footprint + offset). */
   ax: number;
   ay: number;
   order: number;
   areaId: string;
-  /** Mesa: spot do assento cuja atividade aparece na tela. */
+  /** Desk: spot of the seat whose activity shows on the screen. */
   seatSpot?: string;
-  /** Sprites por estado (resolvidos sob demanda). */
+  /** Sprites per state (resolved on demand). */
   states: (FurnitureSprites | null | undefined)[];
   /** Undead room: the piece is drawn in bone and grave violet (art `bone` option). */
   bone?: boolean;
@@ -69,7 +71,7 @@ function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCo
   return [c, ctx];
 }
 
-/** Sprites de um móvel com tolerância a falhas da arte (stub, variante desconhecida...). */
+/** Sprites of a piece of furniture, tolerant of art failures (stub, unknown variant...). */
 export function furnitureSprites(art: ArtModule, f: { kind: FurnitureKind; variant?: string; seed: number; states: (FurnitureSprites | null | undefined)[]; bone?: boolean }, state = 0): FurnitureSprites | null {
   const hit = f.states[state];
   if (hit !== undefined) return hit;
@@ -86,7 +88,7 @@ export function furnitureSprites(art: ArtModule, f: { kind: FurnitureKind; varia
 
 const opaqueCache = new WeakMap<HTMLCanvasElement, { x: number; y: number; w: number; h: number }>();
 
-/** Caixa dos pixels opacos de um canvas (cache por canvas). */
+/** Bounding box of a canvas's opaque pixels (cached per canvas). */
 export function opaqueBounds(c: HTMLCanvasElement): { x: number; y: number; w: number; h: number } {
   const hit = opaqueCache.get(c);
   if (hit) return hit;
@@ -112,16 +114,16 @@ export function opaqueBounds(c: HTMLCanvasElement): { x: number; y: number; w: n
       if (x1 >= 0) box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
     }
   } catch {
-    // canvas "tainted" ou indisponível: usa o tamanho inteiro
+    // "tainted" or unavailable canvas: use the full size
   }
   opaqueCache.set(c, box);
   return box;
 }
 
-/** Posição de desenho de um item de parede (canto superior esquerdo, px de mundo). */
+/** Draw position of a wall item (top-left corner, world px). */
 export function wallItemOrigin(w: WallVis, s: Sprite): { x: number; y: number } {
   if (w.on === 'south') {
-    // sobre a mureta: centraliza o conteúdo opaco pouco abaixo do topo da parede sul
+    // on the low wall: centre the opaque content just below the top of the south wall
     const b = opaqueBounds(s.canvas);
     const top = w.baseY - TILE;
     return { x: Math.round(w.cx - (b.x + b.w / 2)), y: Math.round(top + 9 - (b.y + b.h / 2)) };
@@ -149,12 +151,12 @@ function drawWallSegment(art: ArtModule, ctx: CanvasRenderingContext2D, w: WallS
   }
 }
 
-/** Topo (px acima do rodapé) de quadros e pôsteres na face da parede (logo abaixo da tampa). */
+/** Top (px above the baseboard) of paintings and posters on the wall face (just below the cap). */
 const WALL_ART_TOP = 28;
 
 /**
- * Arte gerada por IA para um quadro/pôster: só do tamanho do lugar (quadros de 2 tiles nunca
- * recebem as pinturas largas); pôsteres preferem a mesma variante do procedural. Puro.
+ * AI-generated art for a painting/poster: only the size that fits the spot (2-tile paintings never
+ * get the wide paintings); posters prefer the same variant as the procedural one. Pure.
  */
 export function pickWallArt(assets: WorldAssets | null, kind: 'painting' | 'poster', tiles: number, variant: string | undefined, seed: number): WallArtAsset | null {
   if (!assets) return null;
@@ -168,15 +170,15 @@ export function pickWallArt(assets: WorldAssets | null, kind: 'painting' | 'post
 }
 
 /**
- * Desenha a arte pronta (com moldura/contorno próprios) no lugar do item procedural, em tamanho
- * nativo e pixels inteiros. Retorna false se o asset não tem versão pronta (pintura sem moldura).
+ * Draws the ready-made art (with its own frame/outline) in place of the procedural item, at native
+ * size and whole pixels. Returns false if the asset has no ready-made version (unframed painting).
  */
 function drawWallArtAsset(ctx: CanvasRenderingContext2D, item: WallVis, a: WallArtAsset): boolean {
   const img = a.framed ?? (a.kind === 'poster' ? a : null);
   if (!img) return false;
   const x = Math.round(item.cx - img.w / 2);
   const y = item.baseY - WALL_ART_TOP;
-  // sombra suave na parede (direita e embaixo), como nos itens procedurais
+  // soft shadow on the wall (right and below), like the procedural items
   ctx.fillStyle = 'rgba(30,34,52,0.16)';
   ctx.fillRect(x + img.w, y + 1, 1, img.h);
   ctx.fillRect(x + 1, y + img.h, img.w, 1);
@@ -184,7 +186,7 @@ function drawWallArtAsset(ctx: CanvasRenderingContext2D, item: WallVis, a: WallA
   return true;
 }
 
-/** Pintura sem moldura pronta: recorte central em tamanho nativo dentro da moldura procedural. */
+/** Painting without a ready-made frame: central crop at native size inside the procedural frame. */
 function drawRawPainting(ctx: CanvasRenderingContext2D, s: Sprite, ox: number, oy: number, a: WallArtAsset): void {
   let r = s.rects?.art;
   if (!r) {
@@ -199,12 +201,12 @@ function drawRawPainting(ctx: CanvasRenderingContext2D, s: Sprite, ox: number, o
   ctx.drawImage(a.img, sx, sy, sw, sh, ox + r.x + Math.floor((r.w - sw) / 2), oy + r.y + Math.floor((r.h - sh) / 2), sw, sh);
 }
 
-/** Tom leve da sala sobre o piso (multiplicação: mantém veios e rejunte). */
+/** The room's light tint over the floor (multiply: keeps the grain and the grout). */
 export function tintFloor(ctx: CanvasRenderingContext2D, px: { x: number; y: number; w: number; h: number }, color: string): void {
   const m = /^#?([0-9a-f]{6})$/i.exec(color.trim());
   if (!m) return;
   const n = parseInt(m[1], 16);
-  // mistura 10% da cor com branco: só um sopro de cor
+  // mixes 10% of the colour with white: just a hint of colour
   const k = 0.1;
   const ch = (v: number) => Math.round(255 + (v - 255) * k);
   ctx.save();
@@ -219,7 +221,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
   const r = layout.rect;
   const px = { x: r.x * TILE, y: r.y * TILE, w: r.w * TILE, h: r.h * TILE };
 
-  // ---- piso + tapetes
+  // ---- floor + rugs
   const [floor, fctx] = makeCanvas(px.w, px.h);
   fctx.translate(-px.x, -px.y);
   for (const f of layout.floors) {
@@ -242,7 +244,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
     decorateSeasonalRug(fctx, theme, rug);
   }
 
-  // ---- paredes + itens de parede fixos
+  // ---- walls + fixed wall items
   const [walls, wctx] = makeCanvas(px.w, px.h + WALL_MARGIN);
   wctx.translate(-px.x, -px.y + WALL_MARGIN);
   const order = { face: 0, south: 1, cap: 2 } as const;
@@ -259,7 +261,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
       else wallItems.push(vis);
       continue;
     }
-    // quadros e pôsteres: arte de IA pronta (quando houver) no lugar do procedural
+    // paintings and posters: ready-made AI art (when available) in place of the procedural one
     const ai = it.kind === 'painting' || it.kind === 'poster' ? pickWallArt(assets, it.kind, it.kind === 'poster' ? 1 : it.variant === 'wide' ? 4 : 2, it.variant, vis.seed) : null;
     if (ai && vis.on === 'face' && drawWallArtAsset(wctx, vis, ai)) continue;
     const s = wallSprites(art, it.kind, it.variant === 'wide' ? undefined : it.variant, 0, vis.seed);
@@ -269,7 +271,7 @@ export function buildAreaVis(art: ArtModule, layout: AreaLayout, room: RoomState
     if (ai && it.kind === 'painting') drawRawPainting(wctx, s.base, o.x, o.y, ai);
   }
 
-  // ---- móveis
+  // ---- furniture
   const bone = !!room && raceOfSeed(room.seed) === 'undead';
   const furniture: FurnVis[] = layout.furniture.map((f) => {
     const def = FURNITURE[f.kind];
@@ -297,7 +299,7 @@ export function toWallVis(it: WallItemPlacement, areaId: string): WallVis {
   return { id: it.id, kind: it.kind, variant: it.variant, seed: hash32(it.id), cx: it.cx, baseY: it.baseY, on: it.on, order: it.order, areaId };
 }
 
-/** Desenha paredes e piso de um conjunto de segmentos/pisos num contexto já transformado (camada base). */
+/** Draws the walls and floor of a set of segments/floors into an already-transformed context (base layer). */
 export function paintShell(art: ArtModule, ctx: CanvasRenderingContext2D, floors: AreaLayout['floors'], walls: WallSegment[]): void {
   for (const f of floors) {
     try {

@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { projectFolder, recentFolders } from './folders';
 
-describe('pastas sugeridas no Novo agente', () => {
-  it('worktree de agente vira o projeto; temporária e relativa ficam de fora', () => {
+describe('suggested folders in New agent', () => {
+  it('an agent worktree becomes the project; temp and relative paths are left out', () => {
     expect(projectFolder('/Users/a/Coding/morgana/.claude/worktrees/read-outcome-4c9d08')).toBe('/Users/a/Coding/morgana');
     expect(projectFolder('/Users/a/proj/.codex/worktrees/x/sub')).toBe('/Users/a/proj');
     expect(projectFolder('/Users/a/proj/')).toBe('/Users/a/proj');
     expect(projectFolder('/private/tmp/claude-501/scratch')).toBeUndefined();
     expect(projectFolder('/var/folders/xy/T/abc')).toBeUndefined();
     expect(projectFolder('/Users/a/Library/Application Support/Claude/scratch-workspaces/e8/60/scratch-2026-10-12-315a47')).toBeUndefined();
-    expect(projectFolder('relativo')).toBeUndefined();
+    expect(projectFolder('relative')).toBeUndefined();
     expect(projectFolder('C:\\code\\win')).toBe('C:\\code\\win');
     expect(projectFolder(undefined)).toBeUndefined();
   });
 
-  it('junta sessões e salas por pasta, mais recente primeiro, com limite', () => {
+  it('merges sessions and rooms by folder, most recent first, with a limit', () => {
     const sessions = [
       { project: '/Users/a/loja', lastAt: 100 },
       { project: '/Users/a/loja/.claude/worktrees/w1', lastAt: 300 },

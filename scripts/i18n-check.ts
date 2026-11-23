@@ -1,18 +1,17 @@
 // Checks the translations: lists the texts passed to tr() without a translation and the translations left over
-// (the PT text changed or left the code). Usage: npm run i18n:check [-- en|es|fr]
-// A missing translation does not fail (the text just shows in PT). What fails (exit 1) is Portuguese text in code
-// OUTSIDE tr(): it would reach the user (or the logs) untranslated. See findPortugueseLiterals.
+// (the English text changed or left the code). Usage: npm run i18n:check [-- es|fr]
+// A missing translation does not fail (the text just shows in English). What fails (exit 1) is Portuguese text in
+// the code, inside tr() or not: the project is written in English. See findPortugueseLiterals.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { EN } from '../shared/locales/en';
 import { ES } from '../shared/locales/es';
 import { FR } from '../shared/locales/fr';
 
 const ROOT = join(import.meta.dirname, '..');
 const DIRS = ['client/src', 'shared', 'server', 'scripts'];
-const DICTS: Record<string, Readonly<Record<string, string>>> = { en: EN, es: ES, fr: FR };
+const DICTS: Record<string, Readonly<Record<string, string>>> = { es: ES, fr: FR };
 
-/** Primeiro argumento literal de cada tr('...') do código (sem os testes). */
+/** First literal argument of every tr('...') in the code (tests excluded). */
 export function collectKeys(root = ROOT): Map<string, string[]> {
   const keys = new Map<string, string[]>();
   const re = /\btr\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
@@ -45,7 +44,7 @@ const PT_JOINERS = /(?:^|\s)(?:de|em|e|ou|com|para|às|há)\s/;
 const PT_CHARS = /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]/;
 
 /**
- * Files allowed to hold Portuguese outside tr(): proper names, language names, internal ids and dev-only previews.
+ * Files allowed to hold Portuguese: proper names, language names, internal ids and dev-only previews.
  */
 const PT_ALLOWED = [
   /^shared\/i18n\.ts$/,
@@ -148,7 +147,7 @@ export function stringLiterals(src: string): Array<{ text: string; index: number
   return out;
 }
 
-/** Portuguese literals outside tr() in the product code (file:line and the text). */
+/** Portuguese literals in the product code, tr() arguments included (file:line and the text). */
 export function findPortugueseLiterals(root = ROOT): string[] {
   const found: string[] = [];
   const walk = (dir: string) => {
@@ -163,7 +162,6 @@ export function findPortugueseLiterals(root = ROOT): string[] {
       if (PT_ALLOWED.some((re) => re.test(rel))) continue;
       const src = readFileSync(p, 'utf8');
       for (const lit of stringLiterals(src)) {
-        if (lit.trArg) continue;
         // Joiners only in short templates (a long one is a script or a document, not a sentence for the user).
         if (!PT_CHARS.test(lit.text) && !(lit.template && lit.text.trim().length <= 80 && PT_JOINERS.test(lit.text))) continue;
         const line = src.slice(0, lit.index).split('\n').length;
@@ -193,12 +191,12 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     if (only && only !== lang) continue;
     const missing = [...keys.keys()].filter((k) => !(k in dict));
     const stale = Object.keys(dict).filter((k) => !keys.has(k));
-    console.log(`${lang}: ${keys.size - missing.length}/${keys.size} textos traduzidos`);
-    for (const k of missing) console.log(`  sem tradução: ${JSON.stringify(k)}  (${keys.get(k)![0]})`);
-    for (const k of stale) console.log(`  sobrando:     ${JSON.stringify(k)}`);
+    console.log(`${lang}: ${keys.size - missing.length}/${keys.size} texts translated`);
+    for (const k of missing) console.log(`  untranslated: ${JSON.stringify(k)}  (${keys.get(k)![0]})`);
+    for (const k of stale) console.log(`  leftover:     ${JSON.stringify(k)}`);
   }
   const pt = findPortugueseLiterals();
-  console.log(pt.length ? `Portuguese text outside tr(): ${pt.length}` : 'Portuguese text outside tr(): none');
+  console.log(pt.length ? `Portuguese text in the code: ${pt.length}` : "Portuguese text in the code: none");
   for (const f of pt) console.log(`  ${f}`);
   if (pt.length) process.exitCode = 1;
 }

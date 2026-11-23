@@ -1,22 +1,22 @@
-// Templates ASCII de cabeça e cabelo (puros). Grade de 14 colunas: a coluna c vira x = c + 5 no
-// sprite do personagem e a linha r vira y = r + 3 (em pé). A cabeça ocupa as colunas 1..12 e as
-// linhas 4..14; orelhas nas colunas 0 e 13 (linhas 10–11) de frente/costas e na coluna 8 de perfil.
+// ASCII head and hair templates (pure). 14-column grid: column c becomes x = c + 5 in the
+// character sprite and row r becomes y = r + 3 (standing). The head takes columns 1..12 and
+// rows 4..14; ears in columns 0 and 13 (rows 10–11) front/back and in column 8 in profile.
 //
-// Legenda do cabelo: o = base, h = claro, H = brilho, d = sombra, D = sombra profunda,
-// z = raspado (cabelo misturado à pele), k = brilho da pele (careca), a = acessório (elástico).
-// Legenda da cabeça: s = pele, S = pele em sombra, L = pele clara, e/E = olho (topo/base),
-// b = blush, m = boca, r = interior da orelha, B = sobrancelha pesada, T = presa.
+// Hair key: o = base, h = light, H = highlight, d = shadow, D = deep shadow,
+// z = shaved (hair blended into the skin), k = skin highlight (bald), a = accessory (hair tie).
+// Head key: s = skin, S = skin in shadow, L = light skin, e/E = eye (top/bottom),
+// b = blush, m = mouth, r = inner ear, B = heavy brow, T = tusk.
 import type { HairStyle } from '../api';
 
 export interface Tpl {
-  /** Deslocamento em colunas da grade (pode ser negativo para volumes largos). */
+  /** Offset in grid columns (may be negative for wide volumes). */
   x: number;
-  /** Linha inicial na grade. */
+  /** Starting row in the grid. */
   y: number;
   rows: readonly string[];
 }
 
-/** Camadas de um penteado numa direção: `back` vai atrás do corpo; `front` por cima da cabeça. */
+/** Layers of a hairstyle in one direction: `back` goes behind the body; `front` over the head. */
 export interface HairLayers {
   front?: Tpl;
   back?: Tpl;
@@ -27,8 +27,8 @@ export type HeadView = 'down' | 'up' | 'side';
 const t = (x: number, y: number, rows: readonly string[]): Tpl => ({ x, y, rows });
 
 export const HEAD_BASE: Readonly<Record<HeadView, Tpl>> = {
-  // Cabeça de trabalhador: sobrancelha pesada (B), mandíbula larga e presas (T) subindo do lábio de
-  // baixo. As orelhas pontudas são desenhadas à parte (drawEars), por cima do cabelo.
+  // Worker head: heavy brow (B), broad jaw and tusks (T) rising from the lower
+  // lip. The pointed ears are drawn separately (drawEars), over the hair.
   down: t(0, 4, [
     '...ssssssss...',
     '..ssssssssss..',
@@ -70,9 +70,9 @@ export const HEAD_BASE: Readonly<Record<HeadView, Tpl>> = {
   ]),
 };
 
-/** Penteados por direção. 'side' é desenhado virado para a esquerda (direita = espelho). */
+/** Hairstyles per direction. 'side' is drawn facing left (right = mirrored). */
 export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLayers>>>> = {
-  // short = coque no alto da cabeça (laterais raspadas).
+  // short = bun on top of the head (shaved sides).
   short: {
     down: {
       front: t(0, 0, [
@@ -350,7 +350,7 @@ export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLaye
       ]),
     },
   },
-  // bob = duas tranças caindo dos lados do rosto, com amarras.
+  // bob = two braids falling at the sides of the face, with ties.
   bob: {
     down: {
       front: t(0, 2, [
@@ -804,5 +804,5 @@ export const HAIR: Readonly<Record<HairStyle, Readonly<Record<HeadView, HairLaye
   },
 };
 
-/** Estilos cuja textura recebe pontilhado de cachos. */
+/** Styles whose texture gets curl dithering. */
 export const TEXTURED: ReadonlySet<HairStyle> = new Set<HairStyle>(['curly', 'afro']);

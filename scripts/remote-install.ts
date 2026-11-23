@@ -50,7 +50,7 @@ export const TOKEN_VAR = 'HABBLAUD_SERVER_TOKEN';
 const TOKEN = /^hbl1\.([a-z0-9-]{1,32})\.[A-Za-z0-9_-]{43}$/;
 
 const USAGE = tr(
-  'Uso: npm run remote:<install|uninstall|status> [-- opções]\n\n  install     manda as sessões desta máquina para um Habblaud central (--server e --token)\n  uninstall   tira o endereço e o token de cada conta e o plugin habblaud-remote\n  status      mostra, por conta, o servidor configurado e o plugin\n\nOpções:\n  --server <url>     endereço HTTPS do Habblaud central (ex.: https://pi.<tailnet>.ts.net)\n  --token <token>    token desta máquina (npm run ingest:token -- add <nome> no servidor); ou HABBLAUD_SERVER_TOKEN\n  --account <pasta>  só esta conta (ex.: --account ~/.claude-conta2); pode repetir\n  --skip-check       não confere o servidor e o token antes de gravar\n  --no-codex         não mexe no Codex (só no Claude Code)\n  --dry-run          mostra o que faria, sem gravar nada\n  --claude <cmd>     comando do Claude Code (padrão: claude, do PATH)\n  -h, --help         mostra esta ajuda',
+  'Usage: npm run remote:<install|uninstall|status> [-- options]\n\n  install     sends this machine\'s sessions to a central Habblaud (--server and --token)\n  uninstall   removes the address and token from each account, and the habblaud-remote plugin\n  status      shows, per account, the configured server and the plugin\n\nOptions:\n  --server <url>     HTTPS address of the central Habblaud (e.g. https://pi.<tailnet>.ts.net)\n  --token <token>    this machine\'s token (npm run ingest:token -- add <name> on the server); or HABBLAUD_SERVER_TOKEN\n  --account <dir>    only this account (e.g. --account ~/.claude-work); repeatable\n  --skip-check       does not check the server and token before writing\n  --no-codex         leaves Codex alone (Claude Code only)\n  --dry-run          shows what it would do, without writing anything\n  --claude <cmd>     Claude Code command (default: claude, from the PATH)\n  -h, --help         shows this help',
 );
 
 export class FatalError extends Error {}
@@ -70,13 +70,13 @@ export interface RemoteOptions {
 export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): RemoteOptions | 'help' {
   const [command, ...rest] = argv;
   if (!command || command === '-h' || command === '--help' || rest.includes('-h') || rest.includes('--help')) return 'help';
-  if (command !== 'install' && command !== 'uninstall' && command !== 'status') throw new FatalError(tr('comando desconhecido: {0}', [command]));
+  if (command !== 'install' && command !== 'uninstall' && command !== 'status') throw new FatalError(tr('unknown command: {0}', [command]));
   const o: RemoteOptions = { command, accounts: [], skipCheck: false, dryRun: false, codex: true };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     const value = () => {
       const v = rest[++i];
-      if (v === undefined || v.startsWith('--')) throw new FatalError(tr('{0} precisa de um valor', [a]));
+      if (v === undefined || v.startsWith('--')) throw new FatalError(tr('{0} needs a value', [a]));
       return v;
     };
     if (a === '--server') o.server = value();
@@ -86,14 +86,14 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--no-codex') o.codex = false;
     else if (a === '--claude') o.claudeCmd = value();
-    else throw new FatalError(tr('opção desconhecida: {0}', [a]));
+    else throw new FatalError(tr('unknown option: {0}', [a]));
   }
   o.token ??= env[TOKEN_VAR]?.trim() || undefined;
   if (command === 'install') {
     const server = normalizeServer(o.server);
-    if (!server) throw new FatalError(tr('--server precisa ser um endereço https:// sem caminho (ex.: https://pi.<tailnet>.ts.net)'));
+    if (!server) throw new FatalError(tr('--server must be an https:// address with no path (e.g. https://pi.<tailnet>.ts.net)'));
     o.server = server;
-    if (!o.token || !TOKEN.test(o.token)) throw new FatalError(tr('--token (ou HABBLAUD_SERVER_TOKEN) precisa ser o token criado no servidor (hbl1.<máquina>.<segredo>)'));
+    if (!o.token || !TOKEN.test(o.token)) throw new FatalError(tr('--token (or HABBLAUD_SERVER_TOKEN) must be the token created on the server (hbl1.<machine>.<secret>)'));
   }
   return o;
 }
@@ -142,8 +142,8 @@ export async function checkServer(url: string, token: string, f: typeof fetch = 
     const res = await f(`${url}/api/ingest/hello`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
     const body = (await res.json().catch(() => ({}))) as { machine?: { name?: string }; error?: string };
     if (res.status === 200 && body.machine?.name) return { ok: true, machine: body.machine.name };
-    if (res.status === 401) return { ok: false, error: tr('o servidor recusou o token (401)') };
-    if (res.status === 404) return { ok: false, error: tr('o servidor não tem /api/ingest: ligue HABBLAUD_INGEST=1 lá e use a porta remota (HTTPS)') };
+    if (res.status === 401) return { ok: false, error: tr('the server refused the token (401)') };
+    if (res.status === 404) return { ok: false, error: tr('the server has no /api/ingest: turn on HABBLAUD_INGEST=1 there and use the remote port (HTTPS)') };
     return { ok: false, error: `HTTP ${res.status}${body.error ? `: ${body.error}` : ''}` };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
@@ -167,12 +167,12 @@ async function runCodex(o: RemoteOptions, ctx: Ctx): Promise<number> {
     if (!found.dirs.length) return 0;
     const cfg = readHookConfig(ctx.home);
     const machine = cfg?.token ? TOKEN.exec(cfg.token)?.[1] : undefined;
-    ctx.out(cfg?.server ? tr('[remote] Codex: {0} como "{1}" ({2})', [cfg.server, machine ?? '?', cfgFile]) : tr('[remote] Codex: sem servidor central'));
+    ctx.out(cfg?.server ? tr('[remote] Codex: {0} as "{1}" ({2})', [cfg.server, machine ?? '?', cfgFile]) : tr('[remote] Codex: no central server'));
     return 0;
   }
   if (o.command === 'uninstall') {
-    if (o.dryRun) ctx.out(tr('[remote] Codex: tiraria o servidor central de {0}', [cfgFile]));
-    else if (setHookRemote(ctx.home, undefined)) ctx.out(tr('[remote] Codex: servidor central removido de {0} (os hooks ficam e voltam a falar com o Habblaud local; npm run codex:uninstall os tira).', [cfgFile]));
+    if (o.dryRun) ctx.out(tr('[remote] Codex: would remove the central server from {0}', [cfgFile]));
+    else if (setHookRemote(ctx.home, undefined)) ctx.out(tr('[remote] Codex: central server removed from {0} (the hooks stay and talk to the local Habblaud again; npm run codex:uninstall removes them).', [cfgFile]));
     return 0;
   }
   if (!found.dirs.length) return 0;
@@ -189,7 +189,7 @@ async function runCodex(o: RemoteOptions, ctx: Ctx): Promise<number> {
         nodeProbe: probeNode,
         nodeCandidates: ['/opt/homebrew/bin/node', '/usr/local/bin/node', process.execPath],
       }));
-  ctx.out(tr('[remote] Codex: instalando os hooks do Habblaud…'));
+  ctx.out(tr('[remote] Codex: installing the Habblaud hooks…'));
   const code = await runner({
     command: 'install',
     dryRun: o.dryRun,
@@ -197,13 +197,13 @@ async function runCodex(o: RemoteOptions, ctx: Ctx): Promise<number> {
     waitS: typeof cfg?.permissionTimeoutS === 'number' ? cfg.permissionTimeoutS : CODEX_DEFAULT_WAIT_S,
   });
   if (code !== 0) {
-    ctx.out(tr('[remote] Codex: os hooks não foram instalados em todas as pastas.'));
+    ctx.out(tr('[remote] Codex: the hooks were not installed in every folder.'));
     return 1;
   }
-  if (o.dryRun) ctx.out(tr('[remote] Codex: gravaria o servidor central em {0}', [cfgFile]));
+  if (o.dryRun) ctx.out(tr('[remote] Codex: would write the central server to {0}', [cfgFile]));
   else {
     setHookRemote(ctx.home, { server: o.server!, token: o.token! });
-    ctx.out(tr('[remote] Codex: pronto. Os eventos vão para {0} (aprove os hooks do Habblaud em /hooks no Codex, se ele pedir).', [o.server!]));
+    ctx.out(tr('[remote] Codex: done. Events go to {0} (approve the Habblaud hooks in /hooks inside Codex if it asks).', [o.server!]));
   }
   return 0;
 }
@@ -236,16 +236,16 @@ export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): 
   const withCodex = o.codex && !o.accounts.length;
   const codexDirs = withCodex ? discoverCodexHomes(ctx.env, ctx.home).dirs : [];
   if (!dirs.length && !codexDirs.length) {
-    ctx.out(tr('Nenhuma conta do Claude Code encontrada (~/.claude* com projects/ ou sessions/). Use --account <pasta> ou HABBLAUD_CLAUDE_DIRS.'));
+    ctx.out(tr('No Claude Code account found (~/.claude* with projects/ or sessions/). Use --account <dir> or HABBLAUD_CLAUDE_DIRS.'));
     return 1;
   }
   if (o.command === 'install' && !o.skipCheck) {
     const c = await checkServer(o.server!, o.token!, f);
     if (!c.ok) {
-      ctx.out(tr('[remote] Não deu para falar com {0}: {1}', [o.server!, c.error]));
+      ctx.out(tr('[remote] Could not reach {0}: {1}', [o.server!, c.error]));
       return 1;
     }
-    ctx.out(tr('[remote] Servidor ok: esta máquina entra como "{0}".', [c.machine]));
+    ctx.out(tr('[remote] Server ok: this machine joins as "{0}".', [c.machine]));
   }
   let failures = 0;
   for (const dir of dirs) {
@@ -263,13 +263,13 @@ export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): 
       const plugin = plugins.find((p) => p.id === REMOTE_PLUGIN);
       ctx.out(
         d.url
-          ? tr('[remote] {0}: {1} como "{2}"; plugin habblaud-remote {3}', [label, d.url, d.machine ?? '?', plugin ? (plugin.enabled ? tr('ligado') : tr('desligado')) : tr('não instalado')])
-          : tr('[remote] {0}: sem servidor central', [label]),
+          ? tr('[remote] {0}: {1} as "{2}"; habblaud-remote plugin {3}', [label, d.url, d.machine ?? '?', plugin ? (plugin.enabled ? tr('enabled') : tr('off')) : tr('not installed')])
+          : tr('[remote] {0}: no central server', [label]),
       );
       continue;
     }
     const next = withServer(read.settings, o.command === 'install' ? { url: o.server!, token: o.token! } : undefined);
-    if (o.dryRun) ctx.out(tr('[remote] {0}: gravaria {1}', [label, tildify(file, ctx.home)]));
+    if (o.dryRun) ctx.out(tr('[remote] {0}: would write {1}', [label, tildify(file, ctx.home)]));
     else if (JSON.stringify(next) !== JSON.stringify(read.settings)) {
       writeSettings(file, next, read.raw, new Date());
       try {
@@ -281,18 +281,18 @@ export async function run(o: RemoteOptions, ctx: Ctx, f: typeof fetch = fetch): 
     if (o.command === 'install') {
       const err = installPlugin(dir, ctx, o.dryRun);
       if (err) {
-        ctx.out(tr('[remote] {0}: o plugin habblaud-remote não foi instalado ({1})', [label, err]));
+        ctx.out(tr('[remote] {0}: the habblaud-remote plugin was not installed ({1})', [label, err]));
         failures++;
         continue;
       }
-      if (!o.dryRun) ctx.out(tr('[remote] {0}: pronto. Sessões novas (ou /reload-plugins) aparecem em {1}.', [label, o.server!]));
+      if (!o.dryRun) ctx.out(tr('[remote] {0}: done. New sessions (or /reload-plugins) show up at {1}.', [label, o.server!]));
     } else {
       if (!o.dryRun) {
         const env = accountEnv(ctx.env, dir, ctx.home);
         const plugins = parsePluginList(ctx.claude(['plugin', 'list', '--json'], env).stdout) ?? [];
         if (plugins.some((p) => p.id === REMOTE_PLUGIN)) ctx.claude(['plugin', 'uninstall', REMOTE_PLUGIN, '--scope', 'user'], env);
       }
-      ctx.out(tr('[remote] {0}: servidor central removido.', [label]));
+      ctx.out(tr('[remote] {0}: central server removed.', [label]));
     }
   }
   if (withCodex) failures += await runCodex(o, ctx);
@@ -315,7 +315,7 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((err: unknown) => {
-    console.error(err instanceof FatalError ? tr('[remote] Erro: {0}', [err.message]) : tr('[remote] Erro inesperado: {0}', [String(err)]));
+    console.error(err instanceof FatalError ? tr('[remote] Error: {0}', [err.message]) : tr('[remote] Unexpected error: {0}', [String(err)]));
     process.exitCode = 1;
   });
 }

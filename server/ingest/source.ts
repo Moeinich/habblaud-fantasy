@@ -225,7 +225,7 @@ export class IngestSource implements AgentSource {
         break;
       }
       case 'PermissionRequest':
-        this.decide(s, target ?? s.agentId, 'waiting', ev.at, tr('aprovar um comando'));
+        this.decide(s, target ?? s.agentId, 'waiting', ev.at, tr('approve a command'));
         break;
       case 'Stop':
         this.decide(s, s.agentId, 'idle', ev.at);
@@ -329,7 +329,7 @@ export class IngestSource implements AgentSource {
       sessionId,
       // The room: the machine and the folder (two machines with the same path get two rooms).
       cwd: `${machine.id}:${ev.cwd}`,
-      role: tr('Agente principal'),
+      role: tr('Main agent'),
       startedAt: now,
       status: ev.event === 'SessionStart' || ev.event === 'Stop' ? 'idle' : 'working',
       machine,
@@ -351,7 +351,7 @@ export class IngestSource implements AgentSource {
         id,
         parentId: s.agentId,
         sessionId: s.sessionId,
-        role: ev.agent_type || tr('Subagente'),
+        role: ev.agent_type || tr('Subagent'),
         title,
         background: false,
         startedAt: now,

@@ -30,7 +30,7 @@
       "provider": null,
       "cost": null,
       "ms": 9300,
-      "note": "entrada reconstruída: duas execuções simultâneas sobrescreveram o log"
+      "note": "reconstructed entry: two simultaneous runs overwrote the log"
     },
     {
       "n": 3,

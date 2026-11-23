@@ -24,8 +24,8 @@ function record(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
-describe('arquivo do tap de statusline', () => {
-  it('resets_at em segundos vira ms; fetchedAt no futuro é limitado a agora', () => {
+describe('statusline tap file', () => {
+  it('resets_at in seconds becomes ms; fetchedAt in the future is clamped to now', () => {
     const p = parseStatuslineFile(JSON.stringify(record()), 'x.json', NOW)!;
     expect(p).toEqual({
       file: 'x.json',
@@ -40,27 +40,27 @@ describe('arquivo do tap de statusline', () => {
       },
     });
     expect(parseStatuslineFile(JSON.stringify(record({ fetchedAt: NOW + 999_999 })), 'x', NOW)!.usage.fetchedAt).toBe(NOW);
-    // Sem fetchedAt: usa a data do arquivo.
+    // Without fetchedAt: uses the file's date.
     expect(parseStatuslineFile(JSON.stringify(record({ fetchedAt: undefined })), 'x', NOW, NOW - 5_000)!.usage.fetchedAt).toBe(NOW - 5_000);
   });
 
-  it('ignora lixo, JSON sem janelas e campos estranhos', () => {
+  it('ignores garbage, JSON without windows and odd fields', () => {
     expect(parseStatuslineFile('{', 'x', NOW)).toBeUndefined();
     expect(parseStatuslineFile('[]', 'x', NOW)).toBeUndefined();
     expect(parseStatuslineFile(JSON.stringify({ fetchedAt: NOW }), 'x', NOW)).toBeUndefined();
-    expect(parseStatuslineFile(JSON.stringify(record({ five_hour: { utilization: 'muito' }, seven_day: null })), 'x', NOW)).toBeUndefined();
+    expect(parseStatuslineFile(JSON.stringify(record({ five_hour: { utilization: 'a lot' }, seven_day: null })), 'x', NOW)).toBeUndefined();
     const clamped = parseStatuslineFile(JSON.stringify(record({ five_hour: { utilization: 250 } })), 'x', NOW)!;
     expect(clamped.usage.fiveHour).toEqual({ utilization: 100 });
   });
 
-  it('arquivo do mod do Claude Code: o mesmo formato com "source": "mod", que vira usage.via', () => {
+  it('Claude Code mod file: the same format with "source": "mod", which becomes usage.via', () => {
     const fromMod = parseStatuslineFile(JSON.stringify(record({ source: 'mod' })), 'x.json', NOW);
     const fromTap = parseStatuslineFile(JSON.stringify(record()), 'x.json', NOW)!;
     expect(fromMod).toEqual({ ...fromTap, usage: { ...fromTap.usage, via: 'mod' } });
     expect(fromMod?.usage.fiveHour).toEqual({ utilization: 42, resetsAt: Date.parse('2026-10-06T14:00:00Z') });
   });
 
-  it('leitor: leitura pela metade (o $.fs.write do mod não é atômico) mantém o último registro bom e relê depois', () => {
+  it('reader: a half-written read (the mod\'s $.fs.write isn\'t atomic) keeps the last good record and re-reads later', () => {
     const tmp = tempDir();
     try {
       const file = join(tmp.dir, '.claude-conta2.json');
@@ -69,18 +69,18 @@ describe('arquivo do tap de statusline', () => {
       writeFileSync(file, JSON.stringify(record({ source: 'mod' })));
       touch(1_000);
       expect(r.read(NOW)[0].usage.fiveHour?.utilization).toBe(42);
-      // truncado (vazio) e depois no meio da escrita: continua o 42
+      // truncated (empty) and then mid-write: still 42
       writeFileSync(file, '');
       touch(2_000);
       expect(r.read(NOW).map((f) => f.usage.fiveHour?.utilization)).toEqual([42]);
       writeFileSync(file, JSON.stringify(record({ five_hour: { utilization: 50 } })).slice(0, 40));
       touch(2_000);
       expect(r.read(NOW).map((f) => f.usage.fiveHour?.utilization)).toEqual([42]);
-      // a escrita termina com a MESMA data (resolução do relógio): relido mesmo assim
+      // the write finishes with the SAME date (clock resolution): re-read anyway
       writeFileSync(file, JSON.stringify(record({ source: 'mod', five_hour: { utilization: 50 } })));
       touch(2_000);
       expect(r.read(NOW).map((f) => f.usage.fiveHour?.utilization)).toEqual([50]);
-      // arquivo que nunca foi bom: nada (e relido a cada ciclo até ficar bom)
+      // a file that was never good: nothing (and re-read every cycle until it is)
       writeFileSync(join(tmp.dir, 'outra.json'), '{"accountId":');
       expect(r.read(NOW)).toHaveLength(1);
       writeFileSync(join(tmp.dir, 'outra.json'), JSON.stringify(record({ accountId: 'outra', configDir: '/x/outra' })));
@@ -90,16 +90,16 @@ describe('arquivo do tap de statusline', () => {
     }
   });
 
-  it('leitor: só *.json, cache por arquivo, some quando o arquivo some', () => {
+  it('reader: only *.json, per-file cache, gone when the file is gone', () => {
     const tmp = tempDir();
     try {
-      const reader = new StatuslineUsageReader(join(tmp.dir, 'nao-existe'));
+      const reader = new StatuslineUsageReader(join(tmp.dir, 'does-not-exist'));
       expect(reader.read(NOW)).toEqual([]);
       const dir = join(tmp.dir, 'usage');
       mkdirSync(dir);
       writeFileSync(join(dir, '.claude-conta2.json'), JSON.stringify(record()));
-      writeFileSync(join(dir, 'notas.txt'), 'x');
-      writeFileSync(join(dir, 'quebrado.json'), '{');
+      writeFileSync(join(dir, 'notes.txt'), 'x');
+      writeFileSync(join(dir, 'broken.json'), '{');
       const r = new StatuslineUsageReader(dir);
       expect(r.read(NOW).map((f) => f.accountId)).toEqual(['.claude-conta2']);
       expect(r.read(NOW)).toHaveLength(1);
@@ -112,7 +112,7 @@ describe('arquivo do tap de statusline', () => {
   });
 });
 
-describe('AccountsService com a fonte statusline', () => {
+describe('AccountsService with the statusline source', () => {
   let tmp: ReturnType<typeof tempDir>;
   let home: string;
   let usageDir: string;
@@ -133,7 +133,7 @@ describe('AccountsService com a fonte statusline', () => {
   const service = (onChange = () => {}) =>
     new AccountsService({ dirs: dirs(), home, env: {}, onChange, usageDir, now: () => now });
 
-  it('casa pelo config dir e vira ok; envelhece para stale; arquivo apagado = sem dados', () => {
+  it('matches by config dir and becomes ok; ages to stale; deleted file = no data', () => {
     writeFileSync(join(usageDir, '.claude-conta2.json'), JSON.stringify(record({ configDir: join(home, '.claude-conta2') })));
     let changes = 0;
     const svc = service(() => changes++);
@@ -153,11 +153,11 @@ describe('AccountsService com a fonte statusline', () => {
     expect(svc.list(new Map())[1].usage).toBeUndefined();
   });
 
-  it('sem configDir, casa pelo accountId; vale a fonte mais recente', () => {
+  it('without configDir, matches by accountId; the most recent source wins', () => {
     writeFileSync(join(usageDir, 'x.json'), JSON.stringify(record({ configDir: undefined, accountId: '.claude', fetchedAt: NOW - 120_000 })));
     const svc = service();
     expect(svc.list(new Map())[0]).toMatchObject({ usageStatus: 'ok', usage: { source: 'statusline' } });
-    // Cache do /usage mais novo vence; statusline mais novo volta a vencer.
+    // A newer /usage cache wins; a newer statusline wins again.
     writeFileSync(join(home, '.claude.json'), JSON.stringify({ cachedUsageUtilization: { fetchedAtMs: NOW - 10_000, utilization: { five_hour: { utilization: 70 } } } }));
     svc.refresh();
     expect(svc.list(new Map())[0].usage).toMatchObject({ source: 'cache', fiveHour: { utilization: 70 } });
@@ -167,7 +167,7 @@ describe('AccountsService com a fonte statusline', () => {
     expect(svc.list(new Map())[0].usage).toMatchObject({ source: 'statusline', fiveHour: { utilization: 42 } });
   });
 
-  it('no Docker: casa pelo caminho do HOST (HABBLAUD_ACCOUNTS.configDir), não pelo da montagem', () => {
+  it('in Docker: matches by the HOST path (HABBLAUD_ACCOUNTS.configDir), not the mount path', () => {
     const env = {
       HABBLAUD_ACCOUNTS: JSON.stringify([{ id: '.claude-conta2', configDir: '/Users/fulano/.claude-conta2', mountDir: join(home, '.claude-conta2') }]),
     };
@@ -176,7 +176,7 @@ describe('AccountsService com a fonte statusline', () => {
     expect(svc.list(new Map())[0]).toMatchObject({ id: '.claude-conta2', usageStatus: 'ok', usage: { source: 'statusline' } });
   });
 
-  it('janela que já reiniciou desde a coleta aparece sem dados', () => {
+  it('a window that has reset since the reading shows no data', () => {
     writeFileSync(join(usageDir, 'c.json'), JSON.stringify(record({ configDir: join(home, '.claude'), accountId: '.claude' })));
     const svc = service();
     now = Date.parse('2026-10-06T14:05:00Z');
@@ -186,16 +186,16 @@ describe('AccountsService com a fonte statusline', () => {
   });
 });
 
-describe('organização da conta', () => {
-  it('omite o nome genérico "<e-mail>\'s Organization"', () => {
+describe('account organization', () => {
+  it('omits the generic "<e-mail>\'s Organization" name', () => {
     expect(meaningfulOrganization("fulano@x.com's Organization", 'fulano@x.com')).toBeUndefined();
     expect(meaningfulOrganization("FULANO@X.COM’s organization", 'fulano@x.com')).toBeUndefined();
     expect(meaningfulOrganization("outra@x.com's Organization", undefined)).toBeUndefined();
-    expect(meaningfulOrganization('Empresa Exemplo', 'fulano@x.com')).toBe('Empresa Exemplo');
+    expect(meaningfulOrganization('Example Company', 'fulano@x.com')).toBe('Example Company');
     expect(meaningfulOrganization("Maria's Organization", 'fulano@x.com')).toBe("Maria's Organization");
   });
 
-  it('detectAccounts aplica a regra ao .claude.json', () => {
+  it('detectAccounts applies the rule to .claude.json', () => {
     const tmp = tempDir();
     try {
       const dir = join(tmp.dir, '.claude');

@@ -11,7 +11,7 @@ export function isRemote(a: Pick<AgentInfo, 'machine'> | null | undefined): bool
 
 /** Why the terminal and the session actions are off for an agent of another machine. */
 export function remoteTerminalHint(a: Pick<AgentInfo, 'machine'>): string {
-  return tr('Esta sessão roda em {0}: o terminal, assumir e encerrar só funcionam lá.', [a.machine?.name ?? '?']);
+  return tr('This session runs on {0}: the terminal, taking over and ending only work there.', [a.machine?.name ?? '?']);
 }
 
 /** Tag with the machine's name (hidden for agents of this machine). */
@@ -24,5 +24,5 @@ export function updateMachineTag(tag: HTMLElement, a: Pick<AgentInfo, 'machine'>
   setHidden(tag, !m);
   if (!m) return;
   setText(tag, m.name);
-  setTitle(tag, tr('Roda em outra máquina: {0}', [m.name]));
+  setTitle(tag, tr('Runs on another machine: {0}', [m.name]));
 }

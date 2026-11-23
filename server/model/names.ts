@@ -1,6 +1,6 @@
-// Nomes dos personagens, persistidos por sessão/subagente em <dataDir>/names.json para que cada um mantenha o nome
-// entre reinícios do servidor, e o personagem escolhido para cada projeto (sala) no editor (ver Office.setCharacter),
-// com a sessão dona dele, para que um reinício não o entregue a outra sessão aberta.
+// Character names, persisted per session/subagent in <dataDir>/names.json so each keeps its name across server
+// restarts, and the character chosen for each project (room) in the editor (see Office.setCharacter), with the session
+// that owns it, so a restart doesn't hand it to another open session.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseAppearanceParts, parseCharacterName, parseSeed, type AppearanceParts } from '../../shared/appearance';
@@ -17,8 +17,8 @@ interface StoredName {
 }
 
 /**
- * Personagem escolhido para uma sala (key: room id, see rooms.ts roomKey). `owner` = sessionId da sessão que o está usando;
- * `at` = último uso, para a expiração.
+ * Character chosen for a room (key: room id, see rooms.ts roomKey). `owner` = sessionId of the session using it;
+ * `at` = last use, for expiry.
  */
 export interface StoredCharacter {
   name: string;
@@ -43,7 +43,7 @@ interface NamesFile {
   rooms?: Record<string, StoredCharacter>;
 }
 
-/** Entrada de `rooms` lida do arquivo, ou null se algo estiver fora do formato. */
+/** A `rooms` entry read from the file, or null if anything is out of format. */
 function parseStoredCharacter(raw: unknown): StoredCharacter | null {
   if (!raw || typeof raw !== 'object') return null;
   const v = raw as Record<string, unknown>;
@@ -53,7 +53,7 @@ function parseStoredCharacter(raw: unknown): StoredCharacter | null {
   if (!name || seed === null || (v.look !== 'f' && v.look !== 'm') || !parts) return null;
   const c: StoredCharacter = { name, look: v.look, seed, at: typeof v.at === 'number' ? v.at : 0 };
   if (Object.keys(parts).length) c.parts = parts;
-  // Dono fora do formato não invalida a entrada: ela volta a valer para quem chegar primeiro.
+  // An out-of-format owner doesn't invalidate the entry: it becomes available to whoever arrives first.
   if (typeof v.owner === 'string' && v.owner && v.owner.length <= MAX_OWNER_LENGTH) c.owner = v.owner;
   return c;
 }
@@ -71,7 +71,7 @@ export class NameStore {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly now: () => number;
 
-  /** `file` null = só em memória (testes ou diretório de dados indisponível). */
+  /** `file` null = in memory only (tests or data directory unavailable). */
   constructor(
     private readonly file: string | null,
     opts: { now?: () => number } = {},
@@ -109,7 +109,7 @@ export class NameStore {
       }
       if (legacy || migrated) this.scheduleFlush();
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') log.warn(tr('names.json ilegível ({0}); começando do zero.', [errMsg(err)]));
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') log.warn(tr('names.json unreadable ({0}); starting from scratch.', [errMsg(err)]));
     }
   }
 
@@ -126,7 +126,7 @@ export class NameStore {
     return person;
   }
 
-  /** Associa `person` a mais uma chave (ex.: a sessão nova depois de um /clear). */
+  /** Associates `person` with one more key (e.g. the new session after a /clear). */
   remember(key: string, person: PersonName): void {
     this.names.set(key, { name: person.name, look: person.look, at: this.now() });
     this.scheduleFlush();
@@ -137,14 +137,14 @@ export class NameStore {
     return s ? { name: s.name, look: s.look } : undefined;
   }
 
-  // ---------------------------------------------------------------- personagem de cada sala (projeto)
+  // ---------------------------------------------------------------- character of each room (project)
 
   character(roomId: string): StoredCharacter | undefined {
     const c = this.rooms.get(roomId);
     return c ? copyCharacter(c) : undefined;
   }
 
-  /** A sessão `sessionId` passa a usar o personagem da sala: vira a dona e renova a expiração. */
+  /** Session `sessionId` starts using the room's character: it becomes the owner and renews the expiry. */
   claimCharacter(roomId: string, sessionId: string): void {
     const c = this.rooms.get(roomId);
     if (!c) return;
@@ -162,7 +162,7 @@ export class NameStore {
     if (this.rooms.delete(roomId)) this.scheduleFlush();
   }
 
-  /** Nomes escolhidos para as salas (nome -> sala), sem a `exceptRoom`. */
+  /** Names chosen for the rooms (name -> room), excluding `exceptRoom`. */
   reservedNames(exceptRoom?: string): Map<string, string> {
     const out = new Map<string, string>();
     for (const [roomId, c] of this.rooms) if (roomId !== exceptRoom) out.set(c.name, roomId);
@@ -201,7 +201,7 @@ export class NameStore {
       renameSync(tmp, this.file);
       log.clearOnce('names-write');
     } catch (err) {
-      log.warnOnce('names-write', tr('Não foi possível gravar {0} ({1}); os nomes valem só nesta execução.', [this.file, errMsg(err)]));
+      log.warnOnce('names-write', tr('Couldn\'t write {0} ({1}); names only last for this run.', [this.file, errMsg(err)]));
     }
   }
 }

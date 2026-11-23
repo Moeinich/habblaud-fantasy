@@ -1,33 +1,33 @@
-// CONTRATO do mundo (canvas do escritório) consumido pela UI (client/src/ui/**).
-// Implementação: client/src/world/index.ts -> createWorld().
-// Regra: mudanças aqui devem ser ADITIVAS.
+// CONTRACT of the world (the office canvas) consumed by the UI (client/src/ui/**).
+// Implementation: client/src/world/index.ts -> createWorld().
+// Rule: changes here must be ADDITIVE.
 
 export type Selection = { type: 'agent'; id: string } | { type: 'room'; id: string } | null;
 
 export interface WorldOptions {
-  /** Mostrar etiquetas com os nomes dos personagens. */
+  /** Show name tags for the characters. */
   showNames: boolean;
-  /** Balões de atividade: todos, só importantes (precisa de você, selecionado, mudanças recentes) ou nenhum. */
+  /** Activity bubbles: all, only important ones (needs you, selected, recent changes) or none. */
   bubbles: 'all' | 'important' | 'none';
-  /** Frequência de passeios pelo escritório quando os agentes estão ociosos. */
+  /** How often idle agents wander around the office. */
   liveliness: 'calm' | 'normal' | 'lively';
-  /** Câmera acompanha o agente selecionado. */
+  /** Camera follows the selected agent. */
   followSelected: boolean;
-  /** Ciclo dia/noite pela hora local (janelas, iluminação). */
+  /** Day/night cycle from the local time (windows, lighting). */
   dayNight: boolean;
-  /** (Opcional, aditivo) Ciclo dia/noite: automático, sempre dia ou sempre noite. Vale sobre `dayNight`. */
+  /** (Optional, additive) Day/night cycle: automatic, always day or always night. Takes precedence over `dayNight`. */
   daylight?: DaylightMode;
-  /** Tema visual: automático (segue o calendário; ver seasonalThemeFor), nenhum, Natal ou Halloween. */
+  /** Visual theme: automatic (follows the calendar; see seasonalThemeFor), none, Christmas or Halloween. */
   theme?: OfficeTheme;
 }
 
-/** Tema que o renderer desenha: o escritório original ('none') ou um dos sazonais. */
+/** Theme the renderer draws: the original office ('none') or one of the seasonal ones. */
 export type SeasonalTheme = 'none' | 'christmas' | 'halloween';
 export type OfficeTheme = 'auto' | SeasonalTheme;
 
 /**
- * Tema desenhado numa data (hora local). No automático: Halloween de 1º a 31 de outubro, Natal de 1º de novembro a
- * 26 de dezembro e, no resto do ano, o escritório original.
+ * Theme drawn on a given date (local time). In automatic mode: Halloween from October 1 to 31, Christmas from
+ * November 1 to December 26 and, for the rest of the year, the original office.
  */
 export function seasonalThemeFor(theme: OfficeTheme | undefined, date: Date): SeasonalTheme {
   if (theme && theme !== 'auto') return theme;
@@ -37,110 +37,110 @@ export function seasonalThemeFor(theme: OfficeTheme | undefined, date: Date): Se
   return 'none';
 }
 
-/** Ciclo dia/noite: segue a hora local, ou fixa o dia ou a noite. */
+/** Day/night cycle: follows the local time, or pins day or night. */
 export type DaylightMode = 'auto' | 'day' | 'night';
 
-/** Sons do ambiente que o mundo sugere (quem toca, e se toca, é a UI). */
+/** Ambient sounds the world suggests (the UI decides whether and how to play them). */
 export type SoundCueKind = 'keys' | 'elevator' | 'pingpong' | 'table' | 'arcade';
 
 export interface SoundCue {
   kind: SoundCueKind;
-  /** 0..1: proximidade (zoom, fora da tela...). */
+  /** 0..1: proximity (zoom, off screen...). */
   gain: number;
-  /** -1 (esquerda) .. 1 (direita): posição na tela. */
+  /** -1 (left) .. 1 (right): position on screen. */
   pan: number;
-  /** Teclado: quantas teclas na rajada. */
+  /** Keyboard: how many keys in the burst. */
   count?: number;
 }
 
 export interface WorldApi {
-  /** Seleciona (ou limpa) um agente/sala. `focus` move a câmera até ele. */
+  /** Selects (or clears) an agent/room. `focus` moves the camera to it. */
   select(sel: Selection, opts?: { focus?: boolean }): void;
   getSelection(): Selection;
-  /** Disparado quando a seleção muda (por clique no canvas ou por select()). */
+  /** Fired when the selection changes (by a click on the canvas or by select()). */
   onSelect(cb: (sel: Selection) => void): () => void;
-  /** Agente sob o cursor (para tooltips da UI). */
+  /** Agent under the cursor (for UI tooltips). */
   onHover(cb: (agentId: string | null) => void): () => void;
   focusAgent(id: string, opts?: { follow?: boolean }): void;
   focusRoom(id: string): void;
-  /** Enquadra o prédio inteiro. */
+  /** Frames the whole building. */
   overview(): void;
   zoomBy(factor: number): void;
   getOptions(): WorldOptions;
   setOptions(o: Partial<WorldOptions>): void;
-  /** Posição na tela (CSS px, relativo à viewport) logo acima da cabeça do personagem, ou null se não visível. */
+  /** Screen position (CSS px, relative to the viewport) just above the character's head, or null if not visible. */
   screenPositionOf(agentId: string): { x: number; y: number } | null;
   /**
-   * (Opcional, aditivo) Área da tela coberta por painéis da UI, em px CSS. O mundo passa a enquadrar
-   * (visão geral) e centralizar (focusAgent/focusRoom/seguir) dentro da área livre.
+   * (Optional, additive) Screen area covered by UI panels, in CSS px. The world then frames (overview) and
+   * centers (focusAgent/focusRoom/follow) within the free area.
    */
   setViewInsets?(insets: Partial<ViewInsets>): void;
   /**
-   * (Opcional, aditivo) Vida social de um agente presente no escritório: personalidade, carteira de
-   * moedinhas, amizades/rivalidades com quem está lá agora e a roda de que participa. null se não está.
+   * (Optional, additive) Social life of an agent present in the office: personality, coin wallet,
+   * friendships/rivalries with whoever is there now and the group it is part of. null if it is not present.
    */
   social?(agentId: string): AgentSocial | null;
-  /** (Opcional, aditivo) Botão direito numa sala do escritório: id da sala e o ponto do clique (px da janela). */
+  /** (Optional, additive) Right click on an office room: the room id and the click point (window px). */
   onRoomContextMenu?(cb: (roomId: string, at: { x: number; y: number }) => void): () => void;
-  /** (Opcional, aditivo) Acontecimentos sociais (partidas e apostas) para o feed. */
+  /** (Optional, additive) Social events (matches and bets) for the feed. */
   onSocialEvent?(cb: (e: SocialEvent) => void): () => void;
   /**
-   * (Opcional, aditivo) Timelapse: com `p`, o mundo passa a desenhar o dia reproduzido (relógio e fator de
-   * animação de `p`); `null` volta ao vivo. Cada chamada recomeça o mundo do zero (ninguém anda até a mesa:
-   * todos já aparecem no lugar), então chame ao entrar, ao pular para outro ponto e ao sair; o próximo
-   * snapshot do store é aplicado como carga inicial.
+   * (Optional, additive) Timelapse: with `p`, the world draws the replayed day (clock and animation factor
+   * from `p`); `null` returns to live. Each call restarts the world from scratch (nobody walks to their desk:
+   * everyone already appears in place), so call it on entering, when jumping to another point and on leaving;
+   * the next store snapshot is applied as the initial load.
    */
   setPlayback?(p: WorldPlayback | null): void;
-  /** (Opcional, aditivo) Sons do ambiente: teclado de quem trabalha à vista, elevador, rodas. */
+  /** (Optional, additive) Ambient sounds: keyboards of visible working agents, elevator, groups. */
   onSound?(cb: (cue: SoundCue) => void): () => void;
   /**
-   * (Opcional, aditivo) Escritório fora da tela (a cena da cidade está aberta): para o desenho e o teclado da
-   * câmera; ao voltar, a simulação avança o tempo que passou (como com a aba em segundo plano).
+   * (Optional, additive) Office off screen (the city scene is open): stops drawing and the camera keyboard;
+   * on return, the simulation catches up on the elapsed time (as with a background tab).
    */
   setSuspended?(suspended: boolean): void;
   destroy(): void;
 }
 
-/** Relógios do timelapse (ver world/playback.ts). */
+/** Timelapse clocks (see world/playback.ts). */
 export interface WorldPlayback {
-  /** Instante reproduzido (epoch ms): hora do céu, da iluminação e do relógio de parede. */
+  /** Replayed instant (epoch ms): time for the sky, the lighting and the wall clock. */
   clock(): number;
-  /** Fator de animação (1 = tempo real; 0 = pausado). */
+  /** Animation factor (1 = real time; 0 = paused). */
   scale(): number;
 }
 
 export interface AgentSocial {
   traits: { emoji: string; label: string; desc: string }[];
-  /** Bordão ("Tá pago!"). */
+  /** Catchphrase ("Done and done!"). */
   catchphrase: string;
-  /** Saldo de moedinhas (🪙). */
+  /** Coin balance (🪙). */
   coins: number;
-  /** Quanto já ganhou trabalhando (saldo inicial + tarefas + pedidos + entregas). */
+  /** How much it has earned working (starting balance + tasks + requests + deliveries). */
   earned: number;
   wins: number;
   losses: number;
-  /** Colegas presentes com quem tem amizade ou rivalidade; `record` = [vitórias, derrotas] contra ele. */
+  /** Present colleagues it has a friendship or rivalry with; `record` = [wins, losses] against them. */
   bonds: { id: string; name: string; kind: 'amizade' | 'rivalidade'; record: [number, number] | null }[];
-  /** O que está fazendo numa roda agora ("📺 Vendo futebol na TV com Rafaela"), ou null. */
+  /** What it is doing in a group right now ("📺 Watching football on TV with Rafaela"), or null. */
   doing: string | null;
-  /** Extrato: movimentações mais recentes primeiro. */
+  /** Statement: most recent transactions first. */
   ledger: { at: number; delta: number; icon: string; text: string }[];
 }
 
-/** Partida/aposta resolvida (vira uma linha do feed). */
+/** A settled match/bet (becomes a feed line). */
 export interface SocialEvent {
   id: string;
   at: number;
   icon: string;
-  /** Protagonista (quem venceu). */
+  /** Protagonist (the winner). */
   agentId: string;
-  /** Texto sem o nome do protagonista: "ganhou 🪙10 de Caio no jokenpô". */
+  /** Text without the protagonist's name: "won 🪙10 from Caio at rock-paper-scissors". */
   text: string;
-  /** Onde aconteceu ("Lounge", "Copa"...). */
+  /** Where it happened ("Lounge", "Kitchen"...). */
   place: string;
 }
 
-/** Margens da viewport cobertas pela UI (px CSS). */
+/** Viewport margins covered by the UI (CSS px). */
 export interface ViewInsets {
   top: number;
   right: number;

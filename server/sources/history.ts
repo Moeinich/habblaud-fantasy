@@ -1,8 +1,8 @@
-// Histórico do terminal do Claude Code (o HistoryProvider 'claude', ver sources/source.ts): as sessões recentes
-// de cada conta (abertas ou já encerradas), listadas a partir dos transcripts
-// <config>/projects/<projeto>/<sessionId>.jsonl (no Docker, a pasta projects/ de cada conta montada só para leitura). De cada arquivo lê só o começo (projeto, primeira
-// atividade e o primeiro prompt) e o fim (título e última atividade), nunca o arquivo inteiro, e guarda o
-// resultado enquanto o mtime e o tamanho não mudam. Subagentes (<sessão>/subagents/) ficam de fora.
+// Claude Code terminal history (the 'claude' HistoryProvider, see sources/source.ts): each account's recent
+// sessions (open or already closed), listed from the transcripts
+// <config>/projects/<project>/<sessionId>.jsonl (in Docker, each account's projects/ folder is mounted read-only). From each file it reads only the start (project, first
+// activity and the first prompt) and the end (title and last activity), never the whole file, and caches the
+// result while the mtime and size don't change. Subagents (<session>/subagents/) are left out.
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { open, readdir, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
@@ -16,46 +16,46 @@ import { createTranscriptState, parseLine, titleOf } from './transcript';
 import { readCustomTitleFile } from './watcher';
 import { tr } from '../../shared/i18n';
 
-/** Janela da listagem: sessões com o transcript modificado nos últimos 7 dias. */
+/** Listing window: sessions whose transcript was modified in the last 7 days. */
 export const HISTORY_DAYS = 7;
 export const HISTORY_MAX_AGE_MS = HISTORY_DAYS * 24 * 3600_000;
-/** Máximo de sessões listadas (as mais recentes). */
+/** Maximum number of sessions listed (the most recent ones). */
 export const HISTORY_LIMIT = 150;
-/** Começo do arquivo lido: projeto (cwd), primeira atividade e o primeiro prompt. */
+/** Start of the file read: project (cwd), first activity and the first prompt. */
 export const HEAD_BYTES = 64 * 1024;
-/** Fim do arquivo lido: o Claude Code regrava título e último prompt a cada turno, então eles ficam perto do fim. */
+/** End of the file read: Claude Code rewrites the title and last prompt every turn, so they stay near the end. */
 export const TAIL_BYTES = 64 * 1024;
-/** Sem título nos últimos 64 KB (ex.: um resultado enorme no fim do arquivo): procura num trecho maior, uma vez. */
+/** No title in the last 64 KB (e.g. a huge result at the end of the file): search a larger chunk, once. */
 export const TAIL_RETRY_BYTES = 512 * 1024;
-/** Arquivos lidos ao mesmo tempo (a listagem é assíncrona: não trava o polling do escritório). */
+/** Files read at the same time (the listing is async: it doesn't block the office polling). */
 const READ_CONCURRENCY = 8;
 const TITLE_MAX = 90;
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Linhas que dão título à sessão (o mesmo formato compacto que transcript.ts procura no prefixo). */
+/** Lines that give the session its title (the same compact format transcript.ts looks for in the prefix). */
 const TITLE_MARKERS = ['"type":"custom-title"', '"type":"agent-name"', '"type":"ai-title"', '"type":"last-prompt"'];
 
-/** O id de uma sessão do Claude Code tem formato de UUID (é também o nome do transcript). */
+/** A Claude Code session id has UUID format (it is also the transcript's name). */
 export function isSessionId(v: string): boolean {
   return SESSION_ID.test(v);
 }
 
 export interface HistoryAccount {
   id: string;
-  /** Config dir lido por este processo (no Docker, o caminho montado). */
+  /** Config dir read by this process (in Docker, the mounted path). */
   dir: string;
 }
 
 export interface HistoryOptions {
   accounts: () => readonly HistoryAccount[];
-  /** Agente principal da sessão, se ela ainda estiver aberta no escritório. */
+  /** The session's main agent, if it is still open in the office. */
   openAgentOf: (account: string, sessionId: string) => string | undefined;
   now?: () => number;
   maxAgeMs?: number;
   limit?: number;
 }
 
-/** O que o começo e o fim do transcript dizem sobre a sessão. */
+/** What the start and end of the transcript say about the session. */
 export interface SessionMeta {
   project?: string;
   title?: string;
@@ -72,22 +72,22 @@ interface Candidate {
   size: number;
 }
 
-/** Resultado de resolve(): o caminho do transcript (com o parser do terminal do Claude Code) ou o erro HTTP. */
+/** Result of resolve(): the transcript path (with the Claude Code terminal parser) or the HTTP error. */
 export type ResolveResult = HistoryResolveResult;
 
-/** Agente principal (ainda no escritório e não encerrado) da sessão `sessionId` da conta. */
+/** Main agent (still in the office and not closed) of the account's `sessionId` session. */
 export function openMainAgent(agents: readonly AgentInfo[], account: string, sessionId: string): string | undefined {
   return agents.find((a) => a.kind === 'main' && a.account === account && a.sessionId === sessionId && a.status !== 'offline')?.id;
 }
 
 export class SessionHistory implements HistoryProvider {
   readonly provider = 'claude' as const;
-  /** Metadados por caminho, válidos enquanto mtime e tamanho forem os mesmos. */
+  /** Metadata per path, valid while mtime and size stay the same. */
   private cache = new Map<string, { mtimeMs: number; size: number; meta: SessionMeta }>();
   private readonly now: () => number;
   private readonly maxAgeMs: number;
   private readonly limit: number;
-  /** Arquivos lidos de verdade (sem cache) desde o início: só para os testes. */
+  /** Files actually read (not cached) since start: only for the tests. */
   reads = 0;
 
   constructor(private readonly opts: HistoryOptions) {
@@ -100,7 +100,7 @@ export class SessionHistory implements HistoryProvider {
     return this.opts.accounts().some((a) => a.id === account);
   }
 
-  /** Sessões recentes de todas as contas, da atividade mais recente para a mais antiga. */
+  /** Recent sessions of all accounts, from most recent activity to oldest. */
   async list(): Promise<RecentSession[]> {
     const now = this.now();
     const all: Candidate[] = [];
@@ -108,7 +108,7 @@ export class SessionHistory implements HistoryProvider {
     all.sort((a, b) => b.mtimeMs - a.mtimeMs);
     const picked = all.slice(0, this.limit);
     const metas = await mapLimit(picked, READ_CONCURRENCY, (c) => this.metaOf(c));
-    // Esquece os arquivos que saíram da janela (o cache não cresce sem limite).
+    // Forget files that left the window (the cache doesn't grow unbounded).
     const keep = new Set(picked.map((c) => c.path));
     for (const path of this.cache.keys()) if (!keep.has(path)) this.cache.delete(path);
 
@@ -116,7 +116,7 @@ export class SessionHistory implements HistoryProvider {
     picked.forEach((c, i) => {
       const meta = metas[i];
       const agentId = this.opts.openAgentOf(c.account, c.sessionId);
-      // Sem nenhuma linha com horário (sessão aberta e fechada sem conversa): não há o que mostrar.
+      // No line with a timestamp (session opened and closed without conversation): nothing to show.
       if (!agentId && meta.firstAt === undefined && meta.lastAt === undefined) return;
       const s: RecentSession = {
         account: c.account,
@@ -136,15 +136,15 @@ export class SessionHistory implements HistoryProvider {
   }
 
   /**
-   * Transcript da sessão `sessionId` da conta, validado: a conta precisa ser uma das conhecidas, o id precisa
-   * ter formato de UUID e o arquivo (com links resolvidos) precisa ficar dentro da pasta projects/ da conta.
+   * The account's `sessionId` transcript, validated: the account must be a known one, the id must have UUID
+   * format and the file (with links resolved) must stay inside the account's projects/ folder.
    */
   resolve(account: string, sessionId: string): ResolveResult {
-    if (!isSessionId(sessionId)) return { status: 400, error: tr('id de sessão inválido') };
+    if (!isSessionId(sessionId)) return { status: 400, error: tr('invalid session id') };
     const acc = this.opts.accounts().find((a) => a.id === account);
-    if (!acc) return { status: 404, error: tr('conta desconhecida') };
+    if (!acc) return { status: 404, error: tr('unknown account') };
     const projects = join(acc.dir, 'projects');
-    const notFound: ResolveResult = { status: 404, error: tr('sessão não encontrada') };
+    const notFound: ResolveResult = { status: 404, error: tr('session not found') };
     let root: string;
     let dirs: string[];
     try {
@@ -159,17 +159,17 @@ export class SessionHistory implements HistoryProvider {
       if (!existsSync(candidate)) continue;
       try {
         const real = realpathSync(candidate);
-        // Um link dentro de projects/ apontando para fora não serve.
+        // A link inside projects/ pointing outside doesn't count.
         if (!real.startsWith(root + sep) || !statSync(real).isFile()) continue;
         return { path: real, createParser: createTerminalParser };
       } catch {
-        // sumiu entre a listagem e a leitura
+        // vanished between listing and reading
       }
     }
     return notFound;
   }
 
-  /** Transcripts de primeiro nível (um por sessão) modificados dentro da janela. */
+  /** First-level transcripts (one per session) modified within the window. */
   private async candidates(acc: HistoryAccount, now: number): Promise<Candidate[]> {
     const projects = join(acc.dir, 'projects');
     const out: Candidate[] = [];
@@ -177,7 +177,7 @@ export class SessionHistory implements HistoryProvider {
     try {
       dirs = (await readdir(projects, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
     } catch {
-      return out; // conta sem projects/ (ainda)
+      return out; // account without projects/ (yet)
     }
     for (const projectDir of dirs) {
       let names: string[];
@@ -196,7 +196,7 @@ export class SessionHistory implements HistoryProvider {
           if (!st.isFile() || now - st.mtimeMs > this.maxAgeMs) continue;
           out.push({ account: acc.id, sessionId, projectDir, path, mtimeMs: st.mtimeMs, size: st.size });
         } catch {
-          // apagado no meio da listagem
+          // deleted mid-listing
         }
       }
     }
@@ -211,7 +211,7 @@ export class SessionHistory implements HistoryProvider {
       this.reads++;
       meta = await readSessionMeta(c.path, c.size);
     } catch (err) {
-      log.warnOnce(`history:${errMsg(err)}`, tr('Histórico de sessões: transcript ilegível ({0}).', [errMsg(err)]));
+      log.warnOnce(`history:${errMsg(err)}`, tr('Session history: unreadable transcript ({0}).', [errMsg(err)]));
       meta = {};
     }
     this.cache.set(c.path, { mtimeMs: c.mtimeMs, size: c.size, meta });
@@ -219,7 +219,7 @@ export class SessionHistory implements HistoryProvider {
   }
 }
 
-/** Lê o começo e o fim do transcript (de tamanho `size`) e extrai projeto, título e horários. */
+/** Reads the start and end of the transcript (of size `size`) and extracts project, title and timestamps. */
 export async function readSessionMeta(path: string, size: number): Promise<SessionMeta> {
   const fh = await open(path, 'r');
   try {
@@ -233,7 +233,7 @@ export async function readSessionMeta(path: string, size: number): Promise<Sessi
     if (size <= HEAD_BYTES + TAIL_BYTES) {
       head = tail = splitLines(await read(0, size), false, false);
     } else {
-      // A última linha do começo e a primeira do fim saem cortadas: são descartadas.
+      // The last line of the start and the first of the end come out cut: they are discarded.
       head = splitLines(await read(0, HEAD_BYTES), false, true);
       tail = splitLines(await read(size - TAIL_BYTES, TAIL_BYTES), true, false);
     }
@@ -247,9 +247,9 @@ export async function readSessionMeta(path: string, size: number): Promise<Sessi
     const project = projectOf(head);
     if (project) meta.project = project;
 
-    // Como no watcher: o /rename do transcript vale mais; o custom-title.json da sessão cobre o que o fim não trouxe.
+    // As in the watcher: the transcript's /rename wins; the session's custom-title.json covers what the end lacked.
     state.customTitle ??= readCustomTitleFile(sessionDirOf(path));
-    // O fim não trouxe nenhuma linha de título (ex.: um resultado enorme por último): procura um pouco antes.
+    // The end brought no title line (e.g. a huge result last): search a bit earlier.
     if (size > HEAD_BYTES + TAIL_BYTES && !tail.some(isTitleLine) && !(state.customTitle ?? state.agentName ?? state.aiTitle)) {
       const len = Math.min(TAIL_RETRY_BYTES, size - HEAD_BYTES);
       for (const line of splitLines(await read(size - len, len), true, false)) if (isTitleLine(line)) parseLine(state, line, ctx);
@@ -273,7 +273,7 @@ function splitLines(text: string, dropFirst: boolean, dropLast: boolean): string
   return lines.map((l) => l.replace(/\r$/, '')).filter((l) => l.trim());
 }
 
-/** O `cwd` da primeira linha que o traz (as linhas de conversa trazem o diretório do projeto). */
+/** The `cwd` of the first line that carries it (conversation lines carry the project directory). */
 function projectOf(lines: readonly string[]): string | undefined {
   for (const line of lines) {
     if (!line.includes('"cwd"')) continue;
@@ -281,13 +281,13 @@ function projectOf(lines: readonly string[]): string | undefined {
       const cwd = (JSON.parse(line) as { cwd?: unknown }).cwd;
       if (typeof cwd === 'string' && cwd.trim()) return cwd.trim();
     } catch {
-      // linha inválida: tenta a próxima
+      // invalid line: try the next one
     }
   }
   return undefined;
 }
 
-/** Sem nenhum título no transcript: o primeiro prompt (já limpo e com segredos mascarados pelo parser do terminal). */
+/** No title at all in the transcript: the first prompt (already cleaned and with secrets masked by the terminal parser). */
 function firstPrompt(lines: readonly string[]): string | undefined {
   const parser = createTerminalParser();
   for (const line of lines) {
@@ -303,7 +303,7 @@ function firstPrompt(lines: readonly string[]): string | undefined {
   return undefined;
 }
 
-/** map() assíncrono com no máximo `limit` tarefas ao mesmo tempo (mantém a ordem). */
+/** Async map() with at most `limit` tasks at a time (keeps the order). */
 async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;

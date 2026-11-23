@@ -1,5 +1,5 @@
-// Peças visuais reutilizadas pelos painéis: chip de conta (e o selo "Codex"), ponto de status, selo de papel, barra
-// de progresso.
+// Visual pieces reused by the panels: account chip (and the "Codex" badge), status dot, role badge, progress
+// bar.
 import type { AccountInfo, Activity, AgentInfo, AgentStatus, Provider } from '../../../shared/types';
 import { h, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
 import { wordmarkSvg } from './icons';
@@ -9,14 +9,14 @@ import { accountChipLabel, accountProvider, fallbackShort, showsProviderTag } fr
 import { tr } from '../../../shared/i18n';
 
 /**
- * Chip quadrado com a letra curta da conta ("C", "D") na cor da conta. Conta do Codex: o chip fica vazado (fundo
- * escuro, borda e letra na cor da conta, cantos em degrau): `data-provider="codex"`.
+ * Square chip with the account's short letter ("C", "D") in the account color. Codex account: the chip is hollow
+ * (dark fill, border and letter in the account color, stepped corners): `data-provider="codex"`.
  */
 export function createAccountChip(size: 'sm' | 'md' | 'lg' = 'sm'): HTMLElement {
   return h('span', { class: `ui-acc-chip ui-acc-chip--${size}` });
 }
 
-/** `provider` = dica para quando a conta não está no snapshot (ex.: a sessão do histórico diz de que ferramenta é). */
+/** `provider` = hint for when the account is not in the snapshot (e.g. the history session says which tool it is). */
 export function updateAccountChip(chip: HTMLElement, account: AccountInfo | undefined, fallbackId = '', provider?: Provider): void {
   const p = accountProvider(account, fallbackId, provider);
   setText(chip, account?.short ?? fallbackShort(fallbackId, p));
@@ -27,17 +27,17 @@ export function updateAccountChip(chip: HTMLElement, account: AccountInfo | unde
   setAttr(chip, 'aria-label', label);
 }
 
-/** Selo de texto "Codex" ao lado do nome da conta (onde há espaço: gaveta, terminal, cartão de uso, dica). */
+/** "Codex" text badge next to the account name (where there's room: drawer, terminal, usage card, tooltip). */
 export function createProviderTag(extra = ''): HTMLElement {
-  return h('span', { class: `ui-prov${extra ? ` ${extra}` : ''}`, text: 'Codex', hidden: true, title: tr('Agente do Codex (OpenAI)') });
+  return h('span', { class: `ui-prov${extra ? ` ${extra}` : ''}`, text: 'Codex', hidden: true, title: tr('Codex agent (OpenAI)') });
 }
 
-/** Mostra o selo só para o Codex (e não repete quando o nome da conta já diz "Codex"). */
+/** Shows the badge only for Codex (and doesn't repeat it when the account name already says "Codex"). */
 export function updateProviderTag(tag: HTMLElement, provider: Provider, accountName = ''): void {
   setHidden(tag, !showsProviderTag(provider, accountName));
 }
 
-/** Quadradinho de status (pixel), com pulso quando precisa de você. */
+/** Little status square (pixel), pulsing when it needs you. */
 export function createStatusDot(): HTMLElement {
   return h('span', { class: 'ui-status-dot', role: 'img' });
 }
@@ -54,12 +54,12 @@ export function createRoleBadge(): HTMLElement {
 }
 
 export function updateRoleBadge(badge: HTMLElement, agent: Pick<AgentInfo, 'kind' | 'role' | 'background'>): void {
-  setText(badge, agent.kind === 'main' ? tr('Principal') : agent.role || tr('Subagente'));
+  setText(badge, agent.kind === 'main' ? tr('Main') : agent.role || tr('Subagent'));
   setVariant(badge, 'ui-role--', agent.kind);
-  setTitle(badge, agent.kind === 'main' ? tr('Agente principal') : tr('Subagente: {0}{1}', [agent.role, agent.background ? tr(' (em segundo plano)') : '']));
+  setTitle(badge, agent.kind === 'main' ? tr('Main agent') : tr('Subagent: {0}{1}', [agent.role, agent.background ? tr(' (in the background)') : '']));
 }
 
-/** Barra de progresso fina; `value` 0–1. */
+/** Thin progress bar; `value` 0–1. */
 export function createProgress(label: string): HTMLElement {
   const bar = h('span', { class: 'ui-progress', role: 'progressbar', attrs: { 'aria-label': label, 'aria-valuemin': 0, 'aria-valuemax': 100 } });
   bar.append(h('span', { class: 'ui-progress__fill' }));
@@ -72,13 +72,13 @@ export function updateProgress(bar: HTMLElement, done: number, total: number, pa
   setStyleVar(bar, '--p', `${pct}%`);
   setStyleVar(bar, '--pp', `${partialPct}%`);
   setAttr(bar, 'aria-valuenow', String(pct));
-  setAttr(bar, 'aria-valuetext', tr('{0} de {1}', [done, total]));
+  setAttr(bar, 'aria-valuetext', tr('{0} of {1}', [done, total]));
   bar.classList.toggle('is-complete', total > 0 && done === total);
 }
 
 /**
- * Linha "ícone + texto" de atividade, com reticências. Tem também um cronômetro e um contador "×N"
- * (ocultos fora da espera por shell), para que o tempo nunca seja cortado pelas reticências do texto.
+ * "Icon + text" activity line, with ellipsis. It also has a stopwatch and a "×N" counter (hidden outside
+ * a shell wait), so the time is never cut off by the text's ellipsis.
  */
 export function createActivityLine(): HTMLElement {
   const el = h('span', { class: 'ui-activity' });
@@ -95,7 +95,7 @@ function activityParts(el: HTMLElement): [HTMLElement, HTMLElement, HTMLElement,
   return el.children as unknown as [HTMLElement, HTMLElement, HTMLElement, HTMLElement];
 }
 
-export function updateActivityLine(el: HTMLElement, activity: Activity | undefined, fallback = tr('Sem atividade ainda')): void {
+export function updateActivityLine(el: HTMLElement, activity: Activity | undefined, fallback = tr('No activity yet')): void {
   const [icon, text, time, count] = activityParts(el);
   setText(icon, activity?.icon ?? '·');
   setText(text, activity?.text ?? fallback);
@@ -103,14 +103,14 @@ export function updateActivityLine(el: HTMLElement, activity: Activity | undefin
   setHidden(count, true);
   el.classList.remove('is-shell');
   el.classList.toggle('is-error', !!activity?.error);
-  // Fim de um shell (✅/❌ do servidor): destaque próprio, para não se perder entre as outras atividades.
+  // End of a shell (✅/❌ from the server): its own highlight, so it doesn't get lost among the other activities.
   const done = shellDoneKind(activity);
   el.classList.toggle('is-shell-ok', done === 'ok');
   el.classList.toggle('is-shell-fail', done === 'fail');
   setTitle(el, activity ? (activity.detail ? `${activity.text}\n${activity.detail}` : activity.text) : fallback);
 }
 
-/** Mesma linha para quem espera um shell: "⏳ <label> · 12:31 ×2", com o tempo correndo. */
+/** Same line for an agent waiting on a shell: "⏳ <label> · 12:31 ×2", with the time running. */
 export function updateShellActivityLine(el: HTMLElement, wait: ShellWait, now: number): void {
   const [icon, text, time, count] = activityParts(el);
   const line = shellLine(wait, now);

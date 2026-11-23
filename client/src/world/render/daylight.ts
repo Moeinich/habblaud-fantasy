@@ -1,6 +1,6 @@
-// Ciclo dia/noite (puro): fase do dia, nível de luz e as cores de multiplicação do exterior e dos
-// interiores pela hora local, a hora efetiva (preferência, ?hora= da URL) e a leitura do parâmetro.
-// O desenho (mapa de luz, halos) fica em lighting.ts.
+// Day/night cycle (pure): phase of the day, light level and the multiply colours of the exterior and
+// interiors by local hour, the effective hour (preference, the URL's ?hora=) and parsing that parameter.
+// The drawing (light map, halos) lives in lighting.ts.
 import type { DaylightMode } from '../api';
 
 export type { DaylightMode };
@@ -11,35 +11,34 @@ export type Rgb = readonly [number, number, number];
 export interface Ambient {
   hour: number;
   phase: DayPhase;
-  /** 0 = dia pleno, 1 = noite fechada. */
+  /** 0 = full day, 1 = deep night. */
   night: number;
-  /** 0..1: força do tom quente do amanhecer/entardecer. */
+  /** 0..1: strength of the warm dawn/dusk tone. */
   warm: number;
-  /** Multiplicação sobre a área externa (gramado, rua, jardins). */
+  /** Multiply colour over the exterior (lawn, street, gardens). */
   outside: Rgb;
-  /** Multiplicação sobre interiores acesos (salas com gente, corredor, recepção). */
+  /** Multiply colour over lit interiors (occupied rooms, corridor, reception). */
   inside: Rgb;
-  /** Multiplicação sobre áreas comuns vazias à noite (luz de vigia). */
+  /** Multiply colour over empty common areas at night (night-light). */
   dim: Rgb;
 }
 
-/** Hora usada quando o ciclo está fixo em "sempre dia" / "sempre noite". */
+/** Hour used when the cycle is fixed to "always day" / "always night". */
 export const FIXED_DAY_HOUR = 13.5;
 export const FIXED_NIGHT_HOUR = 22.5;
 
 export const WHITE: Rgb = [255, 255, 255];
-/** Luz de lâmpada (interiores à noite). */
+/** Lamp light (interiors at night). */
 const LAMP: Rgb = [244, 220, 184];
-/** Sol baixo entrando pelas janelas (amanhecer/entardecer). */
+/** Low sun coming in through the windows (dawn/dusk). */
 const SUN: Rgb = [255, 222, 184];
-/** Área comum vazia à noite: penumbra azulada. */
+/** Empty common area at night: bluish half-light. */
 const VIGIL: Rgb = [138, 144, 180];
 
 /**
- * Chaves do céu ao longo do dia: [hora, noite, quente, cor do exterior]. Interpolação linear, com a
- * volta da meia-noite contínua (0 h e 24 h iguais). A madrugada é um pouco mais fechada que o
- * começo da noite; o amanhecer passa pelo violeta e pelo rosado, o entardecer pelo dourado e pelo
- * laranja até o roxo do crepúsculo.
+ * Sky keys through the day: [hour, night, warm, exterior colour]. Linear interpolation, continuous
+ * across midnight (0 h and 24 h are equal). The small hours are a little darker than early night;
+ * dawn passes through violet and pink, dusk through gold and orange to the purple of twilight.
  */
 const KEYS: readonly (readonly [number, number, number, Rgb])[] = [
   [0, 1, 0, [70, 84, 140]],
@@ -60,7 +59,7 @@ const KEYS: readonly (readonly [number, number, number, Rgb])[] = [
 
 const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
 
-/** Hora normalizada para [0, 24). */
+/** Hour normalized to [0, 24). */
 export function wrapHour(hour: number): number {
   if (!Number.isFinite(hour)) return 0;
   return ((hour % 24) + 24) % 24;
@@ -80,7 +79,7 @@ export function phaseOf(hour: number): DayPhase {
   return 'noite';
 }
 
-/** Nível de luz e cores pela hora local fracionária (0–24). */
+/** Light level and colours for the fractional local hour (0–24). */
 export function ambientAt(hour: number): Ambient {
   const h = wrapHour(hour);
   let i = 0;
@@ -91,18 +90,18 @@ export function ambientAt(hour: number): Ambient {
   const night = n0 + (n1 - n0) * u;
   const warm = w0 + (w1 - w0) * u;
   const outside = mixRgb(c0, c1, u);
-  // interiores acesos: lâmpada quente à noite; de dia, um sopro do sol baixo pelas janelas
+  // lit interiors: warm lamp at night; by day, a hint of low sun through the windows
   const inside = mixRgb(mixRgb(WHITE, LAMP, night), SUN, warm * (1 - night) * 0.55);
   const dim = mixRgb(WHITE, VIGIL, night);
   return { hour: h, phase: phaseOf(h), night, warm, outside, inside, dim };
 }
 
-/** Ambiente neutro (dia pleno): multiplicar por ele não muda nada. */
+/** Neutral ambient (full day): multiplying by it changes nothing. */
 export function isNeutral(a: Ambient): boolean {
   return a.night < 0.005 && a.outside[0] >= 254 && a.outside[1] >= 254 && a.outside[2] >= 254 && a.inside[2] >= 254;
 }
 
-/** Aproxima `cur` de `target` (transição suave ao trocar a preferência ou a hora fixa). */
+/** Moves `cur` towards `target` (smooth transition when the preference or the fixed hour changes). */
 export function approachAmbient(cur: Ambient, target: Ambient, k: number): Ambient {
   const t = clamp(k, 0, 1);
   if (t >= 1) return target;
@@ -118,7 +117,7 @@ export function approachAmbient(cur: Ambient, target: Ambient, k: number): Ambie
   };
 }
 
-/** Distância entre dois ambientes (para saber se a transição terminou). */
+/** Distance between two ambients (to tell whether the transition has finished). */
 export function ambientDistance(a: Ambient, b: Ambient): number {
   let d = Math.abs(a.night - b.night) * 255 + Math.abs(a.warm - b.warm) * 255;
   for (let i = 0; i < 3; i++) d += Math.abs(a.outside[i] - b.outside[i]) + Math.abs(a.inside[i] - b.inside[i]) + Math.abs(a.dim[i] - b.dim[i]);
@@ -126,28 +125,28 @@ export function ambientDistance(a: Ambient, b: Ambient): number {
 }
 
 /**
- * Faixas de sol pelas janelas da parede norte: comprimento no piso (px de mundo), inclinação
- * horizontal por px descido (negativa de manhã: o sol vem do leste e a luz tomba para oeste) e
- * opacidade. null fora do horário de sol. As faixas crescem com o sol baixo e são mais fortes no
- * começo da manhã e no fim da tarde.
+ * Sun shafts through the north wall's windows: length on the floor (world px), horizontal skew per
+ * px down (negative in the morning: the sun comes from the east and the light falls to the west) and
+ * opacity. null outside sun hours. The shafts grow longer as the sun gets low and are strongest early
+ * in the morning and late in the afternoon.
  */
 export function sunbeamAt(hour: number): { len: number; skew: number; alpha: number } | null {
   const h = wrapHour(hour);
   if (h <= 6.1 || h >= 18.4) return null;
-  // arco do sol: 0 no nascer (6 h) e no pôr (18 h), 1 ao meio-dia
+  // sun arc: 0 at sunrise (6 h) and sunset (18 h), 1 at noon
   const p = clamp((h - 6) / 12, 0, 1);
   const elevation = Math.sin(p * Math.PI);
   const len = clamp(18 + (1 - elevation) * 70, 18, 88);
   const skew = clamp(-Math.cos(p * Math.PI) * 0.9, -0.9, 0.9);
-  // aparece e some suave perto do nascer/pôr; pico de manhã cedo e no fim da tarde
+  // fades in and out near sunrise/sunset; peaks early in the morning and late in the afternoon
   const edge = Math.min(clamp((h - 6.1) / 0.6, 0, 1), clamp((18.4 - h) / 0.6, 0, 1));
   const golden = Math.max(0, 1 - Math.abs(h - 7.2) / 1.6, 1 - Math.abs(h - 17.2) / 1.6);
   return { len: Math.round(len), skew, alpha: edge * (0.12 + 0.2 * golden) };
 }
 
 /**
- * Lê o parâmetro de hora da URL (`?hora=21:30`, `21h30`, `21h`, `21`, `6:05`). Devolve a hora
- * fracionária (0–24) ou null se ausente/inválido.
+ * Parses the URL's hour parameter (`?hora=21:30`, `21h30`, `21h`, `21`, `6:05`). Returns the
+ * fractional hour (0–24), or null if missing/invalid.
  */
 export function parseHourParam(search: string | null | undefined): number | null {
   if (!search) return null;
@@ -166,7 +165,7 @@ export function parseHourParam(search: string | null | undefined): number | null
   return wrapHour(hh + mm / 60);
 }
 
-/** Hora efetiva do ciclo: a forçada (URL/depuração) vale sobre a preferência; senão a hora local. */
+/** Effective hour of the cycle: a forced one (URL/debugging) wins over the preference; otherwise the local hour. */
 export function effectiveHour(mode: DaylightMode, override: number | null, date: Date): number {
   if (override !== null && Number.isFinite(override)) return wrapHour(override);
   if (mode === 'day') return FIXED_DAY_HOUR;
@@ -174,7 +173,7 @@ export function effectiveHour(mode: DaylightMode, override: number | null, date:
   return date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
 }
 
-/** Modo do ciclo a partir das opções do mundo (`dayNight` é o interruptor antigo, ainda aceito). */
+/** Cycle mode from the world options (`dayNight` is the old switch, still accepted). */
 export function daylightModeOf(o: { daylight?: DaylightMode; dayNight: boolean }): DaylightMode {
   if (o.daylight === 'auto' || o.daylight === 'day' || o.daylight === 'night') return o.daylight;
   return o.dayNight ? 'auto' : 'day';

@@ -1,6 +1,6 @@
-// Desenho do mundo por frame: camada externa -> pisos -> paredes/itens de parede -> entidades
-// ordenadas por profundidade -> luz/escuridão -> ícones. A passada em espaço de tela (texto
-// nítido) fica em overlay.ts.
+// Per-frame world drawing: outdoor layer -> floors -> walls/wall items -> entities
+// sorted by depth -> light/darkness -> icons. The screen-space pass (crisp text)
+// lives in overlay.ts.
 import { TILE, type ArtModule, type CharacterFrameRequest, type IconName, type ScreenMode, type Sprite } from '../../art/api';
 import type { SeasonalTheme, WorldOptions } from '../api';
 import type { WorldAssets } from '../assets';
@@ -52,13 +52,13 @@ interface Car {
   variant: number;
 }
 
-/** Posição da cabeça (px de mundo) de cada personagem desenhado neste frame. */
+/** Head position (world px) of each character drawn this frame. */
 export interface HeadInfo {
   x: number;
   y: number;
   feetY: number;
   visible: boolean;
-  /** Retângulo do sprite (px de mundo) para hit-test. */
+  /** Sprite rectangle (world px) for hit-testing. */
   bx: number;
   by: number;
   bw: number;
@@ -68,14 +68,14 @@ export interface HeadInfo {
 
 const TV_MODES: ScreenMode[] = ['browser', 'idle', 'chat', 'code'];
 /**
- * Boca do balde de pipoca (px relativos aos pés) na pose 'wait' sentada, por direção — segue o rig
- * da arte: abraçado no peito de frente, ao lado do quadril de costas, no colo de perfil.
+  * Mouth of the popcorn bucket (px relative to the feet) in the seated 'wait' pose, per direction — follows the art's
+  * rig: hugged to the chest facing front, beside the hip from behind, on the lap in profile.
  */
 const POPCORN_DX: Readonly<Record<string, number>> = { down: 0, up: -9, left: -5, right: 5 };
 const POPCORN_DY: Readonly<Record<string, number>> = { down: 11, up: 8, left: 9, right: 9 };
-/** Teia ao lado de um vizinho: no máximo isto (px) para fora do corpo. */
+/** Web beside a neighbor: at most this much (px) outside the body. */
 const WEB_MAX_OUT = 9;
-/** Tom das bordas da área externa (vinheta) e do gramado além dela. */
+/** Tone of the outdoor area's edges (vignette) and of the lawn beyond it. */
 const VIGNETTE_ALPHA = 0.2;
 const VIGNETTE_EDGE = `rgba(18,40,26,${VIGNETTE_ALPHA})`;
 
@@ -139,23 +139,23 @@ export class Renderer {
   private pool: Ent[] = [];
   private date = new Date();
   private icons: { x: number; y: number; name: IconName; bounce: number; alpha: number; badge: number }[] = [];
-  /** Pipoca, confete e chuva (pool fixo). */
+  /** Popcorn, confetti and rain (fixed pool). */
   readonly particles = new Particles();
-  /** Festa e alarme das salas (eventos do GitHub). */
+  /** Room parties and alarms (GitHub events). */
   private readonly roomFx = new RoomFxRenderer();
-  /** dt do frame atual (s), para as partículas emitidas durante o desenho. */
+  /** dt of the current frame (s), for particles emitted while drawing. */
   private dt = 0;
   private iconCount = 0;
   private elevatorVis: WallVis[] = [];
   private occupiedSlots = new Set<number>();
-  /** Hora forçada (?hora=21:30 na URL ou depuração) ou null para a hora local. */
+  /** Forced time (?hora=21:30 in the URL, or debugging) or null for local time. */
   hourOverride: number | null = parseHourParam(typeof location === 'undefined' ? '' : location.search);
-  /** Relógio da hora do dia (céu, iluminação, relógio de parede); o timelapse troca pelo instante reproduzido. */
+  /** Time-of-day clock (sky, lighting, wall clock); the timelapse swaps it for the replayed instant. */
   clock: () => number = () => Date.now();
-  /** Ciclo dia/noite: mapa de luz e brilhos. */
+  /** Day/night cycle: light map and glows. */
   readonly lighting: Lighting;
   assets: WorldAssets | null = null;
-  /** Último fator noturno aplicado (usado pelo overlay). */
+  /** Last night factor applied (used by the overlay). */
   night = 0;
   private clearColor = '#7fae62';
   private grass: CanvasPattern | null = null;
@@ -177,9 +177,9 @@ export class Renderer {
     this.assetsVersion++;
   }
 
-  // =================================================================== sincronização com a simulação
+  // =================================================================== sync with the simulation
 
-  /** Mantém caches e visuais coerentes com o prédio atual. */
+  /** Keeps caches and visuals consistent with the current building. */
   sync(theme: SeasonalTheme = 'none'): void {
     const sim = this.sim;
     const themeChanged = theme !== this.theme;
@@ -201,7 +201,7 @@ export class Renderer {
       for (const id of [...this.areas.keys()]) if (!want.has(id)) this.areas.delete(id);
       this.elevatorVis = this.areas.get('core:recepcao')?.wallItems.filter((w) => w.kind === 'elevator') ?? [];
     }
-    // salas: (re)constrói quando surgem, mudam de layout ou de versão (nome/tema)
+    // rooms: (re)built when they appear or change layout or version (name/theme)
     this.occupiedSlots.clear();
     for (const room of sim.rooms.values()) {
       if (!room.present) continue;
@@ -215,7 +215,7 @@ export class Renderer {
     this.builtAssetsVersion = this.assetsVersion;
   }
 
-  /** Camada base: área externa, pátios dos slots e fechamentos do corredor. */
+  /** Base layer: outdoor area, slot courtyards and corridor closures. */
   private buildBase(): void {
     const shape = this.sim.building.shape;
     this.baseKey = this.sim.building.key;
@@ -244,8 +244,8 @@ export class Renderer {
       for (const w of sh.windows) this.shellWindows.push(toWallVis(w, `shell:${sh.slot}`));
     }
     this.desaturate(ctx);
-    // fundo além da área desenhada: a própria grama (amostra espelhada 2x2, sem emendas), já no
-    // tom da borda da vinheta
+    // background beyond the drawn area: the grass itself (2x2 mirrored sample, seamless), already in
+    // the tone of the vignette edge
     const s = 4 * TILE;
     try {
       const tile = document.createElement('canvas');
@@ -263,7 +263,7 @@ export class Renderer {
         tctx.drawImage(c, 0, 0, s, s, 0, 0, s, s);
       }
       tctx.setTransform(1, 0, 0, 1, 0, 0);
-      // média da amostra: suaviza as manchas grandes (que viram faixas ao repetir), mantém o capim
+      // sample average: smooths out large blotches (which turn into stripes when tiled), keeps the grass blades
       const d = tctx.getImageData(0, 0, 2 * s, 2 * s).data;
       let r = 0;
       let g = 0;
@@ -282,7 +282,7 @@ export class Renderer {
       tctx.fillStyle = VIGNETTE_EDGE;
       tctx.fillRect(0, 0, 2 * s, 2 * s);
       this.grass = this.ctx.createPattern(tile, 'repeat');
-      // cor de fundo (antes do padrão carregar): a média já com o tom da vinheta
+      // background color (before the pattern loads): the average, already in the vignette tone
       const k = VIGNETTE_ALPHA;
       this.clearColor = `rgb(${Math.round((r / n) * (1 - k) + 18 * k)},${Math.round((g / n) * (1 - k) + 40 * k)},${Math.round((bl / n) * (1 - k) + 26 * k)})`;
     } catch {
@@ -293,7 +293,7 @@ export class Renderer {
     this.base = c;
   }
 
-  /** Grama ~15% menos saturada: o gramado não compete com o escritório. */
+  /** Grass ~15% less saturated: the lawn does not compete with the office. */
   private desaturate(ctx: CanvasRenderingContext2D): void {
     const b = this.exterior.bounds;
     ctx.save();
@@ -302,12 +302,12 @@ export class Renderer {
       ctx.fillStyle = 'rgba(128,128,128,0.16)';
       ctx.fillRect(b.x * TILE, b.y * TILE, b.w * TILE, b.h * TILE);
     } catch {
-      // navegador sem o modo de mistura: segue sem dessaturar
+      // browser without the blend mode: carry on without desaturating
     }
     ctx.restore();
   }
 
-  /** Acabamento da camada externa: bordas levemente mais escuras (vinheta) e o capacho da entrada. */
+  /** Finishing of the outdoor layer: slightly darker edges (vignette) and the entrance doormat. */
   private finishBase(ctx: CanvasRenderingContext2D, shape: Shape): void {
     const b = this.exterior.bounds;
     const x0 = b.x * TILE;
@@ -315,8 +315,8 @@ export class Renderer {
     const w = b.w * TILE;
     const h = b.h * TILE;
     ctx.save();
-    // vinheta: escurece com a distância ao prédio e chega ao tom da grama "de fora" exatamente na
-    // borda da área desenhada (máscara de 1 px por tile, ampliada com suavização)
+    // vignette: darkens with distance from the building and reaches the "outside" grass tone exactly at the
+    // edge of the drawn area (1 px mask per tile, scaled up with smoothing)
     const E = this.sim.building.rect;
     const ex1 = E.x + E.w;
     const ey1 = E.y + E.h;
@@ -348,9 +348,9 @@ export class Renderer {
       ctx.drawImage(m, x0, y0, w, h);
       ctx.imageSmoothingEnabled = false;
     } catch {
-      // sem vinheta
+      // no vignette
     }
-    // capacho diante da fachada de vidro da entrada (oeste do corredor)
+    // doormat in front of the entrance's glass façade (west end of the corridor)
     const my = (CORRIDOR_Y + 1.25) * TILE;
     const mx = (mainRect(shape).x - 1.75) * TILE;
     ctx.fillStyle = '#3f4652';
@@ -385,7 +385,7 @@ export class Renderer {
       const bx1 = this.baseX + this.base.width;
       const by1 = this.baseY + this.base.height;
       if (vx0 < this.baseX || vy0 < this.baseY || vx1 > bx1 || vy1 > by1) {
-        // padrão ancorado na origem do mundo (múltiplo do tile), alinhado à camada base
+        // pattern anchored at the world origin (a multiple of the tile), aligned with the base layer
         ctx.fillStyle = this.grass;
         ctx.save();
         ctx.translate(this.baseX, this.baseY);
@@ -395,7 +395,7 @@ export class Renderer {
     }
     const visible = (x: number, y: number, w: number, h: number) => x < vx1 && x + w > vx0 && y < vy1 && y + h > vy0;
 
-    // ---- camada base (só a parte visível)
+    // ---- base layer (visible part only)
     if (this.base) {
       const sx = Math.max(0, Math.floor(vx0 - this.baseX) - 1);
       const sy = Math.max(0, Math.floor(vy0 - this.baseY) - 1);
@@ -403,7 +403,7 @@ export class Renderer {
       const sh = Math.min(this.base.height - sy, Math.ceil(vy1 - vy0) + 3);
       if (sw > 0 && sh > 0) ctx.drawImage(this.base, sx, sy, sw, sh, this.baseX + sx, this.baseY + sy, sw, sh);
     }
-    // hora do ciclo dia/noite (preferência ou hora forçada; o relógio de parede acompanha a forçada)
+    // day/night cycle time (preference or forced time; the wall clock follows the forced one)
     if (this.hourOverride !== null) {
       const min = Math.round(this.hourOverride * 60);
       this.date.setHours(Math.floor(min / 60) % 24, min % 60);
@@ -411,7 +411,7 @@ export class Renderer {
     const hour = this.lighting.update(now, daylightModeOf(opts), this.hourOverride, this.date);
     const t = now;
 
-    // janelas da fachada nos slots vazios
+    // façade windows in empty slots
     for (const w of this.shellWindows) {
       const slot = Number(w.areaId.slice(6));
       const room = this.roomInSlot(slot);
@@ -420,7 +420,7 @@ export class Renderer {
       this.drawWindow(w, hour, t, 1);
     }
 
-    // ---- áreas: piso, paredes e itens de parede
+    // ---- areas: floor, walls and wall items
     for (const vis of this.areas.values()) {
       const p = vis.px;
       if (!visible(p.x, p.y - WALL_MARGIN, p.w, p.h + WALL_MARGIN)) continue;
@@ -434,10 +434,10 @@ export class Renderer {
       this.drawWalls(vis, anim, now, hour);
     }
     const view = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
-    // alarme de CI: tom vermelho no piso (por baixo dos móveis e personagens)
+    // CI alarm: red tint on the floor (under furniture and characters)
     this.roomFx.drawFloor(ctx, this.sim, now, view);
 
-    // ---- entidades ordenadas por profundidade
+    // ---- entities sorted by depth
     const ents = this.ents;
     ents.length = 0;
     let used = 0;
@@ -467,7 +467,7 @@ export class Renderer {
         if (fs?.front) push(K.FurnFront, f.ay + 0.5, f, vis, s);
       }
     }
-    // os agentes e, na visita, o visitante
+    // the agents and, in a visit, the visitor
     for (const ch of this.sim.people()) {
       const head = this.headOf(ch);
       head.visible = false;
@@ -484,7 +484,7 @@ export class Renderer {
       if (!visible(prop.x - 24, prop.y - 56, 48, 60)) continue;
       let alpha = 1;
       if (prop.whenRoom !== undefined) {
-        // ex.: cerca viva diante do caminho do jardim — surge junto com a sala
+        // e.g. hedge in front of the garden path — appears together with the room
         const room = this.roomInSlot(prop.whenRoom);
         if (!room) continue;
         if (room.phase === 'building' || room.phase === 'dismantling') {
@@ -533,7 +533,7 @@ export class Renderer {
       }
     }
     this.drawPingPong(now);
-    // ---- espera de shell: teias de aranha, confete/pipoca/chuva (por cima das entidades)
+    // ---- shell wait: spider webs, confetti/popcorn/rain (on top of the entities)
     this.drawCobwebs(now);
     this.drainEffects(now);
     this.roomFx.emit(this.particles, this.sim, now, dt, view);
@@ -547,7 +547,7 @@ export class Renderer {
     }
     this.drawElfTree(visible);
 
-    // ---- luz: noite, salas apagadas, brilhos
+    // ---- light: night, unlit rooms, glows
     this.night = this.lighting.night;
     this.drawLighting(now, vx0, vy0, vx1, vy1);
     if (this.theme !== 'none') {
@@ -557,10 +557,10 @@ export class Renderer {
         drawSeasonalLights(ctx, areaTheme(this.theme, vis.room), vis.layout, vis.room ? vis.room.light(now) : 1);
       }
     }
-    // giroflex e balão "!" do alarme de CI (brilham também no escuro)
+    // beacon light and "!" bubble of the CI alarm (they glow in the dark too)
     this.roomFx.drawLights(ctx, this.sim, this.heads, now, view);
 
-    // ---- ícones sobre as cabeças (por cima da escuridão)
+    // ---- icons over the heads (on top of the darkness)
     for (let i = 0; i < this.iconCount; i++) {
       const ic = this.icons[i];
       const s = this.icon(ic.name);
@@ -570,7 +570,7 @@ export class Renderer {
       const iy = Math.round(ic.y - s.ay - ic.bounce);
       ctx.drawImage(s.canvas, ix, iy);
       if (ic.badge > 1) {
-        // "×N": mais de um shell rodando
+        // "×N": more than one shell running
         const b = countBadge(ic.badge);
         ctx.drawImage(b.canvas, ix + s.canvas.width - 1, iy + s.canvas.height - b.ay + 1);
       }
@@ -584,7 +584,7 @@ export class Renderer {
     return h;
   }
 
-  /** Remove entradas de personagens que já saíram. */
+  /** Removes entries of characters that have left. */
   pruneHeads(): void {
     for (const id of this.heads.keys()) if (!this.sim.person(id)) this.heads.delete(id);
   }
@@ -622,7 +622,7 @@ export class Renderer {
     return undefined;
   }
 
-  // =================================================================== áreas
+  // =================================================================== areas
 
   private drawFloor(vis: AreaVis, anim: BuildAnim): void {
     const { ctx } = this;
@@ -632,7 +632,7 @@ export class Renderer {
       return;
     }
     if (anim.floor <= 0) return;
-    // varredura: tiles surgem em diagonal (e somem na ordem inversa na desmontagem)
+    // sweep: tiles appear diagonally (and vanish in reverse order on disassembly)
     const w = vis.layout.rect.w;
     const h = vis.layout.rect.h;
     const k = anim.floor * 1.06;
@@ -651,7 +651,7 @@ export class Renderer {
     const rise = Math.round((1 - anim.walls) * 10);
     if (anim.walls < 1) ctx.globalAlpha = anim.walls;
     ctx.drawImage(vis.walls, p.x, p.y - WALL_MARGIN + rise);
-    // itens de parede dinâmicos
+    // dynamic wall items
     for (const w of vis.wallItems) this.drawWallItem(vis, w, now, hour, rise);
     ctx.globalAlpha = 1;
     if (vis.sign && anim.sign > 0) {
@@ -710,7 +710,7 @@ export class Renderer {
         const o = wallItemOrigin(w, s.base);
         ctx.drawImage(s.base.canvas, o.x, o.y + rise);
         const r = s.base.rects?.tv;
-        // roda na TV do lounge: o programa escolhido (futebol, novela, desenho) ou o videogame
+        // playing on the lounge TV: the chosen program (soccer, soap opera, cartoon) or the video game
         const live = this.sim.social.tvScreen();
         const mode = live ? live.mode : TV_MODES[Math.floor(now / 9000) % TV_MODES.length];
         const seed = live ? live.seed : w.seed;
@@ -751,14 +751,14 @@ export class Renderer {
     ctx.drawImage(s.base.canvas, o.x, o.y + rise);
   }
 
-  /** Placa com o nome (o texto nítido é escrito pelo overlay em espaço de tela). */
+  /** Name sign (the crisp text is written by the overlay in screen space). */
   private drawSign(vis: AreaVis, w: WallVis, slide: number): void {
     const { ctx } = this;
     if (!vis.room && this.assets?.signage && vis.id === 'core:recepcao') {
       const a = this.assets.signage;
       const maxW = 5 * TILE;
       const maxH = 24;
-      // escala inteira (pixels nítidos) sempre que couber
+      // integer scale (crisp pixels) whenever it fits
       const fit = Math.min(maxW / a.w, maxH / a.h);
       const k = fit >= 1 ? Math.floor(fit) : fit;
       const dw = Math.round(a.w * k);
@@ -775,7 +775,7 @@ export class Renderer {
     ctx.drawImage(s.base.canvas, o.x, o.y + slide);
   }
 
-  /** Retângulo (px de mundo) da área de texto da placa de uma área, se houver. */
+  /** Rectangle (world px) of the text area of an area's sign, if any. */
   signRect(vis: AreaVis): { x: number; y: number; w: number; h: number } | null {
     if (!vis.sign) return null;
     if (!vis.room && this.assets?.signage && vis.id === 'core:recepcao') return null;
@@ -790,8 +790,8 @@ export class Renderer {
   }
 
   /**
-   * Retângulo (px de mundo) do quadro (`painting`) da parede de uma área, pintado junto com as paredes: a cena Visita
-   * põe o quadro de carimbos da portaria em cima do da recepção.
+    * Rectangle (world px) of the frame (`painting`) on an area's wall, painted together with the walls: the Visit scene
+    * puts the gatehouse stamp board on top of the reception one.
    */
   paintingRect(areaId: string): { x: number; y: number; w: number; h: number } | null {
     const vis = this.areas.get(areaId);
@@ -805,7 +805,7 @@ export class Renderer {
     return { x: o.x + b.x, y: o.y + b.y, w: b.w, h: b.h };
   }
 
-  /** Luminância média da área de texto da placa (para escolher a cor do texto). */
+  /** Average luminance of the sign's text area (to pick the text color). */
   signIsDark(vis: AreaVis): boolean {
     const s = vis.sign ? wallSprites(this.art, 'sign', vis.sign.variant, 0, vis.sign.seed) : null;
     if (!s) return false;
@@ -830,7 +830,7 @@ export class Renderer {
     return dark;
   }
 
-  // =================================================================== entidades
+  // =================================================================== entities
 
   private furnState(f: FurnVis, now: number): number {
     if (f.kind === 'coffee_machine') return (this.sim.machineUntil.get(f.id) ?? 0) > now ? 1 : 0;
@@ -863,7 +863,7 @@ export class Renderer {
       } else if (f.kind === 'coffee_machine' && state === 1) {
         this.drawSteam(f.ax, dy + 2, now, f.seed);
       } else if (f.kind === 'arcade' && s.rects?.screen) {
-        // duelo no fliperama: as duas máquinas mostram a partida
+        // arcade duel: both machines show the match
         const seed = this.sim.social.arcadeSeed();
         const r = s.rects.screen;
         if (seed !== null) this.safe(() => this.art.drawScreen(ctx, { x: dx + r.x, y: dy + r.y, w: r.w, h: r.h }, 'game', now, seed));
@@ -872,7 +872,7 @@ export class Renderer {
     if (scaled) ctx.restore();
   }
 
-  /** Tela do monitor: segue a atividade de quem senta ali. */
+  /** Monitor screen: follows the activity of whoever sits there. */
   deskScreen(f: FurnVis, area: AreaVis): ScreenMode {
     const room = area.room;
     if (room && room.light(this.sim.now) < 0.3) return 'off';
@@ -883,7 +883,7 @@ export class Renderer {
     if (ch.mode === 'wait') return 'alert';
     if (!seated) return 'idle';
     if (ch.mode === 'work') return screenModeFor(ch.info.activity?.kind);
-    // esperando um shell: terminal com a barra de progresso andando (o "filme" da pipoca)
+    // waiting on a shell: terminal with the progress bar moving (the popcorn "movie")
     if (ch.mode === 'shell') return 'progress';
     return 'idle';
   }
@@ -904,11 +904,11 @@ export class Renderer {
   private drawCharacter(ch: Character, now: number, sel: { agent: string | null; hover: string | null }): void {
     const { ctx } = this;
     const head = this.headOf(ch);
-    // faixa lateral de quem anda (dois no mesmo caminho não viram um boneco de duas cabeças)
+    // side lane for walkers (two on the same path don't merge into a two-headed figure)
     const x = Math.round(ch.x + ch.offX);
     const y = Math.round(ch.y + ch.offY);
     ctx.globalAlpha = ch.alpha;
-    // anéis no chão (seleção, hover, alerta)
+    // rings on the floor (selection, hover, alert)
     if (ch.mode === 'wait') this.drawAlertRing(x, y, now);
     if (sel.agent === ch.id) this.drawRing(x, y, '#7fe3ff', now, true);
     else if (sel.hover === ch.id) this.drawRing(x, y, '#ffffff', now, false);
@@ -931,7 +931,7 @@ export class Renderer {
       sprite = null;
     }
     if (!sprite && (req.pose === 'wait' || req.held === 'popcorn')) {
-      // arte ainda sem a pose de espera/pipoca: sentado parado
+      // art still without the wait/popcorn pose: seated and still
       req.pose = req.pose === 'wait' ? 'sit' : req.pose;
       req.held = 'none';
       try {
@@ -962,12 +962,12 @@ export class Renderer {
     head.feetY = y;
     head.visible = true;
     head.depth = ch.depth();
-    // ícone sobre a cabeça (desenhado depois da luz)
+    // icon over the head (drawn after the light)
     let name: IconName | null = ch.mode === 'wait' ? 'alert' : ch.icon;
     const shell = ch.mode === 'shell' && ch.shellSince > 0 && !ch.leaving;
     let badge = 0;
     if (shell && (!name || name === 'zzz')) {
-      // ampulheta virando (com "×N" quando há mais de um shell)
+      // hourglass flipping (with "×N" when there is more than one shell)
       name = hourglassIcon(now);
       badge = ch.shellCount;
     }
@@ -982,14 +982,14 @@ export class Renderer {
               : Math.round(Math.max(0, 1 - (now - ch.iconAt) / 250) * 4);
       const lift = name === 'storm' ? STORM_LIFT : 0;
       this.pushIcon(x, head.y - 2 - lift, name, bounce, ch.alpha, badge);
-      // chuva: pingos caem da nuvem até a cabeça
+      // rain: drops fall from the cloud to the head
       if (name === 'storm' && Math.random() < this.dt * 24) this.particles.rain(x - 3 + Math.floor(Math.random() * 7), head.y - 3 - lift, lift + 1);
     }
     if (shell && ch.shellStage === 'nap' && ch.pose === 'sleep') {
-      // cochilando: "zzz" flutuando acima e à direita da ampulheta (o selo "×N" fica embaixo)
+      // dozing: "zzz" floating above and to the right of the hourglass (the "×N" badge sits below)
       this.pushIcon(x + 10, head.y - 13, 'zzz', Math.round(Math.sin(now / 500) * 1.5), ch.alpha, 0);
     }
-    // pipoca pulando do balde de vez em quando
+    // popcorn popping out of the bucket every now and then
     if (shell && ch.pose === 'wait' && ch.held === 'popcorn' && sprite && now >= ch.popcornAt) {
       ch.popcornAt = now + 450 + Math.random() * 1200;
       const px = x - 1 + (POPCORN_DX[ch.dir] ?? 0);
@@ -1012,7 +1012,7 @@ export class Renderer {
     this.iconCount++;
   }
 
-  /** Sprite do personagem no frame da animação (tolera arte sem a pose: contagem/duração inválidas). */
+  /** Character sprite at the animation frame (tolerates art without the pose: invalid count/duration). */
   private charSprite(req: CharacterFrameRequest, animT: number): Sprite {
     const { art } = this;
     const count = Math.max(1, art.poseFrameCount(req.pose) || 1);
@@ -1022,13 +1022,13 @@ export class Renderer {
   }
 
   /**
-   * Teia de aranha no canto do personagem que espera um shell há mais de 10 min (escala inteira:
-   * 1x, depois 2x com 20 min). Cochilando, fica coberto: uma teia de cada lado. A teia vai para o
-   * lado sem vizinho; com vizinhos dos dois lados, cobre mais o próprio personagem (não invade a
-   * mesa ao lado).
+    * Spider web in the corner of a character who has been waiting on a shell for more than 10 min (integer scale:
+    * 1x, then 2x at 20 min). When dozing, they get covered: one web on each side. The web goes to the
+    * side without a neighbor; with neighbors on both sides, it covers more of the character itself (it doesn't spill onto the
+    * desk next door).
    */
   private drawCobwebs(now: number): void {
-    // visita: nenhum tempo veio do mundo, então nada de teia
+    // visit: no time came from the world, so no web
     if (this.sim.visit) return;
     const { ctx } = this;
     for (const ch of this.sim.chars.values()) {
@@ -1050,7 +1050,7 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Alguém visível logo ao lado (mesma fileira, até ~2 mesas) no lado `side` (-1 esquerda, 1 direita)? */
+  /** Is someone visible right beside them (same row, up to ~2 desks) on side `side` (-1 left, 1 right)? */
   private neighborAt(head: HeadInfo, side: -1 | 1): boolean {
     for (const h of this.heads.values()) {
       if (h === head || !h.visible || Math.abs(h.feetY - head.feetY) > 10) continue;
@@ -1061,8 +1061,8 @@ export class Renderer {
   }
 
   /**
-   * Uma teia presa no ombro (o canto da teia, em cima, fica para fora do corpo; espelhada do lado
-   * direito). Com vizinho do lado, no máximo WEB_MAX_OUT px para fora: o resto cobre o personagem.
+    * A web stuck to the shoulder (the web's corner, at the top, sticks out of the body; mirrored on the right
+    * side). With a neighbor on that side, at most WEB_MAX_OUT px outside: the rest covers the character.
    */
   private drawWeb(web: Sprite, head: HeadInfo, left: boolean, scale: number, crowded: boolean): void {
     const { ctx } = this;
@@ -1083,8 +1083,8 @@ export class Renderer {
   }
 
   /**
-   * Efeitos pedidos pela simulação: confete (shell concluído) sobre quem comemora, moedinhas voando de
-   * quem perdeu a aposta para quem ganhou e o brilho de quem se arrumou no espelho.
+    * Effects requested by the simulation: confetti (shell finished) over whoever celebrates, coins flying from
+    * whoever lost the bet to whoever won, and the sparkle of whoever tidied up at the mirror.
    */
   private drainEffects(now: number): void {
     const fx = this.sim.effects;
@@ -1112,8 +1112,8 @@ export class Renderer {
   };
 
   /**
-   * Reflexo no espelho do banheiro: quem está em pé diante da pia, virado para o espelho, aparece de
-   * frente no vidro (rosto centrado, meio transparente, com o véu azulado do vidro por cima).
+    * Reflection in the restroom mirror: whoever stands in front of the sink, facing the mirror, appears
+    * front-facing in the glass (face centered, semi-transparent, with the glass's bluish veil on top).
    */
   private drawReflection(w: WallVis, gx: number, gy: number, gw: number, gh: number): void {
     const { ctx } = this;
@@ -1200,7 +1200,7 @@ export class Renderer {
 
   private pavings = new Map<string, HTMLCanvasElement>();
 
-  /** Trecho de calçada (2x2 tiles) com o mesmo desenho da calçada vizinha (coordenadas de mundo). */
+  /** Sidewalk stretch (2x2 tiles) with the same pattern as the neighboring sidewalk (world coordinates). */
   private pavingCanvas(prop: ExteriorProp): HTMLCanvasElement {
     const key = `${prop.x},${prop.y}`;
     let c = this.pavings.get(key);
@@ -1266,29 +1266,29 @@ export class Renderer {
       const s = this.art.iconSprite(name);
       if (s && s.canvas.width > 0) return s;
     } catch {
-      // arte ainda sem este ícone
+      // art still without this icon
     }
     return fallbackIcon(name);
   }
 
-  // =================================================================== luz
+  // =================================================================== light
 
   /**
-   * Luz: o mapa do ciclo dia/noite (exterior, interiores e halos; nada de dia), a sombra das salas
-   * com a luz apagada (e a transição de acender/apagar) e os brilhos por cima.
+    * Light: the day/night cycle map (exterior, interiors and halos; nothing by day), the shadow of rooms
+    * with the light off (and the on/off transition) and the glows on top.
    */
   private drawLighting(now: number, vx0: number, vy0: number, vx1: number, vy1: number): void {
     const { ctx } = this;
     const view = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
     this.lighting.drawAmbient(ctx, this, view, now, this.dt);
     const n = this.night;
-    // salas com a luz apagada (e a transição de acender/apagar)
+    // rooms with the light off (and the on/off transition)
     for (const vis of this.areas.values()) {
       const room = vis.room;
       if (!room || !vis.layout.shade) continue;
       const light = room.light(now);
       const strength = (room.phase === 'building' ? 0.5 : 0.74) + 0.1 * n;
-      // durante a montagem/desmontagem, a escuridão acompanha o piso visível (o pátio não escurece)
+      // during assembly/disassembly, the darkness follows the visible floor (the courtyard doesn't darken)
       const cover = room.phase === 'building' || room.phase === 'dismantling' ? buildAnim(room.phase, room.progress(now)).floor : 1;
       const dark = (1 - light) * strength * cover;
       if (dark <= 0.01) continue;
@@ -1303,7 +1303,7 @@ export class Renderer {
     try {
       fn();
     } catch {
-      // arte incompleta (stub) não pode derrubar o mundo
+      // incomplete art (stub) must not bring down the world
     }
   }
 

@@ -86,7 +86,7 @@ export function createIngestHandler(deps: IngestDeps): (req: IncomingMessage, re
     if (res.headersSent) return void res.destroy();
     if (err instanceof HttpError) sendJson(res, err.status, { error: err.message });
     else if (err instanceof InvalidIngest || err instanceof InvalidPermission || err instanceof InvalidMessage) sendJson(res, 400, { error: err.message });
-    else sendJson(res, 500, { error: tr('erro interno') });
+    else sendJson(res, 500, { error: tr('internal error') });
   };
 
   /** The session id of a body, prefixed with the machine (400 if missing or malformed). */
@@ -126,9 +126,9 @@ export function createIngestHandler(deps: IngestDeps): (req: IncomingMessage, re
   const wait = (m: MachineRef, req: IncomingMessage, res: ServerResponse, url: URL, id: string) => {
     const registry = deps.permissions;
     const owner = registry?.agentOf(id);
-    if (!registry || !owner?.startsWith(remotePrefix(m.id))) return sendJson(res, 404, { error: tr('pedido desconhecido') });
+    if (!registry || !owner?.startsWith(remotePrefix(m.id))) return sendJson(res, 404, { error: tr('unknown request') });
     const w = registry.wait(id, waitMs(url));
-    if (!w) return sendJson(res, 404, { error: tr('pedido desconhecido') });
+    if (!w) return sendJson(res, 404, { error: tr('unknown request') });
     req.socket.setTimeout(0);
     res.on('close', () => {
       if (!res.writableEnded) w.cancel();
@@ -178,25 +178,25 @@ export function createIngestHandler(deps: IngestDeps): (req: IncomingMessage, re
       const wait = throttle.retryAfter();
       if (wait > 0) {
         res.setHeader('Retry-After', String(wait));
-        sendJson(res, 429, { error: tr('Muitas tentativas. Tente de novo em {0} s.', [wait]) });
+        sendJson(res, 429, { error: tr('Too many attempts. Try again in {0} s.', [wait]) });
         return true;
       }
       throttle.fail();
       res.setHeader('WWW-Authenticate', 'Bearer');
-      sendJson(res, 401, { error: tr('token de máquina inválido: crie um com npm run ingest:token -- add <nome> no servidor') });
+      sendJson(res, 401, { error: tr('invalid machine token: create one with npm run ingest:token -- add <name> on the server') });
       return true;
     }
     if (!buckets.take(machine.id)) {
       req.resume();
       res.setHeader('Retry-After', '1');
-      sendJson(res, 429, { error: tr('requisições demais desta máquina') });
+      sendJson(res, 429, { error: tr('too many requests from this machine') });
       return true;
     }
     const post = (handler: (m: MachineRef, req: IncomingMessage, res: ServerResponse) => Promise<void>) => {
       if (method !== 'POST') {
         req.resume();
         res.setHeader('Allow', 'POST');
-        return sendJson(res, 405, { error: tr('método não permitido') });
+        return sendJson(res, 405, { error: tr('method not allowed') });
       }
       handler(machine, req, res).catch((err) => fail(res, err));
     };
@@ -204,7 +204,7 @@ export function createIngestHandler(deps: IngestDeps): (req: IncomingMessage, re
       req.resume();
       if (method !== 'GET') {
         res.setHeader('Allow', 'GET');
-        return sendJson(res, 405, { error: tr('método não permitido') });
+        return sendJson(res, 405, { error: tr('method not allowed') });
       }
       try {
         handler();
@@ -225,7 +225,7 @@ export function createIngestHandler(deps: IngestDeps): (req: IncomingMessage, re
       if (m) get(() => wait(machine, req, res, url, m[1]));
       else {
         req.resume();
-        sendJson(res, 404, { error: tr('rota desconhecida') });
+        sendJson(res, 404, { error: tr('unknown route') });
       }
     }
     return true;

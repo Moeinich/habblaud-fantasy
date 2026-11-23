@@ -14,7 +14,7 @@ import { MACHINES_FILE, MachineStore } from '../server/ingest/machines';
 import { tr } from '../shared/i18n';
 
 const USAGE = tr(
-  'Uso: npm run ingest:token -- <add|remove|list> [nome] [--label "Nome exibido"]\n\n  add <nome>      cria (ou troca) o token da máquina e mostra uma única vez\n  remove <nome>   revoga o token da máquina\n  list            lista as máquinas (nunca os tokens)\n\nO nome: letras minúsculas, números e hífens (ex.: mac-anna). Os tokens ficam só como hash em\n<HABBLAUD_DATA_DIR ou ~/.habblaud>/ingest-machines.json.',
+  'Usage: npm run ingest:token -- <add|remove|list> [name] [--label "Display name"]\n\n  add <name>      creates (or replaces) the machine\'s token and shows it once\n  remove <name>   revokes the machine\'s token\n  list            lists the machines (never the tokens)\n\nThe name: lowercase letters, digits and dashes (e.g. mac-anna). Tokens are only stored as a hash in\n<HABBLAUD_DATA_DIR or ~/.habblaud>/ingest-machines.json.',
 );
 
 export function machinesFile(env: NodeJS.ProcessEnv): string {
@@ -26,20 +26,20 @@ export function run(argv: string[], env: NodeJS.ProcessEnv, out: (l: string) => 
   const store = new MachineStore(machinesFile(env));
   if (command === 'list') {
     const list = store.machines();
-    if (!list.length) out(tr('Nenhuma máquina ainda. Crie uma com: npm run ingest:token -- add <nome>'));
+    if (!list.length) out(tr('No machines yet. Create one with: npm run ingest:token -- add <name>'));
     for (const m of list) out(`${m.id}${m.name !== m.id ? ` (${m.name})` : ''}  ${new Date(m.createdAt).toISOString()}`);
     return 0;
   }
   if ((command === 'add' || command === 'remove') && name) {
     if (command === 'remove') {
-      out(store.remove(name) ? tr('Token de "{0}" revogado.', [name]) : tr('Nenhuma máquina "{0}".', [name]));
+      out(store.remove(name) ? tr('Token of "{0}" revoked.', [name]) : tr('No machine "{0}".', [name]));
       return 0;
     }
     const i = rest.indexOf('--label');
     const label = i >= 0 ? rest[i + 1] : undefined;
     try {
       const token = store.add(name, label);
-      out(tr('Token da máquina "{0}" (aparece só agora; guarde-o e use no npm run remote:install da máquina):', [name]));
+      out(tr('Token of machine "{0}" (shown only now; keep it and use it in npm run remote:install on that machine):', [name]));
       out('');
       out(`  ${token}`);
       out('');
