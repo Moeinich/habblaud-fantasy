@@ -1,7 +1,7 @@
 {
   "name": "habblaud-remote",
   "displayName": "Habblaud: send this machine's sessions to a central Habblaud",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Asynchronous hooks that send what each Claude Code session does (prompts, tools, subagents, waits, GitHub results) to a Habblaud server on another machine (HABBLAUD_SERVER_URL + HABBLAUD_SERVER_TOKEN). Fire-and-forget: they never block the session.",
   "author": { "name": "Márcio Junior", "url": "https://github.com/marmottajr" },
   "homepage": "https://github.com/marmottajr/habblaud#readme",

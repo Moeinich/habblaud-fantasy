@@ -10,6 +10,16 @@ one (0.**3**.0).
 
 ## [Unreleased]
 
+### Changed
+
+- **A tighter hub.** The Great Hall, Mess Hall, Bathhouse and Tavern now stand right next to each other, without the
+  open square between them. The walkways between the rows run through the halls: in at the Great Hall's back from
+  the top row, and out at the Bathhouse's back to the bottom row.
+
+### Fixed
+
+- **Plugin versions.** The Claude Code plugins and their marketplace now carry the app's version (1.1.0) again.
+
 ## [1.1.0] - 2026-11-23
 
 ### Added

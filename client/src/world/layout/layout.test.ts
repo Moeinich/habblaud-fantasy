@@ -38,7 +38,7 @@ describe('slot mapping', () => {
     expect(slotWing(cellSlot(WEST_GAP_COL - 1, 'north', 'north'))).toBe('nw');
     expect(slotWing(cellSlot(EAST_COL0, 'north', 'north'))).toBe('ne');
     expect(slotWing(cellSlot(PLAZA_COL - 1, 'north', 'north'))).toBe('nwr');
-    expect(slotWing(cellSlot(PLAZA_COL + 2, 'south', 'south'))).toBe('ber');
+    expect(slotWing(cellSlot(PLAZA_COL + 1, 'south', 'south'))).toBe('ber');
     expect(slotWing(cellSlot(WEST_GAP_COL - 1, 'north', 'main'))).toBe('mw');
     expect(slotWing(cellSlot(EAST_COL0, 'north', 'main'))).toBe('me');
     // row 1 is shared: the top zones on the north side of its corridor, the bottom zones on the south side

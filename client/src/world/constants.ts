@@ -18,19 +18,21 @@ export const BUILDING_H = ROOM_H * 2 + CORRIDOR_H;
 // of rooms either side of a corridor: the hub (the core halls, then the town square below them) takes the middle of
 // rows 1 and 2, and each race holds one corner as an L — the night elves top left, the orcs top right, the undead
 // bottom left and the humans bottom right. An L is a side arm in the row next to the hub and a top or bottom arm
-// in the outer row that reaches one column in over the hub; both grow outwards, away from the middle. A walkway
-// runs down the square's column through every row. Coordinates stay non-negative: the west arms have room
-// reserved before the hub.
-/** Column of the square: the middle of the hub, where the walkways run from row to row. */
+// in the outer row; both grow outwards, away from the middle. The hub is the four core halls side by side; the
+// walkways between the rows run through the west halls (in at the Great Hall's back, out at the Bathhouse's).
+// Coordinates stay non-negative: the west arms have room reserved before the hub.
+/** The middle of the hub: the first column east of it (everything from here on is the east half). */
 export const PLAZA_COL = 16;
-/** The hub's west core column (reception over the bathhouse) and east one (mess hall over the tavern). */
+/** The hub's west core column (reception over the bathhouse) and east one (mess hall over the tavern), side by side. */
 export const CORE_COL0 = PLAZA_COL - 1;
-export const CORE_EAST_COL = PLAZA_COL + 1;
+export const CORE_EAST_COL = PLAZA_COL;
+/** Column the walkways between the rows run down (through the west halls). */
+export const WALK_COL = CORE_COL0;
 /** Open columns between the hub and the side arms (the corridors cross them outdoors). */
-export const WEST_GAP_COL = PLAZA_COL - 2;
-export const EAST_GAP_COL = PLAZA_COL + 2;
-/** First column of the side arms east of the hub (rows 1 and 2); the outer rows start right next to the square. */
-export const EAST_COL0 = PLAZA_COL + 3;
+export const WEST_GAP_COL = CORE_COL0 - 1;
+export const EAST_GAP_COL = CORE_EAST_COL + 1;
+/** First column of the arms east of the hub. */
+export const EAST_COL0 = EAST_GAP_COL + 1;
 /** Columns the west side arms can take (the outer rows can take two more). */
 export const WEST_COLS = WEST_GAP_COL;
 /** Lawn between two rows (tiles): none, the rows sit flush so a zone's two rows form one block. */

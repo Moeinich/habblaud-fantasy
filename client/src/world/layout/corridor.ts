@@ -3,7 +3,7 @@
 // Floors: each arm's corridor is wall-to-wall carpet in the race's colours (layout/departments.ts), with a runner in
 // the race's style and a woven threshold band where the arm begins; the hub's columns are paved in stone (the core
 // keeps its own carpet), so the carpets visibly branch off the middle. Water coolers, benches and plants line the way.
-import { COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, EAST_GAP_COL, PLAZA_COL, ROOM_H, WEST_GAP_COL } from '../constants';
+import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, EAST_GAP_COL, PLAZA_COL, ROOM_H, WALK_COL, WEST_GAP_COL } from '../constants';
 import { AreaBuilder } from './builder';
 import { CORE_CARPET, DEPT_CARPET, WING_RACE } from './departments';
 import { ARMS, armCol, corridorRect, stripArms, stripIndex, stripY, walkways, type Shape, type Strip, type Wing } from './geometry';
@@ -110,8 +110,8 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   const middle = strip === 'main';
   // stone paving only where the hub is (the core halls and the square's column): from its edge outwards every road
   // carries the carpet of the race it leads to
-  const pave0 = middle ? CORE_COL0 : PLAZA_COL;
-  const pave1 = (middle ? CORE_EAST_COL : PLAZA_COL) + 1;
+  const pave0 = middle ? CORE_COL0 : WALK_COL;
+  const pave1 = (middle ? CORE_EAST_COL : WALK_COL) + 1;
   const longest = (arms: Wing[]) => arms.reduce((a, b) => (shape[b] > shape[a] ? b : a));
   const wr = WING_RACE[longest(west)];
   const er = WING_RACE[longest(east)];
@@ -147,8 +147,10 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
       wingColumn(b, lx(col), Math.abs(col - PLAZA_COL), `talk:${ROW_CORRIDOR[strip]}:${col}`, false, false);
     }
   }
-  // the hub's paving: planters at the corners of the square's column, benches by the core, the walkway mouths clear
-  const px = lx(PLAZA_COL);
+  // the walkway's column on the outer rows: planters at its corners, the walkway's mouth kept clear (on row 1 the
+  // walkways go through the halls)
+  const px = lx(WALK_COL);
+  if (strip !== 'main') {
   if (!up) {
     b.furn('plant_tall', px + 2, 0, 'bonsai', { order: 0.5 });
     b.furn('plant_small', px + 13, 0, 'flower', { order: 0.5 });
@@ -165,6 +167,7 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   }
   b.spot('talk', px + 3, 2, 'right', { group: `talk:${ROW_CORRIDOR[strip]}:square`, dx: -1 });
   b.spot('talk', px + 4, 2, 'left', { group: `talk:${ROW_CORRIDOR[strip]}:square`, dx: 1 });
+  }
   if (strip === 'main') {
     for (const col of [CORE_COL0, CORE_EAST_COL]) {
       const cx = lx(col);
@@ -201,9 +204,12 @@ export function layoutBottomCorridor(shape: Shape): AreaLayout | null {
 export function layoutWalkways(shape: Shape): AreaLayout[] {
   const out: AreaLayout[] = [];
   for (const [hi, lo] of walkways(shape)) {
-    const y0 = stripY(hi) + ROOM_H + CORRIDOR_H;
-    const h = stripY(lo) + ROOM_H - y0;
-    const b = new AreaBuilder(WALKWAY_FROM[hi], 'corridor', { x: PLAZA_COL * COL_W + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
+    // from the upper row's corridor to the lower one's, except through the hub's row: there it ends at the Great
+    // Hall's open back / starts at the Bathhouse's (people walk through the hall)
+    const y0 = hi === 'main' ? stripY('main') + BUILDING_H : stripY(hi) + ROOM_H + CORRIDOR_H;
+    const y1 = lo === 'main' ? stripY('main') : stripY(lo) + ROOM_H;
+    const h = y1 - y0;
+    const b = new AreaBuilder(WALKWAY_FROM[hi], 'corridor', { x: WALK_COL * COL_W + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
     {
       b.floor('grass', 0, 0, WALKWAY_W, h, 580 + stripIndex(hi));
       b.floor('tile_check', 0.6, 0, WALKWAY_W - 1.2, h, 582 + stripIndex(hi));

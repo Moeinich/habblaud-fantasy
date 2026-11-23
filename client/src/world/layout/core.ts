@@ -7,6 +7,7 @@ const CX = CORE_COL0 * COL_W;
 /** The east core column, across the square. */
 const CXE = CORE_EAST_COL * COL_W;
 import { AreaBuilder, SEATED_SORT_BIAS } from './builder';
+import { WALKWAY_LX, WALKWAY_W } from './corridor';
 import type { AreaLayout } from './types';
 
 export const RECEPTION_ID = 'core:recepcao';
@@ -68,6 +69,8 @@ export function layoutReception(): AreaLayout {
   // open to the corridor: glass partitions at the ends
   for (const lx of [1, 2, 3, 12, 13, 14]) b.furn('glass_partition', lx, 11, 'h', { order: 0.15 });
   b.walk(1, 2, 14, 10);
+  // the walkway from the top row comes in at the hall's open back (it opens onto the hub's ring)
+  b.walk(WALKWAY_LX, 0, WALKWAY_W, 2);
   b.spot('talk', 6, 9, 'right', { group: 'talk:recepcao', dx: -1 });
   b.spot('talk', 7, 9, 'left', { group: 'talk:recepcao', dx: 1 });
 
@@ -89,6 +92,8 @@ export function layoutRestroom(): AreaLayout {
   b.cap(15.5, 0, 0.5, 12, wall);
   b.walk(1, 2, 14, 9);
   b.walk(7, 0, 2, 2);
+  // the walkway to the bottom row leaves at the back, straight down from the door
+  b.walk(WALKWAY_LX, 10, WALKWAY_W, 2);
   b.area.door = { x: CX + 7, y: SOUTH_Y, w: 2, h: 2 };
 
   // sinks with mirrors

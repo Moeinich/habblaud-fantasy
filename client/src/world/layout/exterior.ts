@@ -2,7 +2,7 @@
 // cobbles and packed earth by art/surfaces/floor.ts); patio/garden in slots without a room.
 import type { WallStyle } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
-import { COL_W, CORRIDOR_H, CORRIDOR_Y, CORE_COL0, CORE_EAST_COL, EAST_GAP_COL, ELF_TREE_UP, EXT_EAST, EXT_NORTH, EXT_SOUTH, EXT_WEST, PLAZA_COL, ROOM_H, TILE, WEST_GAP_COL } from '../constants';
+import { COL_W, CORRIDOR_H, CORRIDOR_Y, CORE_COL0, CORE_EAST_COL, EAST_GAP_COL, ELF_TREE_UP, EXT_EAST, EXT_NORTH, EXT_SOUTH, EXT_WEST, ROOM_H, TILE, WALK_COL, WEST_GAP_COL } from '../constants';
 import { biomeMap, biomeProp, cellRace } from './biome';
 import { hallRings, ringBounds, RING_REACH } from './enclosure';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
@@ -76,7 +76,7 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
   for (const ring of hallRings(shape)) keepClear.push(grow(ringBounds(ring), 1, 1, 1));
   // the elves' world tree: its roots spread round the zone and its crown rises far above it
   for (const r of hallRings(shape).find((h) => h.race === 'elf')?.rects ?? []) keepClear.push({ x: r.x - 9, y: r.y - ELF_TREE_UP - 1, w: r.w + 18, h: r.h + ELF_TREE_UP + 7 });
-  keepClear.push({ x: PLAZA_COL * COL_W + 3, y: ext.y, w: COL_W - 6, h: ext.h });
+  keepClear.push({ x: WALK_COL * COL_W + 3, y: ext.y, w: COL_W - 6, h: ext.h });
   keepClear.push({ x: wx - 6, y: CORRIDOR_Y - 2, w: 6, h: CORRIDOR_H + 4 });
   const clear = (tx: number, ty: number) => !keepClear.some((r) => tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h);
   for (let y = bounds.y + 1; y < bounds.y + bounds.h - 1; y += 3) {
@@ -178,7 +178,7 @@ export function plazaShells(shape: Shape): SlotShell[] {
   };
   /** The square's column where a walkway leaves the row through this side's wall. */
   const walkwayCell = (strip: Strip, side: Side) => {
-    const col = PLAZA_COL;
+    const col = WALK_COL;
     const slot = hubShellSlot(col, side, strip);
     const rect = cellRect(col, side, strip);
     const x0 = rect.x * TILE;
@@ -204,20 +204,22 @@ export function plazaShells(shape: Shape): SlotShell[] {
     if (!hasStrip(shape, strip)) continue;
     const [c0, c1] = stripCols(shape, strip);
     for (let col = c0; col < c1; col++) {
-      if (col === PLAZA_COL || (strip === 'main' && (col === CORE_COL0 || col === CORE_EAST_COL))) continue;
+      if (strip === 'main' ? col === CORE_COL0 || col === CORE_EAST_COL : col === WALK_COL) continue;
       for (const side of ['north', 'south'] as const) {
         if (zoned.has(cellSlot(col, side, strip))) continue;
         // the open gap columns either side of the hub: just lawn between the rings; any other free cell (row 1's
         // side of a zone that has no rooms there yet) is a garden
-        if (Math.abs(col - PLAZA_COL) <= 2) lawn(col, side, strip);
+        if (col >= WEST_GAP_COL && col <= EAST_GAP_COL) lawn(col, side, strip);
         else garden(col, side, strip);
       }
     }
+    // the walkway's column on the outer rows (on row 1 the walkways go through the halls)
+    if (strip !== 'main')
     for (const side of ['north', 'south'] as const) {
       const below = walkways(shape).some(([a]) => a === strip);
       const above = walkways(shape).some(([, b]) => b === strip);
       if ((side === 'north' && above) || (side === 'south' && below)) walkwayCell(strip, side);
-      else lawn(PLAZA_COL, side, strip);
+      else lawn(WALK_COL, side, strip);
     }
   }
   return out;

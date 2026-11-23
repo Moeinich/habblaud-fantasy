@@ -5,7 +5,7 @@
 // (layout/geometry.ts zoneRects) grown by a margin, with round corners, and gaps where corridors and walkways pass.
 // Drawn by render/enclosure.ts.
 import type { Race } from '../../../../shared/race';
-import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, MAIN_Y, PLAZA_COL, ROOM_H } from '../constants';
+import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, MAIN_Y, ROOM_H, WALK_COL } from '../constants';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
 import { ARMS, armIndex, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneParts, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
 import { TILE } from '../constants';
@@ -61,7 +61,7 @@ export function hallRings(shape: Shape): HallRing[] {
   const gaps: TileRect[] = [];
   gaps.push(sideGap('main', CORE_COL0 * COL_W, -1));
   gaps.push(sideGap('main', (CORE_EAST_COL + 1) * COL_W, 1));
-  const wx = PLAZA_COL * COL_W + WALKWAY_LX - 1;
+  const wx = WALK_COL * COL_W + WALKWAY_LX - 1;
   if (hasNorth(shape)) gaps.push({ x: wx, y: MAIN_Y - reach, w: WALKWAY_W + 2, h: reach });
   if (hasBottom(shape)) gaps.push({ x: wx, y: MAIN_Y + BUILDING_H, w: WALKWAY_W + 2, h: reach });
   out.push({ race: 'human', hub: true, rects: [hub], gaps });

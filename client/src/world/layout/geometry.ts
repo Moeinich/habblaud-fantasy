@@ -7,7 +7,7 @@
 // Each race's zone is an L in its corner: a side arm on row 1 starting past the hub's open gap column (the top zones
 // on the north side of its corridor, the bottom zones on the south side), and an outer arm (row 0 or 2) starting
 // right next to the square, so it reaches in over (or under) the hub. Both grow outwards. (The fourth strip type,
-// 'bottom', is never built.) A walkway runs down the square's column (PLAZA_COL) from each row's corridor to the next.
+// 'bottom', is never built.) A walkway runs down WALK_COL from each row's corridor to the next, through the hub's west halls.
 //
 // A slot is one room-sized cell: slot = row * ROW_BASE + col * 2 + (south side ? 1 : 0). In every row, slot + 2 is
 // the cell one column further east on the same side, so a room anchored at `slot` spanning `span` columns covers
@@ -26,6 +26,7 @@ import {
   MAIN_Y,
   NSTRIP_Y,
   PLAZA_COL,
+  WALK_COL,
   ROOM_H,
   MAIN_BOTTOM,
   SSTRIP_Y,
@@ -115,10 +116,10 @@ export function slotSide(slot: number): Side {
 /** Arm a slot belongs to (by its row and which side of the square it is on). */
 export function slotWing(slot: number): Wing {
   const strip = slotStrip(slot);
-  const east = slotColumn(slot) > PLAZA_COL;
+  const east = slotColumn(slot) >= PLAZA_COL;
   const row = strip === 'north' ? 'n' : strip === 'main' ? (slotSide(slot) === 'north' ? 'm' : 's') : 'b';
   // the outer rows' columns over (under) the hub
-  const over = row !== 'm' && row !== 's' && Math.abs(slotColumn(slot) - PLAZA_COL) <= 2;
+  const over = row !== 'm' && row !== 's' && slotColumn(slot) >= WEST_GAP_COL && slotColumn(slot) <= EAST_GAP_COL;
   return `${row}${east ? 'e' : 'w'}${over ? 'r' : ''}` as Wing;
 }
 
@@ -214,8 +215,8 @@ export function stripArms(strip: Strip): [Wing[], Wing[]] {
 export function stripCols(s: Shape, strip: Strip): [number, number] {
   const [ws, es] = stripArms(strip);
   const middle = strip === 'main';
-  let x0 = middle ? WEST_GAP_COL : PLAZA_COL;
-  let x1 = (middle ? EAST_GAP_COL : PLAZA_COL) + 1;
+  let x0 = middle ? WEST_GAP_COL : WALK_COL;
+  let x1 = (middle ? EAST_GAP_COL : WALK_COL) + 1;
   // as far as the zones' outlines reach along this row
   const y0 = stripY(strip);
   for (const race of ['elf', 'orc', 'undead', 'human'] as const)
@@ -356,7 +357,7 @@ export function insideShape(s: Shape, tx: number, ty: number): boolean {
     const r = stripRect(s, st);
     if (r && inRect(r, tx, ty)) return true;
   }
-  const inPlazaCol = tx >= PLAZA_COL * COL_W && tx < (PLAZA_COL + 1) * COL_W;
+  const inPlazaCol = tx >= WALK_COL * COL_W && tx < (WALK_COL + 1) * COL_W;
   return inPlazaCol && walkways(s).some(([a, b]) => ty >= stripY(a) + BUILDING_H && ty < stripY(b));
 }
 

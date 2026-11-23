@@ -6,7 +6,7 @@
 // The exterior's trees and bushes then turn into their land's kind.
 import type { FloorKind } from '../../art/api';
 import type { Race } from '../../../../shared/race';
-import { PLAZA_COL, TILE } from '../constants';
+import { EAST_GAP_COL, TILE, WEST_GAP_COL } from '../constants';
 import { hallRings } from './enclosure';
 import { ARMS, cellSlot, slotWing, type Shape, type Side, type Strip } from './geometry';
 import type { ExteriorProp, FloorPatch, TileRect } from './types';
@@ -128,6 +128,6 @@ export function biomeProp(race: Race, p: ExteriorProp): ExteriorProp {
 /** Race of the land a project cell's patio stands in. */
 export function cellRace(strip: Strip, col: number, side: Side = 'north'): Race {
   // the hub (and the gap columns round it) is the humans' green park
-  if (strip === 'main' && Math.abs(col - PLAZA_COL) <= 2) return 'human';
+  if (strip === 'main' && col >= WEST_GAP_COL && col <= EAST_GAP_COL) return 'human';
   return ARMS[slotWing(cellSlot(col, side, strip))].race;
 }
