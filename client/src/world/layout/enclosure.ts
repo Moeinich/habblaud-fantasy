@@ -77,11 +77,23 @@ const SPREAD_ROUND = 1.5;
 const SPREAD_WOBBLE = 0.9;
 const SPREAD_SLABS = 0.9;
 
-/** Which sides of `rect` spread, or null when it isn't in a ring (the elf wing, the corridor...). */
-export function spreadSides(rect: TileRect, rings: readonly HallRing[]): Spread | null {
+/**
+ * Which sides of `rect` spread, or null when it isn't in a ring (the elf wing, the corridor...). A side spreads when
+ * it lies on the ring's edge or when no other area (`others`: rooms, the core, corridors) borders it, e.g. a room
+ * next to an empty plot or the square's column.
+ */
+export function spreadSides(rect: TileRect, rings: readonly HallRing[], others: readonly TileRect[] = []): Spread | null {
   const ring = rings.find((r) => rect.x >= r.rect.x && rect.y >= r.rect.y && rect.x + rect.w <= r.rect.x + r.rect.w && rect.y + rect.h <= r.rect.y + r.rect.h);
   if (!ring) return null;
-  const s: Spread = { w: rect.x === ring.rect.x, e: rect.x + rect.w === ring.rect.x + ring.rect.w, s: rect.y + rect.h === ring.rect.y + ring.rect.h, gaps: ring.gaps };
+  const overlapsY = (o: TileRect) => o.y < rect.y + rect.h && o.y + o.h > rect.y;
+  const overlapsX = (o: TileRect) => o.x < rect.x + rect.w && o.x + o.w > rect.x;
+  const free = (touch: (o: TileRect) => boolean) => !others.some((o) => o !== rect && touch(o));
+  const s: Spread = {
+    w: rect.x === ring.rect.x || free((o) => o.x + o.w === rect.x && overlapsY(o)),
+    e: rect.x + rect.w === ring.rect.x + ring.rect.w || free((o) => o.x === rect.x + rect.w && overlapsY(o)),
+    s: rect.y + rect.h === ring.rect.y + ring.rect.h || free((o) => o.y === rect.y + rect.h && overlapsX(o)),
+    gaps: ring.gaps,
+  };
   return s.w || s.e || s.s ? s : null;
 }
 

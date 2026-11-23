@@ -8,7 +8,7 @@ import type { Camera } from '../camera';
 import { BUILDING_H, COL_W, CORRIDOR_Y, NSTRIP_Y, PLAZA_COL } from '../constants';
 import { layoutExterior, plazaShells, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
 import { cellsOf, mainRect, type Shape } from '../layout/geometry';
-import type { AreaLayout, ExteriorProp } from '../layout/types';
+import type { AreaLayout, ExteriorProp, TileRect } from '../layout/types';
 import { screenModeFor } from '../sim/behavior';
 import type { Character } from '../sim/character';
 import type { RoomState } from '../sim/room-state';
@@ -229,6 +229,7 @@ export class Renderer {
   /** Keeps caches and visuals consistent with the current building. */
   sync(theme: SeasonalTheme = 'none'): void {
     const sim = this.sim;
+    this.rectsNow = null;
     const themeChanged = theme !== this.theme;
     this.theme = theme;
     const assetsChanged = this.builtAssetsVersion !== this.assetsVersion || themeChanged;
@@ -758,7 +759,19 @@ export class Renderer {
   /** Sides of an area that spread into its ring's yard (none for the corridor and outside the rings). */
   private spreadOf(a: AreaLayout): Spread | null {
     if (a.kind === 'corridor') return null;
-    return spreadSides(a.rect, this.ringsOf());
+    this.rectsNow ??= this.areaRects();
+    return spreadSides(a.rect, this.ringsOf(), this.rectsNow);
+  }
+
+  /** areaRects() for this sync (null = work it out again). */
+  private rectsNow: TileRect[] | null = null;
+
+  /** Rects of every area standing now (core, corridors, rooms), for spreadOf. */
+  private areaRects(): TileRect[] {
+    const b = this.sim.building;
+    const out = [...b.core, b.corridor, ...b.extra].map((a) => a.rect);
+    for (const r of this.sim.rooms.values()) if (r.present && !r.ghost) out.push(r.layout.rect);
+    return out;
   }
 
   private ringsOf(): HallRing[] {
