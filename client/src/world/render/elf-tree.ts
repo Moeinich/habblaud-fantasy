@@ -1,7 +1,6 @@
 // The world tree of the night elves' zone (DOM canvases, cached per outline): the elf offices stand in the hollow
-// heart of one huge tree. A rounded ring of living trunk wraps the zone's L; its back (north) wall rises high
-// behind the offices as the inside of the trunk — furrowed bark with glowing runes and roots running down onto
-// the floor — and its rim carries a crown of jungle leaves all the way round. Inside, the jungle floor runs on, with
+// heart of one huge tree. A low rounded ring of living trunk wraps the zone's L, its rim carrying jungle leaves all
+// the way round. Inside, the jungle floor runs on, with
 // roots breaking through along the foot of the trunk and glowing mushrooms among them. Gaps in the ring let the
 // corridors out. Drawn after people and furniture (render/renderer.ts drawElfTree): the ring, wall, floor and
 // crown never cover the offices themselves; only a veil of hanging vines does, and that one is see-through.
@@ -101,8 +100,9 @@ export function worldTree(rects: readonly TileRect[], rows: readonly TileRect[],
   const M = 1.5 * T; // the hollow's margin round the offices
   const CR = 4 * T; // its corner radius
   const R = 2.5 * T; // ring thickness
-  const WALL = 10 * T; // how high the back wall rises
-  const CROWN = 7 * T; // leaves above the rim
+  // the trunk no longer rises into a tall wall behind the offices: the ring stays low all the way round
+  const WALL = 0;
+  const CROWN = 2 * T; // leaves above the rim
   const pad = 3 * T;
   const bx0 = Math.min(...rects.map((r) => r.x)) * T;
   const by0 = Math.min(...rects.map((r) => r.y)) * T;
@@ -267,15 +267,6 @@ export function worldTree(rects: readonly TileRect[], rows: readonly TileRect[],
       for (let d = -2; d <= 2; d++) solid.put(x + d, y, d === -2 ? BARK[3] : d === 2 ? BARK[0] : BARK[2]);
     }
   }
-  // glowing runes on the inner wall
-  for (let i = 0; i < Math.max(9, Math.round(W / 120)); i++) {
-    const x = hx0 + (0.05 + rnd(i + 300) * 0.9) * W;
-    const yIn = hollowTop(x);
-    if (yIn === null) continue;
-    const y = yIn - lift(x) * (0.35 + rnd(i + 301) * 0.4);
-    for (let j = 0; j < 7; j++) solid.put(x + (j % 3 === 1 ? 1 : 0), y + j, j === 3 ? GLOW_HI : GLOW);
-  }
-
   // ---- the crown: jungle leaves heaped along the rim, tallest at the back
   const clump = (bx: number, by: number, r: number) => {
     for (let dy = -Math.ceil(r); dy <= r; dy++) {
@@ -316,10 +307,9 @@ export function worldTree(rects: readonly TileRect[], rows: readonly TileRect[],
     const back = e.side === 'back';
     const ey = back ? e.y - lift(e.x) : e.y;
     const k = i * 31 + 7;
-    const size = back ? T * (1.2 + (CROWN / T) * 0.25 * Math.min(1, lift(e.x) / WALL + 0.2)) : T * (0.9 + rnd(k) * 0.5);
-    if (!back && rnd(k + 9) < 0.35) continue;
-    clump(e.x + (rnd(k + 1) - 0.5) * T, ey - (back ? size * 0.6 : 0), size);
-    if (back && rnd(k + 2) < 0.5) clump(e.x + (rnd(k + 3) - 0.5) * 2 * T, ey - size * 1.4, size * 0.8);
+    const size = T * (0.9 + rnd(k) * 0.5);
+    if (rnd(k + 9) < 0.35) continue;
+    clump(e.x + (rnd(k + 1) - 0.5) * T, ey, size);
   }
   for (let i = 0; i < Math.round(cw / 5); i++) {
     const x = Math.round(rnd(i + 900) * cw);
@@ -384,7 +374,7 @@ export function worldTree(rects: readonly TileRect[], rows: readonly TileRect[],
       if (rnd(k) < 0.6) lantern(e.x + (rnd(k + 1) - 0.5) * T, e.y - 4);
       if (rnd(k + 2) < 0.7) mushrooms(e.x + (rnd(k + 3) - 0.5) * 2 * T, e.y + 1.2 * T, k);
     } else if (e.side === 'back' && rnd(k + 4) < 0.35) {
-      owl(e.x, e.y - lift(e.x) - CROWN * 0.55);
+      owl(e.x, e.y - 4);
     } else if ((e.side === 'west' || e.side === 'east') && rnd(k + 5) < 0.6) {
       mushrooms(e.x + (e.side === 'west' ? -0.8 : 0.8) * T, e.y + T, k);
     }

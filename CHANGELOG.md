@@ -14,6 +14,8 @@ one (0.**3**.0).
 
 - **Zones closer to the hub.** The open strips between the hub and the race zones are half as wide, so the zones sit
   right up against the hub's wall.
+- **A lower world tree.** The elves' tree no longer rises into a tall trunk wall and crown behind their offices:
+  just the ring of bark with its leaves round the zone.
 
 ## [1.1.1] - 2026-11-23
 

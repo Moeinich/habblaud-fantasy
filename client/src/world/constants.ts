@@ -49,8 +49,8 @@ export const NORTH_Y = MAIN_Y;
 export const CORRIDOR_Y = MAIN_Y + ROOM_H;
 export const SOUTH_Y = CORRIDOR_Y + CORRIDOR_H;
 export const MAIN_BOTTOM = MAIN_Y + BUILDING_H;
-/** How far (tiles) the elf wing's world tree rises above row 0 (render/elf-tree.ts). */
-export const ELF_TREE_UP = 21;
+/** How far (tiles) the elf zone's tree ring and its leaves reach above row 0 (render/elf-tree.ts). */
+export const ELF_TREE_UP = 7;
 /** Row 2 (the town square between the undead's and the humans' side arms). */
 export const SSTRIP_Y = MAIN_BOTTOM + STRIP_GAP;
 export const SCORRIDOR_Y = SSTRIP_Y + ROOM_H;
