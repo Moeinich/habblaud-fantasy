@@ -14,39 +14,49 @@ export const CORE_COLS = 2;
 /** Height of one strip: a row of rooms, a corridor and another row of rooms. */
 export const BUILDING_H = ROOM_H * 2 + CORRIDOR_H;
 
-// The office is a hub with three wings (layout/departments.ts). The core and the square sit in the main strip;
-// the human wing grows west along the main corridor, the orc wing east, and the night-elf wing lives in a
-// second strip to the north, reached by a covered walkway from the square. Coordinates stay non-negative: the
-// west wing has room reserved before the core, and the north strip sits above the main one.
-/** Columns reserved west of the core for the human wing. */
-export const WEST_COLS = 12;
-/** First column of the core. */
-export const CORE_COL0 = WEST_COLS;
-/** Column of the square, where the three wings meet (just east of the core). */
-export const PLAZA_COL = CORE_COL0 + CORE_COLS;
-/** First column of the east (orc) wing. */
-export const EAST_COL0 = PLAZA_COL + 1;
-/** Lawn between the north strip and the main one (tiles). */
+// The camp is a pinwheel round a hub (layout/geometry.ts, layout/departments.ts). Four rows of halls, each a strip
+// of rooms either side of a corridor: the hub (the core halls, then the town square below them) takes the middle of
+// rows 1 and 2, and each race holds one corner as an L — the night elves top left, the orcs top right, the undead
+// bottom left and the humans bottom right. An L is a side arm in the row next to the hub and a top or bottom arm
+// in the outer row that reaches one column in over the hub; both grow outwards, away from the middle. A walkway
+// runs down the square's column through every row. Coordinates stay non-negative: the west arms have room
+// reserved before the hub.
+/** Column of the square: the middle of the hub, where the walkways run from row to row. */
+export const PLAZA_COL = 16;
+/** The hub's west core column (reception over the bathhouse) and east one (mess hall over the tavern). */
+export const CORE_COL0 = PLAZA_COL - 1;
+export const CORE_EAST_COL = PLAZA_COL + 1;
+/** Open columns between the hub and the side arms (the corridors cross them outdoors). */
+export const WEST_GAP_COL = PLAZA_COL - 2;
+export const EAST_GAP_COL = PLAZA_COL + 2;
+/** First column of the side arms east of the hub (rows 1 and 2); the outer rows start right next to the square. */
+export const EAST_COL0 = PLAZA_COL + 3;
+/** Columns the west side arms can take (the outer rows can take two more). */
+export const WEST_COLS = WEST_GAP_COL;
+/** Lawn between two rows (tiles): room for the rings of the halls on both sides. */
 export const STRIP_GAP = 10;
-/** Top of the north (elf) strip and of its corridor and south rooms. */
+/** Row 0 (top: elves and orcs). */
 export const NSTRIP_Y = 0;
 export const NCORRIDOR_Y = NSTRIP_Y + ROOM_H;
 export const NSOUTH_Y = NCORRIDOR_Y + CORRIDOR_H;
-/** Top of the main strip. */
+/** Row 1 (the core halls between the elves' and the orcs' side arms). */
 export const MAIN_Y = NSTRIP_Y + BUILDING_H + STRIP_GAP;
-
 export const NORTH_Y = MAIN_Y;
 export const CORRIDOR_Y = MAIN_Y + ROOM_H;
 export const SOUTH_Y = CORRIDOR_Y + CORRIDOR_H;
-/** Bottom edge of the main strip (the street side). */
 export const MAIN_BOTTOM = MAIN_Y + BUILDING_H;
-/** How far (tiles) the elf wing's world tree rises above the north strip (render/elf-tree.ts). */
+/** How far (tiles) the elf wing's world tree rises above row 0 (render/elf-tree.ts). */
 export const ELF_TREE_UP = 21;
-/** Top of the south (undead) strip, across a lawn from the main one, and of its corridor and south rooms. */
+/** Row 2 (the town square between the undead's and the humans' side arms). */
 export const SSTRIP_Y = MAIN_BOTTOM + STRIP_GAP;
 export const SCORRIDOR_Y = SSTRIP_Y + ROOM_H;
 export const SSOUTH_Y = SCORRIDOR_Y + CORRIDOR_H;
 export const SSTRIP_BOTTOM = SSTRIP_Y + BUILDING_H;
+/** Row 3 (bottom: undead and humans). */
+export const BSTRIP_Y = SSTRIP_BOTTOM + STRIP_GAP;
+export const BCORRIDOR_Y = BSTRIP_Y + ROOM_H;
+export const BSOUTH_Y = BCORRIDOR_Y + CORRIDOR_H;
+export const BSTRIP_BOTTOM = BSTRIP_Y + BUILDING_H;
 
 /** First (local) column of the rooms' 2-tile door. */
 export const DOOR_X = 7;

@@ -1,16 +1,15 @@
-// Departments (pure): project rooms are grouped by race into four wings that branch off the square next to the
-// core — the human wing runs west along the main corridor, the orc wing east, the night-elf wing has its own
-// strip to the north (reached by a covered walkway from the square) and the undead have theirs to the south,
-// across the street (a walkway crosses it). Inside a wing, rooms keep their arrival
-// order and fill the north and south sides of the wing's corridor evenly, starting next to the square; a room
-// that spans several columns takes that many cells on its side. Each wing's corridor gets the race's carpet.
+// Departments (pure): project rooms are grouped by race into the four zones of the pinwheel round the hub
+// (layout/geometry.ts) — night elves top left, orcs top right, undead bottom left, humans bottom right. A zone is an
+// L of two arms (the outer row, which reaches in over the hub, and the side row beside the hub), each with a north
+// and a south side: four lanes. Rooms keep their arrival order; each goes to the lane where it ends up nearest the
+// hub, so a zone first wraps round the hub and then grows outwards. A room that spans several columns takes that
+// many cells of its lane. West zones are bounded by the map's edge; whoever doesn't fit there joins the zone on
+// the other side of the same half (elves -> orcs, undead -> humans). Each zone's corridors get the race's carpet.
 import type { Race } from '../../../../shared/race';
-import { CORE_COL0, EAST_COL0, PLAZA_COL, WEST_COLS } from '../constants';
-import { cellSlot, SOUTH_COLS, type Shape, type Side, type Wing } from './geometry';
+import { ARMS, armCol, armLimit, emptyShape, cellSlot, ZONE_ARMS, type Shape, type Side, type Wing } from './geometry';
 
-/** Race that lives in each wing. */
-export const WING_RACE: Readonly<Record<Wing, Race>> = { west: 'human', east: 'orc', north: 'elf', south: 'undead' };
-export const RACE_WING: Readonly<Record<Race, Wing>> = { human: 'west', orc: 'east', elf: 'north', undead: 'south' };
+/** Race that lives in each arm. */
+export const WING_RACE: Readonly<Record<Wing, Race>> = { nw: 'elf', mw: 'elf', ne: 'orc', me: 'orc', sw: 'undead', bw: 'undead', se: 'human', be: 'human' };
 
 export interface DeptRoom {
   id: string;
@@ -27,69 +26,47 @@ export interface Placement {
 
 export interface DeptPlan {
   targets: Map<string, Placement>;
-  /** Columns each wing needs once every room is in place. */
+  /** Columns each arm needs once every room is in place. */
   shape: Shape;
 }
 
 const byOrder = (a: DeptRoom, b: DeptRoom) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-/** Target placement of every room, wing by wing. */
+/** Where the zone across the same half sends whoever doesn't fit (the west zones are bounded). */
+const SPILL: Partial<Record<Race, Race>> = { elf: 'orc', undead: 'human' };
+
+/** Target placement of every room, zone by zone. */
 export function packDepartments(rooms: readonly DeptRoom[]): DeptPlan {
   const targets = new Map<string, Placement>();
-  const shape: Shape = { west: 0, east: 1, north: 0, south: 0 };
-  const of = (race: Race) => rooms.filter((r) => r.race === race).sort(byOrder);
-
-  // west: from the core outwards; whatever doesn't fit in the reserve joins the east wing at its far end
-  const fill: Record<Side, number> = { north: 0, south: 0 };
-  const spill: DeptRoom[] = [];
-  for (const r of of('human')) {
-    const span = Math.max(1, r.span);
-    const side: Side = fill.north <= fill.south ? 'north' : 'south';
-    if (fill[side] + span > WEST_COLS) {
-      spill.push(r);
-      continue;
+  const shape = emptyShape();
+  const fill = new Map<string, number>();
+  const spilled: Record<Race, DeptRoom[]> = { elf: [], orc: [], undead: [], human: [] };
+  for (const race of ['elf', 'undead', 'orc', 'human'] as const) {
+    const queue = [...rooms.filter((r) => r.race === race), ...spilled[race]].sort(byOrder);
+    for (const r of queue) {
+      const span = Math.max(1, r.span);
+      let best: { w: Wing; side: Side; reach: number } | null = null;
+      for (const w of ZONE_ARMS[race]) {
+        const dist = ARMS[w].dist;
+        for (const side of ARMS[w].side ? [ARMS[w].side] : (['north', 'south'] as const)) {
+          const f = fill.get(`${w}${side}`) ?? 0;
+          if (f + span > armLimit(w)) continue;
+          const reach = dist + f + span;
+          if (!best || reach < best.reach) best = { w, side, reach };
+        }
+      }
+      if (!best) {
+        const to = SPILL[race];
+        if (to) spilled[to].push(r);
+        continue;
+      }
+      const key = `${best.w}${best.side}`;
+      const f = fill.get(key) ?? 0;
+      const col = ARMS[best.w].dir < 0 ? armCol(best.w, f + span - 1) : armCol(best.w, f);
+      targets.set(r.id, { slot: cellSlot(col, best.side, ARMS[best.w].strip), span });
+      fill.set(key, f + span);
+      shape[best.w] = Math.max(shape[best.w], f + span);
     }
-    targets.set(r.id, { slot: cellSlot(CORE_COL0 - fill[side] - span, side), span });
-    fill[side] += span;
-    shape.west = Math.max(shape.west, fill[side]);
-  }
-
-  // east: from the square outwards
-  fill.north = 0;
-  fill.south = 0;
-  for (const r of [...of('orc'), ...spill]) {
-    const span = Math.max(1, r.span);
-    const side: Side = fill.north <= fill.south ? 'north' : 'south';
-    targets.set(r.id, { slot: cellSlot(EAST_COL0 + fill[side], side), span });
-    fill[side] += span;
-    shape.east = Math.max(shape.east, fill[side]);
-  }
-
-  // south strip: the undead, from the walkway's column westwards; whoever doesn't fit joins the elves
-  fill.north = 0;
-  fill.south = 0;
-  const spillNorth: DeptRoom[] = [];
-  for (const r of of('undead')) {
-    const span = Math.max(1, r.span);
-    const side: Side = fill.north <= fill.south ? 'north' : 'south';
-    if (fill[side] + span > SOUTH_COLS) {
-      spillNorth.push(r);
-      continue;
-    }
-    targets.set(r.id, { slot: cellSlot(PLAZA_COL - fill[side] - span, side, 'south'), span });
-    fill[side] += span;
-    shape.south = Math.max(shape.south, fill[side]);
-  }
-
-  // north strip, from the square's column eastwards: the south side starts one column later (the walkway comes up there)
-  fill.north = 0;
-  fill.south = 1;
-  for (const r of [...of('elf'), ...spillNorth]) {
-    const span = Math.max(1, r.span);
-    const side: Side = fill.north <= fill.south ? 'north' : 'south';
-    targets.set(r.id, { slot: cellSlot(PLAZA_COL + fill[side], side, 'north'), span });
-    fill[side] += span;
-    shape.north = Math.max(shape.north, fill[side]);
   }
   return { targets, shape };
 }

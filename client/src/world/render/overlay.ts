@@ -7,7 +7,8 @@
 import { TILE } from '../../art/api';
 import type { WorldOptions } from '../api';
 import type { Camera } from '../camera';
-import { COL_W, CORE_COL0, CORRIDOR_Y, EAST_COL0, NCORRIDOR_Y, PLAZA_COL, SCORRIDOR_Y, SOUTH_Y } from '../constants';
+import { BUILDING_H, COL_W, CORRIDOR_H, ROOM_H, STRIP_GAP } from '../constants';
+import { ARMS, stripY, ZONE_ARMS } from '../layout/geometry';
 import type { Character } from '../sim/character';
 import { shellAgeKey, shellBubbleAlpha, shellBubbleText, STORM_LIFT, unitHash } from '../sim/shell';
 import type { Sim } from '../sim/sim';
@@ -409,7 +410,9 @@ export class Overlay {
       if (it.type !== 'bubble' || (it.tone !== 'info' && it.tone !== 'shell' && it.tone !== 'say') || it.prio >= 75) continue;
       // per PHYSICAL area (where the character is right now), which is what clutters the screen
       const ch = it.ch;
-      rin.push({ room: `${Math.floor(ch.tx / COL_W)}:${ch.ty < CORRIDOR_Y ? 'n' : ch.ty < SOUTH_Y ? 'c' : 's'}`, prio: it.prio, changedAt: it.changedAt });
+      const row = Math.floor(ch.ty / (BUILDING_H + STRIP_GAP));
+      const ly = ch.ty - row * (BUILDING_H + STRIP_GAP);
+      rin.push({ room: `${Math.floor(ch.tx / COL_W)}:${row}:${ly < ROOM_H ? 'n' : ly < ROOM_H + CORRIDOR_H ? 'c' : 's'}`, prio: it.prio, changedAt: it.changedAt });
       idx.push(it);
     }
     if (!idx.length) return;
@@ -589,10 +592,17 @@ export class Overlay {
     if (zoom < 0.6) return;
     const shape = this.sim.building.shape;
     const maxW = 220;
-    const labels: { race: Race; x: number; y: number; right?: boolean }[] = [{ race: 'orc', x: EAST_COL0 * COL_W + 1, y: CORRIDOR_Y + 1 }];
-    if (shape.west) labels.push({ race: 'human', x: CORE_COL0 * COL_W - 1, y: CORRIDOR_Y + 1, right: true });
-    if (shape.north) labels.push({ race: 'elf', x: PLAZA_COL * COL_W + 1, y: NCORRIDOR_Y + 1 });
-    if (shape.south) labels.push({ race: 'undead', x: PLAZA_COL * COL_W - 1, y: SCORRIDOR_Y + 1, right: true });
+    const labels: { race: Race; x: number; y: number; right?: boolean }[] = [];
+    // at the inner end of each zone's corridors, where it branches off the hub
+    for (const race of ['elf', 'orc', 'undead', 'human'] as const) {
+      const [outer, side] = ZONE_ARMS[race];
+      // on the outer row's corridor (row 1's is shared by two zones)
+      const arm = shape[outer] ? outer : shape[side] ? side : null;
+      if (!arm) continue;
+      const { start, dir, strip } = ARMS[arm];
+      const west = dir < 0;
+      labels.push({ race, x: west ? (start + 1) * COL_W - 1 : start * COL_W + 1, y: stripY(strip) + ROOM_H + 1, right: west });
+    }
     for (const l of labels) {
       const x = this.sx(l.x * TILE);
       const y = this.sy(l.y * TILE) - 2;

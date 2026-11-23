@@ -6,9 +6,9 @@
 // The exterior's trees and bushes then turn into their land's kind.
 import type { FloorKind } from '../../art/api';
 import type { Race } from '../../../../shared/race';
-import { EAST_COL0, TILE } from '../constants';
+import { PLAZA_COL, TILE } from '../constants';
 import { hallRings } from './enclosure';
-import { northRect, type Shape, type Strip } from './geometry';
+import { ARMS, cellSlot, slotWing, type Shape, type Side, type Strip } from './geometry';
 import type { ExteriorProp, FloorPatch, TileRect } from './types';
 
 const GROUND: Readonly<Record<Race, FloorKind>> = { human: 'grass', elf: 'jungle', orc: 'desert', undead: 'blight' };
@@ -49,9 +49,7 @@ export interface BiomeMap {
 
 /** Where each race's land lies, for the halls of this shape. */
 export function biomeMap(shape: Shape): BiomeMap {
-  const anchors: { race: Race; r: TileRect }[] = hallRings(shape).map((h) => ({ race: h.race, r: h.rect }));
-  const north = northRect(shape);
-  if (north) anchors.push({ race: 'elf', r: north });
+  const anchors: { race: Race; r: TileRect }[] = hallRings(shape).flatMap((h) => h.rects.map((r) => ({ race: h.race, r })));
   const at = (tx: number, ty: number): Race => {
     // large, slow swirls move the borders around; a fine grain frays them
     const warp = (noise(tx, ty, 9, 11) - 0.5) * 14 + (noise(tx, ty, 1.2, 12) - 0.5) * 2.2;
@@ -128,8 +126,8 @@ export function biomeProp(race: Race, p: ExteriorProp): ExteriorProp {
 }
 
 /** Race of the land a project cell's patio stands in. */
-export function cellRace(strip: Strip, col: number): Race {
-  if (strip === 'north') return 'elf';
-  if (strip === 'south') return 'undead';
-  return col >= EAST_COL0 ? 'orc' : 'human';
+export function cellRace(strip: Strip, col: number, side: Side = 'north'): Race {
+  // the hub (and the gap columns round it) is the humans' green park
+  if (strip === 'main' && Math.abs(col - PLAZA_COL) <= 2) return 'human';
+  return ARMS[slotWing(cellSlot(col, side, strip))].race;
 }

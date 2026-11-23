@@ -8,7 +8,7 @@ import { roomTheme, themeRace } from '../../art/theme';
 import { hash32 } from '../../../../shared/hash';
 import type { Race } from '../../../../shared/race';
 import { TILE } from '../constants';
-import { RING_MARGIN, RING_RADIUS, RING_WIDTH, type HallRing } from '../layout/enclosure';
+import { ringBounds, RING_MARGIN, RING_RADIUS, RING_WIDTH, type HallRing } from '../layout/enclosure';
 import { ringDecor, ringGate, type DecorSpot } from './ring-decor';
 
 export interface RingSprite {
@@ -52,16 +52,17 @@ function raceSeed(race: Race): number {
 
 export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
   const race = ring.race === 'elf' ? 'human' : ring.race;
-  const key = `${race}|${ring.rect.x},${ring.rect.y},${ring.rect.w},${ring.rect.h}|${ring.gaps.map((g) => `${g.x},${g.y},${g.w},${g.h}`).join(';')}`;
+  const key = `${race}|${ring.rects.map((g) => `${g.x},${g.y},${g.w},${g.h}`).join(';')}|${ring.gaps.map((g) => `${g.x},${g.y},${g.w},${g.h}`).join(';')}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const T = TILE;
   const st = STYLE[race];
+  const bounds = ringBounds(ring);
   const pad = Math.ceil((RING_MARGIN + RING_WIDTH) * T) + 2 * T;
-  const wx0 = ring.rect.x * T - pad;
-  const wy0 = ring.rect.y * T - pad;
-  const w = ring.rect.w * T + 2 * pad;
-  const h = ring.rect.h * T + 2 * pad;
+  const wx0 = bounds.x * T - pad;
+  const wy0 = bounds.y * T - pad;
+  const w = bounds.w * T + 2 * pad;
+  const h = bounds.h * T + 2 * pad;
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -81,24 +82,37 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
   function inGap(x: number, y: number): boolean {
     return gaps.some((g) => x >= g.x0 && x < g.x1 && y >= g.y0 && y < g.y1);
   }
-  // inner rounded rectangle: the building grown by the margin, with round corners
-  const cx = w / 2;
-  const cy = h / 2;
-  const hw = (ring.rect.w / 2 + RING_MARGIN) * T;
-  const hh = (ring.rect.h / 2 + RING_MARGIN) * T;
   const r = RING_RADIUS * T;
   const rw = RING_WIDTH * T;
-  /** Distance outside the inner rounded rectangle (negative inside). */
-  const dist = (x: number, y: number) => {
-    const qx = Math.abs(x - cx) - (hw - r);
-    const qy = Math.abs(y - cy) - (hh - r);
+  // each wrapped rectangle in canvas px: the building (x0..x1, y0..y1) and its inner rounded outline (grown by the margin)
+  const boxes = ring.rects.map((q) => {
+    const x0 = q.x * T - wx0;
+    const y0 = q.y * T - wy0;
+    const x1 = x0 + q.w * T;
+    const y1 = y0 + q.h * T;
+    return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, hw: (q.w / 2 + RING_MARGIN) * T, hh: (q.h / 2 + RING_MARGIN) * T };
+  });
+  type Box = (typeof boxes)[number];
+  const boxDist = (b: Box, x: number, y: number) => {
+    const qx = Math.abs(x - b.cx) - (b.hw - r);
+    const qy = Math.abs(y - b.cy) - (b.hh - r);
     return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
   };
-  const rx0 = pad;
-  const ry0 = pad;
-  const rx1 = pad + ring.rect.w * T;
-  const ry1 = pad + ring.rect.h * T;
-  const inRect = (x: number, y: number) => x >= rx0 && x < rx1 && y >= ry0 && y < ry1;
+  // the union of the rounded rectangles, blended so the inner corners where they meet are rounded too
+  const K = 3 * T;
+  /** Distance outside the ring's inner outline (negative inside). */
+  const dist = (x: number, y: number) => {
+    let d = Infinity;
+    for (const b of boxes) {
+      const e = boxDist(b, x, y);
+      if (d === Infinity) d = e;
+      else {
+        const k = Math.max(K - Math.abs(d - e), 0) / K;
+        d = Math.min(d, e) - k * k * K * 0.25;
+      }
+    }
+    return d;
+  };
   const seed = raceSeed(race);
   const theme = roomTheme(seed);
 
@@ -113,10 +127,12 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
   art.drawFloor(fctx, YARD[race], wx0, wy0, w, h, { seed });
   fctx.restore();
   const fimg = fctx.getImageData(0, 0, w, h);
+  const dmap = new Float32Array(w * h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       const d = dist(x + 0.5, y + 0.5);
+      dmap[y * w + x] = d;
       if (d > 0) {
         fimg.data[i + 3] = 0;
         continue;
@@ -125,71 +141,92 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
       if (shade > 0) for (let c = 0; c < 3; c++) fimg.data[i + c] = Math.round(fimg.data[i + c] * (1 - shade));
     }
   fctx.putImageData(fimg, 0, 0);
+  const D = (x: number, y: number) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    return ix < 0 || iy < 0 || ix >= w || iy >= h ? Infinity : dmap[iy * w + ix];
+  };
 
-  // the back wall: a wall face along the north of the ring, down to where the rooms' floor begins
+  // the back wall: a wall face along the north of the ring, down to where the rooms' floor begins (the top of the
+  // highest rectangle in that column)
   cctx.save();
   cctx.translate(-wx0, -wy0);
   for (let x = 0; x < w; x++) {
+    let top = Infinity;
+    for (const b of boxes) if (x >= b.x0 - RING_MARGIN * T && x < b.x1 + RING_MARGIN * T) top = Math.min(top, b.y0);
+    if (top === Infinity) top = Math.min(...boxes.map((b) => b.y0));
     let yIn = -1;
-    for (let y = 0; y < cy; y++) {
-      if (dist(x + 0.5, y + 0.5) <= 0) {
+    for (let y = 0; y < h; y++) {
+      if (D(x, y) <= 0) {
         yIn = y;
         break;
       }
     }
-    if (yIn < 0 || yIn >= ry0 + 2 * T) continue;
-    // no wall across a way in from the north (the walkway down to the undead wing)
-    if (gaps.some((g) => g.y0 < cy && x >= g.x0 && x < g.x1)) continue;
+    if (yIn < 0 || yIn >= top + 2 * T) continue;
+    // no wall across a way in from the north (a walkway)
+    if (gaps.some((g) => g.y1 <= yIn + 2 * T + 1 && g.y1 >= yIn - T && x >= g.x0 && x < g.x1)) continue;
     art.drawWallFace(cctx, wx0 + x, wy0 + yIn, 1, theme.wall);
   }
   cctx.restore();
   // nothing of it inside the rooms below their old back wall
-  cctx.clearRect(rx0, ry0 + 2 * T, rx1 - rx0, ry1 - ry0 - 2 * T);
+  for (const b of boxes) cctx.clearRect(b.x0, b.y0 + 2 * T, b.x1 - b.x0, b.y1 - b.y0 - 2 * T);
   const img = cctx.getImageData(0, 0, w, h);
   const data = img.data;
 
   // the rim
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const d = dist(x + 0.5, y + 0.5);
+      const d = dmap[y * w + x];
       if (d <= 0 || d > rw) continue;
       const u = d / rw;
       const n = hash32(`${race}${x >> 1},${y >> 1}`) % 7;
       put(x, y, u < 0.15 || u > 0.85 ? st.rim[0] : n === 0 ? st.rim[2] : st.rim[1]);
     }
   }
-  // the front face where the ring drops to the ground (its southern half)
+  // the front face where the ring drops to the ground: below the lowest stretch of rim in every column
+  const faceAt: number[] = [];
   for (let x = 0; x < w; x++) {
     let yb = -1;
-    for (let y = h - 1; y > cy; y--) {
-      const d = dist(x + 0.5, y + 0.5);
+    for (let y = h - 1; y > 0; y--) {
+      const d = dmap[y * w + x];
       if (d > 0 && d <= rw) {
         yb = y;
         break;
       }
     }
+    faceAt.push(yb);
     if (yb < 0) continue;
     for (let k = 1; k <= 8; k++) put(x, yb + k, k > 6 ? st.face[0] : (x + (k > 3 ? 4 : 0)) % 8 === 0 ? st.face[0] : st.face[1]);
   }
-  // the wall on the rim: features every few px along the centre line of the ring
+  // the wall on the rim: features every few px along the centre line of the ring — each rectangle's own centre line
+  // (edges and round corners), kept where it is the outline of the whole ring
   const path: [number, number][] = [];
-  const chw = hw + rw / 2;
-  const chh = hh + rw / 2;
+  const corners: [number, number][] = [];
   const cr = r + rw / 2;
-  const step = 1;
-  const corners: [number, number, number][] = [
-    [cx + chw - cr, cy - chh + cr, -Math.PI / 2],
-    [cx + chw - cr, cy + chh - cr, 0],
-    [cx - chw + cr, cy + chh - cr, Math.PI / 2],
-    [cx - chw + cr, cy - chh + cr, Math.PI],
-  ];
-  // top edge, then each corner and the next edge, clockwise
-  for (let x = cx - chw + cr; x < cx + chw - cr; x += step) path.push([x, cy - chh]);
-  for (const [i, [ox, oy, a0]] of corners.entries()) {
-    for (let a = a0; a < a0 + Math.PI / 2; a += step / cr) path.push([ox + Math.cos(a) * cr, oy + Math.sin(a) * cr]);
-    if (i === 0) for (let y = cy - chh + cr; y < cy + chh - cr; y += step) path.push([cx + chw, y]);
-    if (i === 1) for (let x = cx + chw - cr; x > cx - chw + cr; x -= step) path.push([x, cy + chh]);
-    if (i === 2) for (let y = cy + chh - cr; y > cy - chh + cr; y -= step) path.push([cx - chw, y]);
+  const onLine = (x: number, y: number) => Math.abs(D(x, y) - rw / 2) < 1.2;
+  for (const b of boxes) {
+    const chw = b.hw + rw / 2;
+    const chh = b.hh + rw / 2;
+    const { cx, cy } = b;
+    const cs: [number, number, number][] = [
+      [cx + chw - cr, cy - chh + cr, -Math.PI / 2],
+      [cx + chw - cr, cy + chh - cr, 0],
+      [cx - chw + cr, cy + chh - cr, Math.PI / 2],
+      [cx - chw + cr, cy - chh + cr, Math.PI],
+    ];
+    const pts: [number, number][] = [];
+    for (let x = cx - chw + cr; x < cx + chw - cr; x += 1) pts.push([x, cy - chh]);
+    for (const [i, [ox, oy, a0]] of cs.entries()) {
+      for (let a = a0; a < a0 + Math.PI / 2; a += 1 / cr) pts.push([ox + Math.cos(a) * cr, oy + Math.sin(a) * cr]);
+      if (i === 0) for (let y = cy - chh + cr; y < cy + chh - cr; y += 1) pts.push([cx + chw, y]);
+      if (i === 1) for (let x = cx + chw - cr; x > cx - chw + cr; x -= 1) pts.push([x, cy + chh]);
+      if (i === 2) for (let y = cy + chh - cr; y > cy - chh + cr; y -= 1) pts.push([cx - chw, y]);
+      const a = a0 + Math.PI / 4;
+      const kx = ox + Math.cos(a) * cr;
+      const ky = oy + Math.sin(a) * cr;
+      if (onLine(kx, ky)) corners.push([kx, ky]);
+    }
+    for (const p of pts) if (onLine(p[0], p[1])) path.push(p);
   }
   // draw back to front, so features further south overlap the ones behind them
   const order = path.map((p, i) => ({ p, i })).sort((a, b) => a.p[1] - b.p[1]);
@@ -239,58 +276,62 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
   // and clutter along the yard just inside the wall (render/ring-decor.ts), drawn back to front
   const decor: { x: number; y: number; spot: DecorSpot; n: number }[] = [];
   const clear = (x: number, y: number, m: number) => !inGap(x, y) && !inGap(x - m, y) && !inGap(x + m, y) && !inGap(x, y - m) && !inGap(x, y + m);
-  for (const [ox, oy, a0] of corners) {
-    const a = a0 + Math.PI / 4;
-    decor.push({ x: ox + Math.cos(a) * cr, y: oy + Math.sin(a) * cr, spot: 'corner', n: decor.length });
-  }
+  const near = (x: number, y: number, m: number) => decor.some((d) => Math.abs(d.x - x) < m && Math.abs(d.y - y) < m);
+  for (const [x, y] of corners) if (!near(x, y, 24)) decor.push({ x, y, spot: 'corner', n: decor.length });
   const S = RIM_STEP[race];
   let n = 0;
-  for (let x = cx - chw + cr + S / 2; x < cx + chw - cr; x += S) {
-    for (const y of [cy - chh, cy + chh]) if (clear(x, y, 10)) decor.push({ x, y, spot: 'rim', n: n++ });
-  }
-  for (let y = cy - chh + cr + S / 2; y < cy + chh - cr; y += S) {
-    for (const x of [cx - chw, cx + chw]) if (clear(x, y, 10)) decor.push({ x, y, spot: 'rim', n: n++ });
+  for (let k = 0; k < path.length; k += S) {
+    const [x, y] = path[k];
+    if (clear(x, y, 10) && !near(x, y, 20)) decor.push({ x, y, spot: 'rim', n: n++ });
   }
   // hangings on the outer face in the south (the face the camp looks at)
   n = 0;
-  for (let x = cx - hw + r + 16; x < cx + hw - r - 8; x += 48) {
-    const y = cy + hh + rw;
-    if (clear(x, y, 8)) decor.push({ x, y, spot: 'face', n: n++ });
+  for (let x = 16; x < w - 8; x += 48) {
+    const yb = faceAt[Math.round(x)];
+    if (yb < 0) continue;
+    // only along straight stretches
+    if (Math.abs(faceAt[Math.round(x) - 12] - yb) > 1 || Math.abs(faceAt[Math.round(x) + 12] - yb) > 1) continue;
+    if (clear(x, yb, 8)) decor.push({ x, y: yb, spot: 'face', n: n++ });
   }
-  // clutter just inside the wall: down both sides (below the back wall) and along the south
+  // clutter just inside the wall: down the sides (below the back wall) and along the south
   n = 0;
-  const yardTop = ry0 + 3 * T;
-  for (let y = yardTop; y < cy + hh - r; y += 34) {
-    for (const [side, x] of [[0, cx - hw + 8], [1, cx + hw - 8]] as const) {
-      const jy = y + (hash32(`${race}y${side}${y}`) % 12);
-      if (clear(x, jy, 14)) decor.push({ x, y: jy, spot: 'yard', n: n++ });
+  const atInset = (x: number, y: number, inset: number) => Math.abs(D(x, y) + inset) < 2;
+  for (const b of boxes) {
+    for (let y = b.y0 + 3 * T; y < b.cy + b.hh - r; y += 34) {
+      for (const [side, x] of [[0, b.cx - b.hw + 8], [1, b.cx + b.hw - 8]] as const) {
+        const jy = y + (hash32(`${race}y${side}${y}`) % 12);
+        if (atInset(x, jy, 8) && clear(x, jy, 14)) decor.push({ x, y: jy, spot: 'yard', n: n++ });
+      }
+    }
+    for (let x = b.cx - b.hw + r; x < b.cx + b.hw - r; x += 38) {
+      const jx = x + (hash32(`${race}x${x}`) % 14);
+      const y = b.cy + b.hh - 3;
+      if (atInset(jx, y, 3) && clear(jx, y, 14)) decor.push({ x: jx, y, spot: 'yard', n: n++ });
     }
   }
-  for (let x = cx - hw + r; x < cx + hw - r; x += 38) {
-    const jx = x + (hash32(`${race}x${x}`) % 14);
-    const y = cy + hh - 3;
-    if (clear(jx, y, 14)) decor.push({ x: jx, y, spot: 'yard', n: n++ });
-  }
   decor.sort((a, b) => a.y - b.y);
-  for (const d of decor) ringDecor(cctx, race, d.spot, Math.round(d.x), Math.round(d.y), d.n, ring.rect.x * 31 + ring.rect.y);
+  for (const d of decor) ringDecor(cctx, race, d.spot, Math.round(d.x), Math.round(d.y), d.n, bounds.x * 31 + bounds.y);
   // a gate at every way in: posts on the rim either side, with an arch over a way in from the north or south
   for (const g of gaps) {
+    const gx = (g.x0 + g.x1) / 2;
     const gy = (g.y0 + g.y1) / 2;
-    if (gy < cy - hh || gy > cy + hh) {
-      const y = g.y0 < cy ? cy - chh : cy + chh;
-      ringGate(cctx, race, g.x0 - 4, g.x1 + 4, Math.round(y), true);
-    } else {
-      const x = g.x0 < cx ? cx - chw : cx + chw;
+    const side = boxes.find((b) => gy > b.y0 - RING_MARGIN * T && gy < b.y1 + RING_MARGIN * T && (gx < b.x0 || gx > b.x1));
+    if (side) {
+      const x = gx < side.cx ? side.cx - side.hw - rw / 2 : side.cx + side.hw + rw / 2;
       ringGate(cctx, race, Math.round(x), Math.round(x), Math.round(g.y0 - 3), false);
       ringGate(cctx, race, Math.round(x), Math.round(x), Math.round(g.y1 + 6), false);
+    } else {
+      const b = boxes.find((q) => gx > q.x0 && gx < q.x1) ?? boxes[0];
+      const y = gy < b.cy ? b.cy - b.hh - rw / 2 : b.cy + b.hh + rw / 2;
+      ringGate(cctx, race, g.x0 - 4, g.x1 + 4, Math.round(y), true);
     }
   }
 
   // Built by reading pixels back, which leaves a canvas in CPU memory: the ring is drawn on every frame, so it goes
   // into a fresh canvas the GPU can keep as a texture instead of uploading it again each time.
-  const s = { canvas: freshCopy(canvas), floor, x: wx0, y: wy0 };
-  cache.set(key, s);
-  return s;
+  const out = { canvas: freshCopy(canvas), floor, x: wx0, y: wy0 };
+  cache.set(key, out);
+  return out;
 }
 
 function freshCopy(src: HTMLCanvasElement): HTMLCanvasElement {

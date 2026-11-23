@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { FURNITURE, TILE, type FurnitureKind, type RoomTheme } from '../../art/api';
-import { COL_W, CORE_COL0, CORRIDOR_H, CORRIDOR_Y, EAST_COL0, MAIN_BOTTOM, NORTH_Y, PLAZA_COL, ROOM_H, SOUTH_Y } from '../constants';
+import { BUILDING_H, COL_W, CORRIDOR_H, CORRIDOR_Y, EAST_COL0, MAIN_BOTTOM, NORTH_Y, PLAZA_COL, ROOM_H, SOUTH_Y, WEST_GAP_COL } from '../constants';
 import { assembleBuilding, coreAreas } from './building';
-import { cellSlot, cellsOf, coveredSlots, mainRect, NORTH_SLOT0, shapeOf, slotColumn, slotRect, slotSide, slotStrip, slotWing, stripY, WALKWAY_SLOT } from './geometry';
+import { ARMS, armCol, armIndex, cellSlot, cellsOf, coveredSlots, emptyShape, hasBottom, hasNorth, mainRect, shapeOf, slotColumn, slotRect, slotSide, slotStrip, slotWing, STRIPS, stripY, WINGS, zoneRects } from './geometry';
+import { WING_RACE } from './departments';
 import { layoutProjectRoom, roomVariant } from './room';
-import { layoutExterior, slotShell } from './exterior';
+import { layoutExterior, plazaShells, slotShell } from './exterior';
 import { RECEPTION_ID } from './core';
 import type { AreaLayout } from './types';
 
@@ -22,48 +23,83 @@ function roomsFor(slots: number[]): AreaLayout[] {
 }
 
 describe('slot mapping', () => {
-  it('east wing from the square, west wing from the core outwards, north strip from the square', () => {
-    expect(slotColumn(0)).toBe(EAST_COL0);
-    expect(slotColumn(1)).toBe(EAST_COL0);
-    expect(slotColumn(2)).toBe(EAST_COL0 + 1);
-    expect(slotColumn(7)).toBe(EAST_COL0 + 3);
-    expect(slotColumn(-1)).toBe(CORE_COL0 - 1);
-    expect(slotColumn(-2)).toBe(CORE_COL0 - 1);
-    expect(slotColumn(-3)).toBe(CORE_COL0 - 2);
-    expect(slotColumn(NORTH_SLOT0)).toBe(PLAZA_COL);
-    expect(slotSide(0)).toBe('north');
-    expect(slotSide(1)).toBe('south');
-    expect(slotSide(-1)).toBe('north');
-    expect(slotSide(-2)).toBe('south');
-    expect(slotSide(NORTH_SLOT0 + 3)).toBe('south');
-    expect([0, 1, -1, -4, NORTH_SLOT0 + 5].map(slotWing)).toEqual(['east', 'east', 'west', 'west', 'north']);
-    for (const slot of [0, 1, 9, -1, -2, -7, NORTH_SLOT0, NORTH_SLOT0 + 5]) expect(cellSlot(slotColumn(slot), slotSide(slot), slotStrip(slot))).toBe(slot);
-    // slot + 2 is always one column further east
-    for (const slot of [0, -3, NORTH_SLOT0 + 1]) expect(slotColumn(slot + 2)).toBe(slotColumn(slot) + 1);
+  it('a slot is a row, a column and a side; slot + 2 is one column further east', () => {
+    for (const strip of STRIPS)
+      for (const col of [3, PLAZA_COL - 1, PLAZA_COL + 1, EAST_COL0 + 4])
+        for (const side of ['north', 'south'] as const) {
+          const slot = cellSlot(col, side, strip);
+          expect([slotStrip(slot), slotColumn(slot), slotSide(slot)]).toEqual([strip, col, side]);
+          expect(slotColumn(slot + 2)).toBe(col + 1);
+        }
   });
 
-  it('room rectangles respect the corridor of their strip', () => {
-    const a = slotRect(0);
-    const b = slotRect(1);
+  it('the arms: two per zone round the hub, the outer rows reaching in over it', () => {
+    expect(slotWing(cellSlot(PLAZA_COL - 1, 'north', 'north'))).toBe('nw');
+    expect(slotWing(cellSlot(PLAZA_COL + 1, 'north', 'north'))).toBe('ne');
+    expect(slotWing(cellSlot(WEST_GAP_COL - 1, 'north', 'main'))).toBe('mw');
+    expect(slotWing(cellSlot(EAST_COL0, 'north', 'main'))).toBe('me');
+    // row 1 is shared: the top zones on the north side of its corridor, the bottom zones on the south side
+    expect(slotWing(cellSlot(WEST_GAP_COL - 1, 'south', 'main'))).toBe('sw');
+    expect(slotWing(cellSlot(EAST_COL0, 'south', 'main'))).toBe('se');
+    expect(slotWing(cellSlot(PLAZA_COL - 1, 'south', 'south'))).toBe('bw');
+    expect(slotWing(cellSlot(PLAZA_COL + 1, 'north', 'south'))).toBe('be');
+    for (const w of WINGS) {
+      expect(ARMS[w].race).toBe(WING_RACE[w]);
+      expect(armIndex(w, armCol(w, 3))).toBe(3);
+    }
+  });
+
+  it('room rectangles respect the corridor of their row', () => {
+    const a = slotRect(cellSlot(EAST_COL0, 'north'));
+    const b = slotRect(cellSlot(EAST_COL0, 'south'));
     expect(a).toEqual({ x: EAST_COL0 * COL_W, y: NORTH_Y, w: COL_W, h: 12 });
     expect(b.y).toBe(SOUTH_Y);
     expect(a.y + a.h).toBe(CORRIDOR_Y);
     expect(b.y + b.h).toBe(MAIN_BOTTOM);
-    const n = slotRect(NORTH_SLOT0 + 2);
-    expect(n.y + n.h + CORRIDOR_H).toBe(slotRect(NORTH_SLOT0 + 3).y);
+    for (const strip of ['north', 'main', 'south'] as const) {
+      const n = slotRect(cellSlot(5, 'north', strip));
+      expect(n.y + n.h + CORRIDOR_H).toBe(slotRect(cellSlot(5, 'south', strip)).y);
+    }
   });
 
-  it('shape: how far each wing reaches (at least one east column)', () => {
-    expect(shapeOf([])).toEqual({ west: 0, east: 1, north: 0, south: 0 });
-    expect(shapeOf([0, 1])).toEqual({ west: 0, east: 1, north: 0, south: 0 });
-    expect(shapeOf([5])).toEqual({ west: 0, east: 3, north: 0, south: 0 });
-    expect(shapeOf([-3, -1])).toEqual({ west: 2, east: 1, north: 0, south: 0 });
-    expect(shapeOf([NORTH_SLOT0 + 2])).toEqual({ west: 0, east: 1, north: 2, south: 0 });
+  it('shape: how far each arm reaches; the outer rows only stand once their half has a room', () => {
+    expect(shapeOf([])).toEqual(emptyShape());
+    const s = shapeOf([cellSlot(armCol('ne', 2), 'north', 'north'), cellSlot(armCol('mw', 0), 'north', 'main')]);
+    expect(s).toEqual({ ...emptyShape(), ne: 3, mw: 1 });
+    expect(hasNorth(s)).toBe(true);
+    expect(hasBottom(s)).toBe(false);
+  });
+
+  it('a zone is an L: its block over its two rows and its reach over the hub', () => {
+    const s = { ...emptyShape(), ne: 4, me: 1 };
+    const { block, reach } = zoneRects(s, 'orc');
+    expect(block).toEqual({ x: EAST_COL0 * COL_W, y: stripY('north'), w: 2 * COL_W, h: stripY('main') + ROOM_H - stripY('north') });
+    expect(reach).toEqual({ x: (PLAZA_COL + 1) * COL_W, y: stripY('north'), w: 2 * COL_W, h: BUILDING_H });
+    // every cell of the outline gets a room or a patio
+    const cells = cellsOf(s);
+    expect(cells.filter((c) => c.strip === 'north')).toHaveLength(8);
+    // and on row 1 only its own (north) side: the south side is the bottom zone's
+    expect(cells.filter((c) => c.strip === 'main')).toHaveLength(2);
+    expect(cells.filter((c) => c.strip === 'main').every((c) => c.side === 'north')).toBe(true);
   });
 });
 
 describe('building layout', () => {
-  const slots = [0, 1, 2, 3, 4, 7, -1, -2, -3, NORTH_SLOT0, NORTH_SLOT0 + 2, NORTH_SLOT0 + 3];
+  // a few rooms in every zone, on both rows
+  const slots = [
+    cellSlot(armCol('ne', 0), 'north', 'north'),
+    cellSlot(armCol('ne', 1), 'south', 'north'),
+    cellSlot(armCol('me', 0), 'north', 'main'),
+    cellSlot(armCol('me', 1), 'south', 'main'),
+    cellSlot(armCol('nw', 0), 'north', 'north'),
+    cellSlot(armCol('nw', 2), 'south', 'north'),
+    cellSlot(armCol('mw', 0), 'north', 'main'),
+    cellSlot(armCol('sw', 0), 'south', 'main'),
+    cellSlot(armCol('bw', 1), 'north', 'south'),
+    cellSlot(armCol('se', 0), 'south', 'main'),
+    cellSlot(armCol('be', 0), 'south', 'south'),
+    cellSlot(armCol('be', 3), 'north', 'south'),
+  ];
   const rooms = roomsFor(slots);
   const shape = shapeOf(slots);
   const b = assembleBuilding(shape, rooms);
@@ -91,7 +127,7 @@ describe('building layout', () => {
         for (let y = door.y; y < door.y + door.h; y++) expect(b.grid.walkable(x, y)).toBe(true);
         // corridor tile right outside the door
         const outside = room.side === 'north' ? door.y + door.h : door.y - 1;
-        const cy = room.rect.y < CORRIDOR_Y - ROOM_H ? stripY('north') + ROOM_H : CORRIDOR_Y;
+        const cy = stripY(STRIPS.find((st) => room.rect.y >= stripY(st) && room.rect.y < stripY(st) + BUILDING_H)!) + ROOM_H;
         expect(outside >= cy && outside < cy + CORRIDOR_H).toBe(true);
         expect(reachable(x, outside)).toBe(true);
       }
@@ -151,7 +187,7 @@ describe('building layout', () => {
   });
 
   it('the corridor alternates water coolers and benches in project columns, without too many plants', () => {
-    const cols = shape.west + shape.east;
+    const cols = Math.max(shape.mw, shape.sw) + Math.max(shape.me, shape.se);
     const coolers = b.corridor.furniture.filter((f) => f.kind === 'water_cooler');
     expect(coolers.length).toBeGreaterThanOrEqual(Math.floor(cols / 2));
     const benches = b.corridor.furniture.filter((f) => f.kind === 'bench');
@@ -167,11 +203,15 @@ describe('building layout', () => {
     expect(ext.bounds.x + ext.bounds.w).toBeGreaterThan(m.x + m.w);
     expect(ext.bounds.y).toBeLessThan(0);
     const cells = cellsOf(shape);
-    expect(cells.some((c) => c.slot === WALKWAY_SLOT)).toBe(false);
-    const cell = cells.find((c) => c.slot === 5)!;
+    expect(cells.some((c) => c.col === PLAZA_COL)).toBe(false);
+    const cell = cells.find((c) => !slots.includes(c.slot))!;
     const shell = slotShell(cell);
     expect(shell.walls.length).toBeGreaterThan(0);
-    expect(shell.props.every((p) => p.slot === 5)).toBe(true);
+    expect(shell.props.every((p) => p.slot === cell.slot)).toBe(true);
+    // the cells outside the zones have patios too, and never a room's slot
+    const plaza = plazaShells(shape);
+    expect(plaza.length).toBeGreaterThan(0);
+    for (const sh of plaza) expect(sh.slot).toBeLessThan(0);
   });
 });
 

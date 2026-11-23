@@ -7,7 +7,8 @@ import type { Appearance, ArtModule, RoomTheme } from '../../art/api';
 import { DEFAULT_WORLD_OPTIONS } from '../api';
 import type { Character } from './character';
 import { SHELL_DONE_TOOL, Sim } from './sim';
-import { cellSlot, inRect, slotColumn, slotWing } from '../layout/geometry';
+import { cellSlot, emptyShape, inRect, slotColumn, slotWing } from '../layout/geometry';
+import { packDepartments } from '../layout/departments';
 
 const theme: RoomTheme = {
   carpet: '#4f6d8f',
@@ -41,8 +42,18 @@ const art = {
 
 const T0 = 1_700_000_000_000;
 
+/** Where n orc rooms end up once everything is in place. */
+function orcPlan(n: number) {
+  return packDepartments(Array.from({ length: n }, (_, i) => ({ id: `r${i}`, race: 'orc' as const, span: 1, order: i })));
+}
+
+/** Cell of the k-th of n orc rooms once everything is in place. */
+function at(n: number, k: number): number {
+  return orcPlan(n).targets.get(`r${k}`)!.slot;
+}
+
 function room(id: string, slot: number): RoomInfo {
-  // seed % 9 = 2: an orc room, so the rooms line up in the east wing (slots 0, 1, 2...)
+  // an orc room, so the rooms line up in the orc zone (orcPlan)
   return { id, name: id.replace('/', ''), path: id, slot, seed: slot * 120 + 2, createdAt: T0 };
 }
 
@@ -468,27 +479,27 @@ describe('rooms grow and gather in departments', () => {
     expect(a.span).toBe(1);
   });
 
-  it('rooms branch into wings: human west, orc east, elf and undead up north across the walkway', () => {
+  it('rooms gather in their race corner round the hub: elves top left, orcs top right, undead bottom left, humans bottom right', () => {
     const sim = newSim();
     const clock = { now: T0 };
     const rooms = [raceRoom('/elf', 0, 'elf'), raceRoom('/hum', 1, 'human'), raceRoom('/orc', 2, 'orc'), raceRoom('/und', 3, 'undead')];
     const people = [agent('ana', '/elf', 'working'), agent('bia', '/hum', 'working'), agent('caio', '/orc', 'working'), agent('edu', '/und', 'working')];
     sim.applySnapshot(snap(rooms, people), clock.now);
-    expect(slotWing(sim.rooms.get('/hum')!.slot)).toBe('west');
-    expect(slotWing(sim.rooms.get('/orc')!.slot)).toBe('east');
-    expect(slotWing(sim.rooms.get('/elf')!.slot)).toBe('north');
-    expect(slotWing(sim.rooms.get('/und')!.slot)).toBe('south');
-    expect(sim.building.shape).toEqual({ west: 1, east: 1, north: 1, south: 1 });
-    // everyone walks from the elevators to their own desk, the elf across the walkway
+    expect(slotWing(sim.rooms.get('/hum')!.slot)).toBe('be');
+    expect(slotWing(sim.rooms.get('/orc')!.slot)).toBe('ne');
+    expect(slotWing(sim.rooms.get('/elf')!.slot)).toBe('nw');
+    expect(slotWing(sim.rooms.get('/und')!.slot)).toBe('bw');
+    expect(sim.building.shape).toEqual({ ...emptyShape(), nw: 1, ne: 1, bw: 1, be: 1 });
+    // everyone walks from the elevators to their own desk, across the walkways
     run(sim, clock, 90, () => [...sim.chars.values()].every((c) => c.atSpot && c.atSpot === c.homeSpot));
     for (const id of ['ana', 'bia', 'caio', 'edu']) {
       const c = sim.chars.get(id)!;
       expect(c.atSpot, id).toBe(c.homeSpot);
       expect(inRect(sim.rooms.get(c.roomId)!.layout.rect, c.tx, c.ty), id).toBe(true);
     }
-    // a second human room fills the other side of the west wing, next to the core
+    // a second human room fills the other side of the same cell, right under the hub
     sim.applySnapshot(snap([...rooms, raceRoom('/hum2', 3, 'human')], [...people, agent('davi', '/hum2', 'working')], 2), clock.now);
-    expect(sim.rooms.get('/hum2')!.slot).toBe(cellSlot(slotColumn(sim.rooms.get('/hum')!.slot), 'south'));
+    expect(sim.rooms.get('/hum2')!.slot).toBe(cellSlot(slotColumn(sim.rooms.get('/hum')!.slot), 'south', 'south'));
   });
 });
 
@@ -496,12 +507,12 @@ describe('rooms without gaps', () => {
   const inside = (r: { layout: { rect: { x: number; y: number; w: number; h: number } } }, c: { tx: number; ty: number }) =>
     c.tx >= r.layout.rect.x && c.tx < r.layout.rect.x + r.layout.rect.w && c.ty >= r.layout.rect.y && c.ty < r.layout.rect.y + r.layout.rect.h;
 
-  it('initial load: rooms take slots 0, 1, 2... in server order, even with gaps in its slots', () => {
+  it('initial load: rooms take the zone cells in server order, even with gaps in its slots', () => {
     const sim = newSim();
     const clock = { now: T0 };
     sim.applySnapshot(snap([room('/c', 8), room('/a', 0), room('/b', 3)], [agent('ana', '/a', 'working'), agent('bia', '/b', 'working'), agent('caio', '/c', 'working')]), clock.now);
-    expect(['/a', '/b', '/c'].map((id) => sim.rooms.get(id)!.slot)).toEqual([0, 1, 2]);
-    expect(sim.building.shape.east).toBe(2);
+    expect(['/a', '/b', '/c'].map((id) => sim.rooms.get(id)!.slot)).toEqual([at(3, 0), at(3, 1), at(3, 2)]);
+    expect(sim.building.shape).toEqual(orcPlan(3).shape);
   });
 
   it('terminal closed: the farthest room moves into the free slot, people walk over and the building shrinks', () => {
@@ -514,21 +525,21 @@ describe('rooms without gaps', () => {
     const c = sim.rooms.get('/c')!;
     const caio = sim.chars.get('caio')!;
     const homeBefore = caio.homeSpot;
-    expect(c.slot).toBe(2);
-    expect(sim.building.shape.east).toBe(2);
+    expect(c.slot).toBe(at(3, 2));
+    expect(sim.building.shape).toEqual(orcPlan(3).shape);
 
     // the session of room /b closes: bia leaves and the room is dismantled
     sim.applySnapshot(snap([room('/a', 0), room('/c', 2)], [agents[0], agent('bia', '/b', 'offline'), agents[2], agents[3]], 2), clock.now);
     run(sim, clock, 200, () => !sim.rooms.has('/b'));
     expect(sim.rooms.has('/b')).toBe(false);
-    expect(c.slot).toBe(2);
+    expect(c.slot).toBe(at(3, 2));
 
     // the slot waits a bit and then room /c moves into it (rebuilt, dark)
-    run(sim, clock, 3, () => c.slot === 1);
-    expect(c.slot).toBe(1);
+    run(sim, clock, 3, () => c.slot === at(2, 1));
+    expect(c.slot).toBe(at(2, 1));
     expect(c.phase).toBe('building');
     const ghost = [...sim.rooms.values()].find((r) => r.ghost);
-    expect(ghost?.slot).toBe(2);
+    expect(ghost?.slot).toBe(at(3, 2));
     expect(ghost?.listed).toBe(false);
     // everyone keeps their desk (now in the new room) and walks to it, no teleporting
     expect(caio.homeSpot).toBe(homeBefore);
@@ -548,8 +559,8 @@ describe('rooms without gaps', () => {
     expect(c.lightOn).toBe(true);
     // the old address emptied, went dark and was dismantled; the building is back to one column of rooms
     expect(sim.rooms.has(ghost!.id)).toBe(false);
-    run(sim, clock, 10, () => sim.building.shape.east === 1);
-    expect(sim.building.shape.east).toBe(1);
+    run(sim, clock, 10, () => JSON.stringify(sim.building.shape) === JSON.stringify(orcPlan(2).shape));
+    expect(sim.building.shape).toEqual(orcPlan(2).shape);
     // davi (idle, maybe strolling) also has his place in the new room
     expect(c.layout.spots.some((p) => p.id === sim.chars.get('davi')!.homeSpot)).toBe(true);
   });
@@ -564,13 +575,13 @@ describe('rooms without gaps', () => {
     sim.applySnapshot(snap([room('/a', 0)], [agent('ana', '/a', 'working'), agent('bia', '/b', 'offline'), agent('caio', '/c', 'offline')], 2), clock.now);
     let moved = false;
     run(sim, clock, 240, () => {
-      if (c.slot !== 2 || [...sim.rooms.values()].some((r) => r.ghost)) moved = true;
+      if (c.slot !== at(3, 2) || [...sim.rooms.values()].some((r) => r.ghost)) moved = true;
       return !sim.rooms.has('/b') && !sim.rooms.has('/c');
     });
     expect(moved).toBe(false);
     expect(sim.rooms.has('/c')).toBe(false);
-    run(sim, clock, 5, () => sim.building.shape.east === 1);
-    expect(sim.building.shape.east).toBe(1);
+    run(sim, clock, 5, () => JSON.stringify(sim.building.shape) === JSON.stringify(orcPlan(1).shape));
+    expect(sim.building.shape).toEqual(orcPlan(1).shape);
   });
 
   it('opens and closes at random (even in the middle of a move): nobody teleports and no gap is left at the end', () => {
@@ -621,15 +632,17 @@ describe('rooms without gaps', () => {
     run(sim, clock, 400, () => {
       track();
       const rs = [...sim.rooms.values()];
-      const compact = rs.every((r) => r.slot < rs.length);
+      const want = new Set([...orcPlan(rs.length).targets.values()].map((t) => t.slot));
+      const compact = rs.every((r) => want.has(r.slot));
       return compact && rs.every((r) => r.listed && r.phase === 'ready' && !r.ghost) && [...sim.chars.values()].every((c) => !c.leaving);
     });
     const slots = [...sim.rooms.values()].map((r) => r.slot).sort((a, b) => a - b);
     expect([...sim.rooms.keys()].sort()).toEqual([...open.keys()].sort());
-    expect(slots).toEqual(slots.map((_, i) => i));
+    const plan = orcPlan(open.size);
+    expect(slots).toEqual([...plan.targets.values()].map((t) => t.slot).sort((a, b) => a - b));
     expect([...sim.rooms.values()].some((r) => r.ghost)).toBe(false);
-    run(sim, clock, 20, () => sim.building.shape.east === Math.ceil(open.size / 2));
-    expect(sim.building.shape.east).toBe(Math.ceil(open.size / 2));
+    run(sim, clock, 20, () => JSON.stringify(sim.building.shape) === JSON.stringify(plan.shape));
+    expect(sim.building.shape).toEqual(plan.shape);
     expect(maxStep).toBeLessThan(12);
   });
 
@@ -637,11 +650,11 @@ describe('rooms without gaps', () => {
     const sim = newSim();
     const clock = { now: T0 };
     sim.applySnapshot(snap([room('/a', 0), room('/c', 2)], [agent('ana', '/a', 'working'), agent('caio', '/c', 'working')]), clock.now);
-    expect(sim.rooms.get('/c')!.slot).toBe(1);
+    expect(sim.rooms.get('/c')!.slot).toBe(at(2, 1));
     run(sim, clock, 0.5);
-    // the server sends the new room in a high slot; in the building it goes to slot 2
+    // the server sends the new room in a high slot; in the building it goes to the next cell
     sim.applySnapshot(snap([room('/a', 0), room('/c', 2), room('/d', 7)], [agent('ana', '/a', 'working'), agent('caio', '/c', 'working'), agent('duda', '/d', 'working')], 2), clock.now);
-    expect(sim.rooms.get('/d')!.slot).toBe(2);
+    expect(sim.rooms.get('/d')!.slot).toBe(at(3, 2));
     expect(sim.rooms.get('/d')!.phase).toBe('building');
   });
 });
@@ -720,7 +733,8 @@ describe('shell wait', () => {
     sim.applySnapshot(snap(rooms, [agent('ana', '/a', 'shell', { shells: [shell(1000)] })], 2), clock.now);
     expect(ana.mode).toBe('shell');
     let ran = false;
-    run(sim, clock, 60, () => {
+    // the zones lie further from the hub's stalls than the old wings did: the walk back takes a while
+    run(sim, clock, 150, () => {
       if (ana.pose === 'run') ran = true;
       return ana.atSpot === ana.homeSpot && !ana.step && !ana.queue.length;
     });

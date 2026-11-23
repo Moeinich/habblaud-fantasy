@@ -92,6 +92,78 @@ const PROJECTS: DemoProject[] = [
     commands: ['npm test', 'npm run dev', 'git status', 'git push'],
     greps: ['handoff', 'escalate'],
   },
+  {
+    name: 'inventory-service',
+    files: ['src/stock/reserve.ts', 'src/stock/warehouse.ts', 'src/events/consumer.ts', 'tests/reserve.test.ts', 'Dockerfile'],
+    prompts: [tr('Stock goes negative when two orders arrive at once'), tr('Add a low-stock alert per warehouse')],
+    tasks: [tr('Reproduce the race condition'), tr('Lock stock reservations'), tr('Low-stock alert')],
+    queries: ['postgres select for update skip locked', 'kafka consumer exactly once'],
+    commands: ['npm test', 'docker compose up -d', 'git status', 'git diff'],
+    greps: ['reserve', 'quantity'],
+  },
+  {
+    name: 'design-system',
+    files: ['src/components/Button.tsx', 'src/components/Modal.tsx', 'src/tokens/colors.ts', 'stories/Button.stories.tsx', 'package.json'],
+    prompts: [tr('Add a size variant to the button'), tr('The modal doesn\'t trap keyboard focus')],
+    tasks: [tr('Button sizes'), tr('Focus trap in the modal'), tr('Update the stories')],
+    queries: ['react focus trap accessible modal', 'design tokens css variables'],
+    commands: ['npm run storybook', 'npm test', 'git status', 'npm run lint'],
+    greps: ['variant', 'aria-modal'],
+  },
+  {
+    name: 'auth-gateway',
+    files: ['src/oauth/callback.ts', 'src/session/store.ts', 'src/middleware/jwt.ts', 'tests/oauth.test.ts', 'config/default.yml'],
+    prompts: [tr('Users get logged out after five minutes'), tr('Add sign-in with a second provider')],
+    tasks: [tr('Check token expiry'), tr('Refresh tokens'), tr('Second sign-in provider')],
+    queries: ['jwt refresh token rotation', 'oauth pkce flow'],
+    commands: ['npm test', 'npm run dev', 'git status', 'curl -s http://localhost:8080/health'],
+    greps: ['expiresIn', 'refreshToken'],
+  },
+  {
+    name: 'billing-portal',
+    files: ['src/pages/Invoices.tsx', 'src/api/invoices.ts', 'src/pdf/invoice.ts', 'tests/invoices.test.ts'],
+    prompts: [tr('Invoice PDFs show the wrong currency'), tr('Let customers download all invoices at once')],
+    tasks: [tr('Fix the currency format'), tr('Bulk download'), tr('Invoice tests')],
+    queries: ['intl numberformat currency locale', 'zip files stream node'],
+    commands: ['npm test', 'npm run build', 'git status', 'git diff'],
+    greps: ['currency', 'formatMoney'],
+  },
+  {
+    name: 'search-indexer',
+    files: ['indexer/main.go', 'indexer/tokenize.go', 'indexer/store.go', 'indexer/main_test.go', 'go.mod'],
+    prompts: [tr('Searches with accents find nothing'), tr('Reindexing takes far too long')],
+    tasks: [tr('Normalize accents'), tr('Index in batches'), tr('Benchmark the indexer')],
+    queries: ['go unicode normalization nfd', 'bulk indexing batch size'],
+    commands: ['go test ./...', 'go build ./...', 'git status', 'go vet ./...'],
+    greps: ['Tokenize', 'batch'],
+  },
+  {
+    name: 'game-backend',
+    files: ['src/match/lobby.ts', 'src/match/rating.ts', 'src/ws/server.ts', 'tests/rating.test.ts'],
+    prompts: [tr('Matchmaking pairs players of very different levels'), tr('Players disconnect when the lobby fills up')],
+    tasks: [tr('Tune the rating range'), tr('Fix the lobby disconnects'), tr('Rating tests')],
+    queries: ['elo rating matchmaking range', 'websocket heartbeat ping pong'],
+    commands: ['npm test', 'npm run dev', 'git status', 'git push'],
+    greps: ['rating', 'lobby'],
+  },
+  {
+    name: 'cli-tools',
+    files: ['src/commands/deploy.ts', 'src/commands/init.ts', 'src/config.ts', 'tests/deploy.test.ts', 'README.md'],
+    prompts: [tr('Add a --dry-run flag to deploy'), tr('The init command overwrites existing files')],
+    tasks: [tr('Dry-run flag'), tr('Ask before overwriting'), tr('Update the README')],
+    queries: ['node cli argument parsing', 'prompt before overwrite file cli'],
+    commands: ['npm test', 'npm run build', 'git status', 'node dist/cli.js --help'],
+    greps: ['dryRun', 'overwrite'],
+  },
+  {
+    name: 'ml-recommender',
+    files: ['recommender/train.py', 'recommender/features.py', 'recommender/serve.py', 'tests/test_features.py', 'requirements.txt'],
+    prompts: [tr('Recommendations keep showing items people already bought'), tr('Retrain the model every night')],
+    tasks: [tr('Filter purchased items'), tr('Nightly training job'), tr('Feature tests')],
+    queries: ['implicit feedback recommender filter seen items', 'cron retrain model pipeline'],
+    commands: ['pytest -q', 'python recommender/train.py --dry-run', 'git status', 'pip install -r requirements.txt'],
+    greps: ['purchased', 'predict'],
+  },
 ];
 
 /** Demo projects (the fake "My day" history uses all of them, not just the rooms open at the moment). */
@@ -259,7 +331,7 @@ export class DemoSimulator {
     this.nextGitHubAt = now + (10_000 + this.ghRng() * 10_000) / this.speed;
     this.prSeq = 12 + Math.floor(this.ghRng() * 80);
     this.codexRng = mulberry32(((opts.seed ?? hash32(String(now))) ^ 0x3c6ef372) >>> 0);
-    this.target = opts.sessions ?? 4;
+    this.target = opts.sessions ?? 12;
     this.prefix = opts.idPrefix ?? '';
     this.tag = now.toString(36);
     this.accounts = this.prefix
@@ -522,7 +594,13 @@ export class DemoSimulator {
     // 35% chance of reusing an existing room (2 sessions on the same project).
     const reuse = activeRooms.size > 0 && this.rng() < 0.35;
     const candidates = PROJECTS.filter((p) => (reuse ? activeRooms.has(p.name) : !activeRooms.has(p.name)));
-    let project = this.pick(candidates.length ? candidates : PROJECTS);
+    // a new room goes to whichever faction has the fewest rooms, so every corner of the camp fills up
+    const pool = candidates.length ? candidates : PROJECTS;
+    const byRace = new Map<string, number>();
+    for (const r of this.rooms.values()) byRace.set(raceOfRoom(r.id), (byRace.get(raceOfRoom(r.id)) ?? 0) + 1);
+    const load = (p: DemoProject) => (reuse ? 0 : (byRace.get(raceOfRoom(`${this.prefix}${ROOT}/${p.name}`)) ?? 0));
+    const least = Math.min(...pool.map(load));
+    let project = this.pick(pool.filter((p) => load(p) === least));
     // Opening: the 2nd session is Codex's and joins the 1st's room (Claude Code and Codex sharing the room). The room
     // draw still happens (the other sessions' sequence doesn't change); only the result is swapped.
     const host = warm && k === 1 ? [...this.agents.values()].find((x) => x.info.kind === 'main') : undefined;

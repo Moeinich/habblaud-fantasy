@@ -7,7 +7,7 @@ import type { WorldAssets } from '../assets';
 import type { Camera } from '../camera';
 import { BUILDING_H, COL_W, CORRIDOR_Y, NSTRIP_Y, PLAZA_COL } from '../constants';
 import { layoutExterior, plazaShells, slotShell, type ExteriorLayout, type SlotShell } from '../layout/exterior';
-import { cellsOf, mainRect, type Shape } from '../layout/geometry';
+import { cellsOf, hasStrip, mainRect, stripY, type Shape } from '../layout/geometry';
 import type { AreaLayout, ExteriorProp, TileRect } from '../layout/types';
 import { screenModeFor } from '../sim/behavior';
 import type { Character } from '../sim/character';
@@ -281,7 +281,8 @@ export class Renderer {
     ctx.translate(-this.baseX, -this.baseY);
     paintShell(this.art, ctx, this.exterior.floors, []);
     // the halls' floors running out to their rings (layout/enclosure.ts)
-    this.rings = hallRings(shape).map((ring) => ringSprite(ring, this.art));
+    // the elves' ring is their world tree (drawElfTree)
+    this.rings = hallRings(shape).filter((ring) => ring.race !== 'elf').map((ring) => ringSprite(ring, this.art));
     for (const sp of this.rings) ctx.drawImage(sp.floor, sp.x, sp.y);
     if (this.exterior.streetH) paintRoadRuts(ctx, this.baseX, c.width, this.exterior.streetY, this.exterior.streetH);
     this.shells = [];
@@ -702,25 +703,31 @@ export class Renderer {
    * trunk and crown are solid (none of them covers a floor); the veil of vines over the offices is see-through.
    */
   private drawElfTree(visible: (x: number, y: number, w: number, h: number) => boolean): void {
-    const shape = this.sim.building.shape;
-    if (!shape.north) return;
+    const ring = this.ringsAll().find((r) => r.race === 'elf');
+    if (!ring) return;
     let elves = false;
     for (const r of this.sim.rooms.values()) if (r.present && !r.ghost && raceOfSeed(r.seed) === 'elf') elves = true;
     if (!elves) return;
     const { ctx } = this;
-    const tree = worldTree(shape.north * COL_W * TILE);
-    const wx = PLAZA_COL * COL_W * TILE;
-    const wy = NSTRIP_Y * TILE;
-    const x = wx + tree.ox;
-    const y = wy + tree.oy;
-    if (!visible(x, y, tree.solid.width, tree.solid.height)) return;
-    ctx.drawImage(tree.solid, x, y);
+    const shape = this.sim.building.shape;
+    // the elves' offices: the parts of the zone's outline that lie on a row (the top row, and row 1's north side)
+    const rows: TileRect[] = [];
+    for (const r of ring.rects)
+      for (const strip of ['north', 'main'] as const) {
+        if (!hasStrip(shape, strip)) continue;
+        const y0 = Math.max(r.y, stripY(strip));
+        const y1 = Math.min(r.y + r.h, stripY(strip) + BUILDING_H);
+        if (y1 > y0) rows.push({ x: r.x, y: y0, w: r.w, h: y1 - y0 });
+      }
+    const tree = worldTree(ring.rects, rows, ring.gaps);
+    if (!visible(tree.x, tree.y, tree.solid.width, tree.solid.height)) return;
+    ctx.drawImage(tree.solid, tree.x, tree.y);
     ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.beginPath();
-    ctx.rect(wx, wy + 2 * TILE, shape.north * COL_W * TILE, BUILDING_H * TILE - 2 * TILE);
+    for (const c of tree.clips) ctx.rect(c.x, c.y, c.w, c.h);
     ctx.clip();
-    ctx.drawImage(tree.veil, x, y);
+    ctx.drawImage(tree.veil, tree.x, tree.y);
     ctx.restore();
   }
 
@@ -774,17 +781,25 @@ export class Renderer {
     return out;
   }
 
+  /** The rings floors spread into (not the elves' tree). */
   private ringsOf(): HallRing[] {
+    this.ringsAll();
+    return this.ringSpread;
+  }
+
+  private ringsAll(): HallRing[] {
     const key = this.sim.building.key;
     if (this.ringKey !== key) {
       this.ringKey = key;
       this.ringList = hallRings(this.sim.building.shape);
+      this.ringSpread = this.ringList.filter((r) => r.race !== 'elf');
     }
     return this.ringList;
   }
 
   private ringKey = '';
   private ringList: HallRing[] = [];
+  private ringSpread: HallRing[] = [];
 
   private drawWalls(vis: AreaVis, anim: BuildAnim, now: number, hour: number): void {
     const { ctx } = this;

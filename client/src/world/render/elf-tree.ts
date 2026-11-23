@@ -1,22 +1,24 @@
-// The world tree of the night-elf wing (DOM canvases, cached per wing width): the elf offices stand in the hollow
-// heart of one huge tree. A rounded ring of living trunk wraps the whole wing; its back (north) wall rises high
+// The world tree of the night elves' zone (DOM canvases, cached per outline): the elf offices stand in the hollow
+// heart of one huge tree. A rounded ring of living trunk wraps the zone's L; its back (north) wall rises high
 // behind the offices as the inside of the trunk — furrowed bark with glowing runes and roots running down onto
-// the floor — and its rim carries a crown of jungle leaves all the way round. Between the offices and the ring
-// lies the hollow's floor of heartwood, with growth rings and glowing mushrooms. A gap in the front of the ring
-// lets the walkway in. Drawn after people and furniture (render/renderer.ts drawElfTree): the ring, wall, floor and
+// the floor — and its rim carries a crown of jungle leaves all the way round. Inside, the jungle floor runs on, with
+// roots breaking through along the foot of the trunk and glowing mushrooms among them. Gaps in the ring let the
+// corridors out. Drawn after people and furniture (render/renderer.ts drawElfTree): the ring, wall, floor and
 // crown never cover the offices themselves; only a veil of hanging vines does, and that one is see-through.
 import { hash32 } from '../../../../shared/hash';
-import { BUILDING_H, ELF_TREE_UP, TILE } from '../constants';
-import { WALKWAY_LX, WALKWAY_W } from '../layout/corridor';
+import { ELF_TREE_UP, TILE } from '../constants';
+import type { TileRect } from '../layout/types';
 
 export interface TreeSprite {
-  /** Ring, inner wall, heartwood floor and crown (drawn opaque; nothing over the offices). */
+  /** Ring, inner wall, roots and crown (drawn opaque; nothing over the offices). */
   solid: HTMLCanvasElement;
   /** Vines hanging over the offices (drawn see-through). */
   veil: HTMLCanvasElement;
-  /** Offset (px) of both canvases from the wing's top-left corner. */
-  ox: number;
-  oy: number;
+  /** World px of both canvases' top-left corner. */
+  x: number;
+  y: number;
+  /** Where the veil may show (world px): the rows of offices below their back wall. */
+  clips: { x: number; y: number; w: number; h: number }[];
 }
 
 /** How far the tree rises above the north strip (tiles), for the camera. */
@@ -79,62 +81,114 @@ class Pix {
 
 const cache = new Map<string, TreeSprite>();
 
-/** Rounded-rectangle "superellipse" exponent of the ring: round corners, nearly straight sides. */
-const N = 6;
+/** A rectangle in px. */
+interface PxRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
-export function worldTree(wingWpx: number, seed = 7): TreeSprite {
-  const key = `${wingWpx}|${seed}`;
+/**
+ * The tree round the elves' zone: `rects` are the zone's outline (tiles, overlapping: the L of its two rows), `rows`
+ * the bands of its two rows of offices (tiles) and `gaps` where the corridors leave through the trunk (tiles).
+ */
+export function worldTree(rects: readonly TileRect[], rows: readonly TileRect[], gaps: readonly TileRect[], seed = 7): TreeSprite {
+  const key = `${[...rects, ...rows, ...gaps].map((r) => `${r.x},${r.y},${r.w},${r.h}`).join(';')}|${seed}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const T = TILE;
-  const W = wingWpx;
-  const H = BUILDING_H * T;
-  // hollow's half width: just wide enough that the wing's corners stay inside the rounded ring
-  // (|x/A|^N + |y/B|^N <= 1 at the corners, with B below), so the trunk hugs the offices on the sides
-  const A = W / 2 / (1 - ((H / 2) / (H / 2 + 1.5 * T)) ** N) ** (1 / N) + 0.5 * T;
-  const B = H / 2 + 1.5 * T; // hollow's half height
+  const M = 1.5 * T; // the hollow's margin round the offices
+  const CR = 4 * T; // its corner radius
   const R = 2.5 * T; // ring thickness
   const WALL = 10 * T; // how high the back wall rises
   const CROWN = 7 * T; // leaves above the rim
   const pad = 3 * T;
-  const left = A + R + pad; // canvas x of the hollow's centre
-  const top = WALL + R + CROWN + T; // canvas y of the wing's top edge
-  const cw = Math.ceil(left * 2);
-  const ch = Math.ceil(top + H / 2 + B + R + 2 * T);
-  const cx = left;
-  const cy = top + H / 2;
+  const bx0 = Math.min(...rects.map((r) => r.x)) * T;
+  const by0 = Math.min(...rects.map((r) => r.y)) * T;
+  const bx1 = Math.max(...rects.map((r) => r.x + r.w)) * T;
+  const by1 = Math.max(...rects.map((r) => r.y + r.h)) * T;
+  // canvas origin in world px
+  const ox = bx0 - M - R - pad;
+  const oy = by0 - WALL - R - CROWN - T;
+  const cw = Math.ceil(bx1 + M + R + pad - ox);
+  const ch = Math.ceil(by1 + M + R + 2 * T - oy);
   const solid = new Pix(cw, ch);
   const veil = new Pix(cw, ch);
   const rnd = (k: number) => hash32(`${seed}:${k}`) / 4294967296;
-  const sup = (dx: number, dy: number, a: number, b: number) => Math.abs(dx / a) ** N + Math.abs(dy / b) ** N;
-  /** Top edge of the hollow at a column (canvas y), or null beyond its sides. */
-  const hollowTop = (dx: number) => (Math.abs(dx) >= A ? null : cy - B * (1 - Math.abs(dx / A) ** N) ** (1 / N));
-  /** How high the ring is lifted at a column: the full wall in the middle, dropping to nothing at the sides. */
-  const lift = (dx: number) => (Math.abs(dx) >= A ? 0 : WALL * Math.sqrt(1 - (dx / A) ** 2));
-  const wingX0 = cx - W / 2;
-  const walkX0 = wingX0 + (WALKWAY_LX - 0.5) * T;
-  const walkX1 = wingX0 + (WALKWAY_LX + WALKWAY_W + 0.5) * T;
-  const inWing = (x: number, y: number) => x >= wingX0 && x < wingX0 + W && y >= top && y < top + H;
+  const box = (r: TileRect) => {
+    const x0 = r.x * T - ox;
+    const y0 = r.y * T - oy;
+    return { x0, y0, x1: x0 + r.w * T, y1: y0 + r.h * T, cx: x0 + (r.w * T) / 2, cy: y0 + (r.h * T) / 2, hw: (r.w * T) / 2 + M, hh: (r.h * T) / 2 + M };
+  };
+  const boxes = rects.map(box);
+  const wing = rows.map(box);
+  const holes = gaps.map(box);
+  const K = 3 * T;
+  /** Distance outside the hollow (negative inside): the zone's rectangles, rounded and blended into one. */
+  const sdf = (x: number, y: number) => {
+    let d = Infinity;
+    for (const b of boxes) {
+      const qx = Math.abs(x - b.cx) - (b.hw - CR);
+      const qy = Math.abs(y - b.cy) - (b.hh - CR);
+      const e = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - CR;
+      if (d === Infinity) d = e;
+      else {
+        const k = Math.max(K - Math.abs(d - e), 0) / K;
+        d = Math.min(d, e) - k * k * K * 0.25;
+      }
+    }
+    return d;
+  };
+  const dmap = new Float32Array(cw * ch);
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) dmap[y * cw + x] = sdf(x + 0.5, y + 0.5);
+  const D = (x: number, y: number) => {
+    const ix = Math.round(x);
+    const iy = Math.round(y);
+    return ix < 0 || iy < 0 || ix >= cw || iy >= ch ? Infinity : dmap[iy * cw + ix];
+  };
+  const inWing = (x: number, y: number) => wing.some((b) => x >= b.x0 && x < b.x1 && y >= b.y0 && y < b.y1);
+  // a corridor's way out through the trunk (with half a tile of dark edge either side)
+  const inGap = (x: number, y: number) => holes.some((b) => x >= b.x0 && x < b.x1 && y >= b.y0 - 0.5 * T && y < b.y1 + 0.5 * T);
+  /** Top edge of the hollow at a column (canvas y), or null where the hollow doesn't reach. */
+  const tops: (number | null)[] = [];
+  for (let x = 0; x < cw; x++) {
+    let t: number | null = null;
+    for (let y = 0; y < ch; y++)
+      if (dmap[y * cw + x] <= 0) {
+        t = y;
+        break;
+      }
+    tops.push(t);
+  }
+  const hollowTop = (x: number) => tops[Math.round(x)] ?? null;
+  const hx0 = bx0 - M - ox;
+  const hx1 = bx1 + M - ox;
+  /** How high the ring is lifted at a column: the full wall in the middle, dropping to nothing at the ends. */
+  const lift = (x: number) => {
+    const u = (x - (hx0 + hx1) / 2) / ((hx1 - hx0) / 2);
+    return Math.abs(u) >= 1 ? 0 : WALL * Math.sqrt(1 - u * u);
+  };
 
-  // ---- the hollow's floor: heartwood with growth rings, roots and glowing mushrooms (around the offices)
+  // ---- the hollow's floor is the jungle's own ground (the biome underneath); only along the foot of the trunk do
+  // its roots break through, with glowing mushrooms among them
   for (let y = 0; y < ch; y++) {
     for (let x = 0; x < cw; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const f = sup(dx, dy, A, B);
-      if (f > 1 || inWing(x, y)) continue;
-      if (y > top + H && x >= walkX0 && x < walkX1) continue;
-      const ring = Math.floor(f ** 0.5 * 14 + Math.sin(x * 0.05) * 0.3);
+      const d = dmap[y * cw + x];
+      if (d > 0 || inWing(x, y) || inGap(x, y)) continue;
+      // a ragged band of roots, wider here and there
+      const band = (0.35 + 0.45 * ((hash32(`r${x >> 3},${y >> 3}`) % 100) / 100)) * T;
+      if (-d > band) continue;
       const n = hash32(`h${x >> 1},${y >> 1}`) % 11;
-      solid.put(x, y, ring % 3 === 0 && n > 2 ? HEART[0] : n === 0 ? HEART[2] : HEART[1]);
+      solid.put(x, y, n === 0 ? HEART[2] : n < 4 ? HEART[0] : HEART[1]);
     }
   }
-  for (let i = 0; i < 70; i++) {
-    const a = rnd(i + 50) * Math.PI * 2;
-    const r = 0.86 + rnd(i + 51) * 0.12;
-    const x = Math.round(cx + Math.cos(a) * A * r);
-    const y = Math.round(cy + Math.sin(a) * B * r);
-    if (!solid.filled(x, y) || inWing(x, y)) continue;
+  for (let i = 0, put = 0; i < 1200 && put < 90; i++) {
+    const x = Math.round(rnd(i + 50) * cw);
+    const y = Math.round(rnd(i + 51) * ch);
+    const d = D(x, y);
+    if (d > -0.4 * T || d < -1.6 * T || inWing(x, y) || inGap(x, y)) continue;
+    put++;
     solid.put(x, y, GLOW_HI);
     solid.put(x - 1, y + 1, GLOW);
     solid.put(x + 1, y + 1, GLOW);
@@ -151,10 +205,9 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
   };
   // inner wall first (behind everything else of the ring)
   for (let x = 0; x < cw; x++) {
-    const dx = x - cx;
-    const yIn = hollowTop(dx);
+    const yIn = hollowTop(x);
     if (yIn === null) continue;
-    const l = lift(dx);
+    const l = lift(x);
     if (l < 1) continue;
     for (let y = Math.floor(yIn - l); y < yIn; y++) {
       if (inWing(x, y)) continue;
@@ -166,58 +219,60 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
       solid.put(x, y, c);
     }
   }
-  // the rim all the way round (the back of it lifted onto the wall)
+  // the rim all the way round (the back of it — above the hollow — lifted onto the wall)
   for (let y = 0; y < ch; y++) {
     for (let x = 0; x < cw; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const f = sup(dx, dy, A, B);
-      const g = sup(dx, dy, A + R, B + R);
-      if (f <= 1 || g > 1) continue;
-      if (dy > 0 && x >= walkX0 && x < walkX1) continue; // the walkway's gap in the front
-      // how far between the inner and the outer edge this pixel lies (0..1)
-      const uu = Math.min(1, Math.max(0, (f ** (1 / N) - 1) / ((A + R) / A - 1)));
-      const yy = dy < 0 ? y - lift(dx) : y;
-      solid.put(x, yy, barkAt(x, y, uu));
+      const d = dmap[y * cw + x];
+      if (d <= 0 || d > R || inGap(x, y)) continue;
+      const yIn = tops[x];
+      const back = yIn !== null && y < yIn;
+      solid.put(x, back ? y - lift(x) : y, barkAt(x, y, d / R));
     }
   }
-  // the outer face of the front of the ring, dropping to the ground
+  // the outer face of the front of the ring, dropping to the ground: below the lowest stretch of rim in each column
   for (let x = 0; x < cw; x++) {
-    const dx = x - cx;
-    if (Math.abs(dx) >= A + R) continue;
-    if (x >= walkX0 && x < walkX1) continue;
-    const yOut = cy + (B + R) * (1 - Math.abs(dx / (A + R)) ** N) ** (1 / N);
-    for (let y = Math.floor(yOut); y < yOut + T; y++) {
+    let yOut: number | null = null;
+    for (let y = ch - 1; y > 0; y--)
+      if (dmap[y * cw + x] <= R) {
+        yOut = y + 1;
+        break;
+      }
+    if (yOut === null) continue;
+    for (let y = yOut; y < yOut + T; y++) {
+      if (inGap(x, y - T)) continue;
       const fur = (x % 7 + 7) % 7;
       solid.put(x, y, y > yOut + T - 3 ? BARK[0] : fur === 0 ? BARK[0] : BARK[1]);
     }
   }
-  // the gap's dark edges
-  for (const gx of [walkX0 - 1, walkX1]) {
-    const dx = gx - cx;
-    const y0 = cy + B * (1 - Math.abs(dx / A) ** N) ** (1 / N);
-    const y1 = cy + (B + R) * (1 - Math.abs(dx / (A + R)) ** N) ** (1 / N) + T;
-    for (let y = Math.floor(y0); y < y1; y++) solid.put(gx, y, BARK[0]);
+  // the gaps' dark edges
+  for (const g of holes) {
+    for (let x = Math.floor(g.x0); x < g.x1; x++) {
+      for (const y of [Math.floor(g.y0 - 0.5 * T) - 1, Math.ceil(g.y1 + 0.5 * T)]) {
+        const d = D(x, y);
+        if (d > 0 && d <= R) solid.put(x, y, BARK[0]);
+      }
+    }
   }
 
-  // ---- roots running down the inner wall onto the heartwood
+  // ---- roots running down the inner wall onto the floor
+  const W = hx1 - hx0;
   for (let i = 0; i < Math.round(W / 70); i++) {
-    const x0 = cx + (rnd(i + 200) - 0.5) * W * 1.1;
-    const yIn = hollowTop(x0 - cx);
+    const x0 = hx0 + rnd(i + 200) * W;
+    const yIn = hollowTop(x0);
     if (yIn === null) continue;
     let x = x0;
-    for (let y = Math.floor(yIn - lift(x0 - cx) * 0.5); y < yIn + T * 0.8; y++) {
+    for (let y = Math.floor(yIn - lift(x0) * 0.5); y < yIn + T * 0.8; y++) {
       x += Math.sin(y * 0.15 + i) * 0.6;
       if (inWing(Math.round(x), y)) break;
       for (let d = -2; d <= 2; d++) solid.put(x + d, y, d === -2 ? BARK[3] : d === 2 ? BARK[0] : BARK[2]);
     }
   }
   // glowing runes on the inner wall
-  for (let i = 0; i < 9; i++) {
-    const x = cx + (rnd(i + 300) - 0.5) * W * 0.9;
-    const yIn = hollowTop(x - cx);
+  for (let i = 0; i < Math.max(9, Math.round(W / 120)); i++) {
+    const x = hx0 + (0.05 + rnd(i + 300) * 0.9) * W;
+    const yIn = hollowTop(x);
     if (yIn === null) continue;
-    const y = yIn - lift(x - cx) * (0.35 + rnd(i + 301) * 0.4);
+    const y = yIn - lift(x) * (0.35 + rnd(i + 301) * 0.4);
     for (let j = 0; j < 7; j++) solid.put(x + (j % 3 === 1 ? 1 : 0), y + j, j === 3 ? GLOW_HI : GLOW);
   }
 
@@ -228,7 +283,7 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
         if (dx * dx + dy * dy > r * r) continue;
         const x = Math.round(bx + dx);
         const y = Math.round(by + dy);
-        if (inWing(x, y)) continue;
+        if (inWing(x, y) || inGap(x, y)) continue;
         const q = hash32(`${x >> 1},${y >> 1}`) & 7;
         const lit = -dx - dy;
         let tone = dy > r * 0.45 ? 0 : lit > r * 0.7 ? 3 : lit > 0 ? 2 : 1;
@@ -238,19 +293,33 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
       }
     }
   };
-  for (let a = 0; a < Math.PI * 2; a += 0.035) {
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    // a point on the outer rim (superellipse via sign-power)
-    const ex = cx + (A + R) * Math.sign(ca) * Math.abs(ca) ** (2 / N);
-    const ey0 = cy + (B + R) * Math.sign(sa) * Math.abs(sa) ** (2 / N);
-    const back = sa < 0;
-    const ey = back ? ey0 - lift(ex - cx) : ey0;
-    if (!back && ex >= walkX0 - T && ex < walkX1 + T) continue;
-    const k = Math.round(a * 1000);
-    const size = back ? T * (1.2 + (CROWN / T) * 0.25 * (-sa)) : T * (0.9 + rnd(k) * 0.5);
-    clump(ex + (rnd(k + 1) - 0.5) * T, ey - (back ? size * 0.6 : 0), size);
-    if (back && rnd(k + 2) < 0.5) clump(ex + (rnd(k + 3) - 0.5) * 2 * T, ey - size * 1.4, size * 0.8);
+  // points along the outer edge of the rim: the top and bottom of every few columns, the ends of every few rows
+  type Edge = { x: number; y: number; side: 'back' | 'front' | 'west' | 'east' };
+  const edge: Edge[] = [];
+  for (let x = 2; x < cw; x += 4) {
+    let t = -1;
+    let b = -1;
+    for (let y = 0; y < ch; y++) if (dmap[y * cw + x] <= R) (t < 0 ? (t = y) : 0, (b = y));
+    if (t < 0) continue;
+    const back = tops[x] !== null;
+    edge.push({ x, y: t, side: back ? 'back' : 'west' }, { x, y: b, side: 'front' });
+  }
+  for (let y = 2; y < ch; y += 4) {
+    let l = -1;
+    let r = -1;
+    for (let x = 0; x < cw; x++) if (dmap[y * cw + x] <= R) (l < 0 ? (l = x) : 0, (r = x));
+    if (l < 0) continue;
+    edge.push({ x: l, y, side: 'west' }, { x: r, y, side: 'east' });
+  }
+  for (const [i, e] of edge.entries()) {
+    if (inGap(e.x, e.y)) continue;
+    const back = e.side === 'back';
+    const ey = back ? e.y - lift(e.x) : e.y;
+    const k = i * 31 + 7;
+    const size = back ? T * (1.2 + (CROWN / T) * 0.25 * Math.min(1, lift(e.x) / WALL + 0.2)) : T * (0.9 + rnd(k) * 0.5);
+    if (!back && rnd(k + 9) < 0.35) continue;
+    clump(e.x + (rnd(k + 1) - 0.5) * T, ey - (back ? size * 0.6 : 0), size);
+    if (back && rnd(k + 2) < 0.5) clump(e.x + (rnd(k + 3) - 0.5) * 2 * T, ey - size * 1.4, size * 0.8);
   }
   for (let i = 0; i < Math.round(cw / 5); i++) {
     const x = Math.round(rnd(i + 900) * cw);
@@ -261,68 +330,68 @@ export function worldTree(wingWpx: number, seed = 7): TreeSprite {
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) solid.put(x + dx, y + dy, GLOW);
   }
 
-  // ---- the veil over the offices: vines and leaves trailing down from the wall
-  for (let x = Math.round(wingX0) + 6; x < wingX0 + W - 6; x += 9 + Math.round(rnd(x + 700) * 12)) {
-    const len = Math.round(T * (1.2 + rnd(x + 701) * 3.5));
-    for (let j = 0; j < len; j++) {
-      const vx = x + Math.round(Math.sin((j + x) * 0.3));
-      veil.put(vx, top + j, j % 6 === 5 ? LEAF[3] : LEAF[1]);
-      if (j % 5 === 2) veil.put(vx + (j % 10 === 2 ? 1 : -1), top + j, LEAF[2]);
+  // ---- the veil over the offices: vines and leaves trailing down from the wall over each row
+  for (const b of wing) {
+    for (let x = Math.round(b.x0) + 6; x < b.x1 - 6; x += 9 + Math.round(rnd(x + 700) * 12)) {
+      const len = Math.round(T * (1.2 + rnd(x + 701) * 3.5));
+      for (let j = 0; j < len; j++) {
+        const vx = x + Math.round(Math.sin((j + x) * 0.3));
+        veil.put(vx, b.y0 + j, j % 6 === 5 ? LEAF[3] : LEAF[1]);
+        if (j % 5 === 2) veil.put(vx + (j % 10 === 2 ? 1 : -1), b.y0 + j, LEAF[2]);
+      }
+      if (rnd(x + 702) < 0.35) veil.put(x, b.y0 + len, GLOW_HI);
     }
-    if (rnd(x + 702) < 0.35) veil.put(x, top + len, GLOW_HI);
   }
 
   // ---- elf dressing round the outside of the trunk: moon lanterns hanging from the front of the crown, clusters
   // of glowing mushrooms at its foot and owls keeping watch on the back of the crown
-  const box = (x: number, y: number, w: number, h: number, c: RGB) => {
+  const fill = (x: number, y: number, w: number, h: number, c: RGB) => {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) solid.put(Math.round(x) + i, Math.round(y) + j, c);
   };
   const lantern = (x: number, y: number) => {
-    box(x, y, 1, 5, [58, 46, 40]);
-    box(x - 2, y + 5, 5, 1, [90, 74, 106]);
-    box(x - 2, y + 6, 5, 5, [191, 232, 255]);
-    box(x - 1, y + 7, 3, 3, GLOW_HI);
-    box(x - 2, y + 6, 1, 5, [90, 74, 106]);
-    box(x + 2, y + 6, 1, 5, [90, 74, 106]);
-    box(x - 1, y + 11, 3, 1, [90, 74, 106]);
+    fill(x, y, 1, 5, [58, 46, 40]);
+    fill(x - 2, y + 5, 5, 1, [90, 74, 106]);
+    fill(x - 2, y + 6, 5, 5, [191, 232, 255]);
+    fill(x - 1, y + 7, 3, 3, GLOW_HI);
+    fill(x - 2, y + 6, 1, 5, [90, 74, 106]);
+    fill(x + 2, y + 6, 1, 5, [90, 74, 106]);
+    fill(x - 1, y + 11, 3, 1, [90, 74, 106]);
   };
   const mushrooms = (x: number, y: number, k: number) => {
     for (const [dx, h, w] of [[-4, 4, 5], [1, 6, 7], [6, 3, 4]] as const) {
       if (rnd(k + dx) < 0.25) continue;
-      box(x + dx, y - h, 1, h, [232, 224, 208]);
-      box(x + dx - (w >> 1), y - h - 2, w, 2, [160, 112, 224]);
-      box(x + dx - (w >> 1) + 1, y - h - 3, w - 2, 1, [216, 176, 255]);
+      fill(x + dx, y - h, 1, h, [232, 224, 208]);
+      fill(x + dx - (w >> 1), y - h - 2, w, 2, [160, 112, 224]);
+      fill(x + dx - (w >> 1) + 1, y - h - 3, w - 2, 1, [216, 176, 255]);
       solid.put(x + dx, y - h - 2, GLOW_HI);
     }
   };
   const owl = (x: number, y: number) => {
-    box(x - 2, y - 7, 5, 7, [110, 82, 58]);
-    box(x - 2, y - 7, 1, 1, [70, 52, 38]);
-    box(x + 2, y - 7, 1, 1, [70, 52, 38]);
-    box(x - 1, y - 3, 3, 3, [176, 150, 110]);
+    fill(x - 2, y - 7, 5, 7, [110, 82, 58]);
+    fill(x - 2, y - 7, 1, 1, [70, 52, 38]);
+    fill(x + 2, y - 7, 1, 1, [70, 52, 38]);
+    fill(x - 1, y - 3, 3, 3, [176, 150, 110]);
     solid.put(x - 1, y - 5, [255, 214, 90]);
     solid.put(x + 1, y - 5, [255, 214, 90]);
     solid.put(x, y - 4, [220, 170, 60]);
   };
-  for (let a = 0.1; a < Math.PI * 2; a += 0.2) {
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    const ex = cx + (A + R) * Math.sign(ca) * Math.abs(ca) ** (2 / N);
-    const ey = cy + (B + R) * Math.sign(sa) * Math.abs(sa) ** (2 / N);
-    const k = Math.round(a * 997);
-    if (sa > 0.15) {
-      if (ex >= walkX0 - 2 * T && ex < walkX1 + 2 * T) continue;
+  for (const [i, e] of edge.entries()) {
+    if (i % 12 !== 5) continue;
+    const k = i * 997;
+    if (inGap(e.x, e.y) || inGap(e.x, e.y + 1.5 * T) || inGap(e.x, e.y - 1.5 * T)) continue;
+    if (e.side === 'front') {
       // the front: a lantern under the leaves, mushrooms on the ground in front of the trunk
-      if (rnd(k) < 0.6) lantern(ex + (rnd(k + 1) - 0.5) * T, ey - 4);
-      if (rnd(k + 2) < 0.7) mushrooms(ex + (rnd(k + 3) - 0.5) * 2 * T, ey + 1.2 * T, k);
-    } else if (sa < -0.3 && rnd(k + 4) < 0.3) {
-      owl(ex, ey - lift(ex - cx) - CROWN * 0.55);
-    } else if (Math.abs(ca) > 0.8 && rnd(k + 5) < 0.6) {
-      mushrooms(ex + Math.sign(ca) * 0.8 * T, ey + T, k);
+      if (rnd(k) < 0.6) lantern(e.x + (rnd(k + 1) - 0.5) * T, e.y - 4);
+      if (rnd(k + 2) < 0.7) mushrooms(e.x + (rnd(k + 3) - 0.5) * 2 * T, e.y + 1.2 * T, k);
+    } else if (e.side === 'back' && rnd(k + 4) < 0.35) {
+      owl(e.x, e.y - lift(e.x) - CROWN * 0.55);
+    } else if ((e.side === 'west' || e.side === 'east') && rnd(k + 5) < 0.6) {
+      mushrooms(e.x + (e.side === 'west' ? -0.8 : 0.8) * T, e.y + T, k);
     }
   }
 
-  const s = { solid: solid.canvas(), veil: veil.canvas(), ox: -(cx - W / 2), oy: -top };
-  cache.set(key, s);
-  return s;
+  const clips: PxRect[] = wing.map((b) => ({ x: b.x0 + ox, y: b.y0 + oy + 2 * T, w: b.x1 - b.x0, h: b.y1 - b.y0 - 2 * T }));
+  const out = { solid: solid.canvas(), veil: veil.canvas(), x: ox, y: oy, clips };
+  cache.set(key, out);
+  return out;
 }

@@ -20,8 +20,8 @@ import { raceOfSeed, type Race } from '../../../../shared/race';
 import { DOOR_W, DOOR_X, TILE } from '../constants';
 import { AreaBuilder, type SpotOpts } from './builder';
 import { COL_W } from '../constants';
-import { openToRing } from './enclosure';
-import { MAX_SPAN, roomRect, slotSide, slotWing } from './geometry';
+import { openToRing, ringSides } from './enclosure';
+import { MAX_SPAN, roomRect, slotSide } from './geometry';
 import type { AreaLayout, SpotDef, SpotKind } from './types';
 
 export interface RoomInput {
@@ -333,7 +333,8 @@ export function layoutProjectRoom(room: RoomInput, theme: RoomTheme): AreaLayout
     b.furn('plant_tall', W - 1, 2, PLANTS_TALL[(room.seed >>> 3) % PLANTS_TALL.length], { order: 0.2 });
     b.furn('plant_tall', W - 1, 10, PLANTS_TALL[(room.seed >>> 5) % PLANTS_TALL.length], { order: 0.2 });
   }
-  // every wing but the elves' (their hollow tree) stands inside a rounded ring that is its outer wall
-  if (slotWing(room.slot) !== 'north') openToRing(area, side);
+  // every zone but the elves' (their hollow tree) stands inside a rounded ring: the room's outer wall gives way to it
+  // where the ring runs right past (layout/enclosure.ts ringSides)
+  if (ringSides(room.slot)[side]) openToRing(area, side);
   return b.build();
 }

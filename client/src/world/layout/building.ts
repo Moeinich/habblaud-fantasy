@@ -5,7 +5,7 @@ import { furnitureBlocks, furnitureIsSeat } from './builder';
 import { MAIN_Y } from '../constants';
 import { openToRing } from './enclosure';
 import { layoutCafe, layoutLounge, layoutReception, layoutRestroom } from './core';
-import { layoutCorridor, layoutNorthCorridor, layoutSouthCorridor, layoutSouthWalkway, layoutWalkway } from './corridor';
+import { layoutBottomCorridor, layoutCorridor, layoutNorthCorridor, layoutSouthCorridor, layoutWalkways } from './corridor';
 import { extentRect, gridSize, shapeKey, type Shape } from './geometry';
 import type { AreaLayout, SpotDef, TileRect } from './types';
 
@@ -18,7 +18,7 @@ export interface BuildingLayout {
   rect: TileRect;
   core: AreaLayout[];
   corridor: AreaLayout;
-  /** The elf and undead wings' corridors and the walkways to them (only while those wings exist). */
+  /** The other rows' corridors and the walkways down the square's column between them. */
   extra: AreaLayout[];
   rooms: AreaLayout[];
   grid: WalkGrid;
@@ -31,7 +31,7 @@ let coreCache: AreaLayout[] | null = null;
 export function coreAreas(): AreaLayout[] {
   if (!coreCache) {
     coreCache = [layoutReception(), layoutRestroom(), layoutCafe(), layoutLounge()];
-    // the core stands inside the human wing's ring (layout/enclosure.ts) too
+    // the core's halls open onto the hub's ring (layout/enclosure.ts): the north ones at the back, the south ones in front
     for (const a of coreCache) openToRing(a, a.rect.y === MAIN_Y ? 'north' : 'south');
   }
   return coreCache;
@@ -62,7 +62,7 @@ export function buildWalkGrid(shape: Shape, areas: readonly AreaLayout[], versio
 export function assembleBuilding(shape: Shape, rooms: readonly AreaLayout[], version = 0): BuildingLayout {
   const core = coreAreas();
   const corridor = layoutCorridor(shape);
-  const extra = [layoutNorthCorridor(shape), layoutWalkway(shape), layoutSouthCorridor(shape), layoutSouthWalkway(shape)].filter((a): a is AreaLayout => !!a);
+  const extra = [layoutNorthCorridor(shape), layoutSouthCorridor(shape), layoutBottomCorridor(shape), ...layoutWalkways(shape)].filter((a): a is AreaLayout => !!a);
   const all = [...core, corridor, ...extra, ...rooms];
   const grid = buildWalkGrid(shape, all, version);
   const spots: SpotDef[] = [];

@@ -2,11 +2,11 @@
 // cobbles and packed earth by art/surfaces/floor.ts); patio/garden in slots without a room.
 import type { WallStyle } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
-import { COL_W, CORRIDOR_H, CORRIDOR_Y, ELF_TREE_UP, EXT_EAST, EXT_NORTH, EXT_SOUTH, EXT_WEST, PLAZA_COL, ROOM_H, SCORRIDOR_Y, TILE } from '../constants';
+import { COL_W, CORRIDOR_H, CORRIDOR_Y, CORE_COL0, CORE_EAST_COL, EAST_GAP_COL, ELF_TREE_UP, EXT_EAST, EXT_NORTH, EXT_SOUTH, EXT_WEST, PLAZA_COL, ROOM_H, TILE, WEST_GAP_COL } from '../constants';
 import { biomeMap, biomeProp, cellRace } from './biome';
-import { RING_REACH } from './enclosure';
+import { hallRings, ringBounds, RING_REACH } from './enclosure';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
-import { cellRect, extentRect, mainRect, northRect, southRect, stripY, type Cell, type Shape, type Side, type Strip } from './geometry';
+import { cellRect, cellSlot, cellsOf, extentRect, hasStrip, mainRect, stripCols, stripRect, STRIPS, stripY, walkways, WINGS, type Cell, type Shape, type Side, type Strip } from './geometry';
 import type { ExteriorProp, FloorPatch, TileRect, WallItemPlacement, WallSegment } from './types';
 
 /** A rectangle grown by `x` on both sides, `top` above and `bottom` below (tiles). */
@@ -43,13 +43,21 @@ export interface SlotShell {
 export function layoutExterior(shape: Shape): ExteriorLayout {
   const ext = extentRect(shape);
   const main = mainRect(shape);
-  const north = northRect(shape);
-  const southStrip = southRect(shape);
-  const bounds: TileRect = { x: ext.x - EXT_WEST, y: ext.y - EXT_NORTH, w: ext.w + EXT_WEST + EXT_EAST, h: ext.h + EXT_NORTH + EXT_SOUTH };
+  let bounds: TileRect = { x: ext.x - EXT_WEST, y: ext.y - EXT_NORTH, w: ext.w + EXT_WEST + EXT_EAST, h: ext.h + EXT_NORTH + EXT_SOUTH };
+  // the land runs on to the edge of a widescreen view (a TV) round the camp, in whichever direction it is short of
+  // 16:9, so the races' grounds reach the edge of the screen instead of stopping at a plain backdrop
+  const ASPECT = 16 / 9;
+  if (bounds.w < bounds.h * ASPECT * 1.1) {
+    const grow = Math.ceil((bounds.h * ASPECT * 1.1 - bounds.w) / 2);
+    bounds = { ...bounds, x: bounds.x - grow, w: bounds.w + 2 * grow };
+  } else if (bounds.h < (bounds.w / ASPECT) * 1.1) {
+    const grow = Math.ceil(((bounds.w / ASPECT) * 1.1 - bounds.h) / 2);
+    bounds = { ...bounds, y: bounds.y - grow, h: bounds.h + 2 * grow };
+  }
   const px = (t: number) => t * TILE;
   const floors: FloorPatch[] = [];
   const props: ExteriorProp[] = [];
-  const rng = mulberry32(0xc0de + shape.west * 131 + shape.east * 7 + shape.north * 977);
+  const rng = mulberry32(0xc0de + WINGS.reduce((a, w, i) => a + shape[w] * (7 + i * 131), 0));
   const rs = () => Math.floor(rng() * 1e9);
 
   floors.push({ kind: 'grass', x: px(bounds.x), y: px(bounds.y), w: px(bounds.w), h: px(bounds.h), seed: 11 });
@@ -62,8 +70,12 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
 
   // the countryside: trees, bushes and stones scattered densely over everything that isn't built on, kept clear
   // of the halls, their rings and the walkways (each prop then turns into its land's kind, layout/biome.ts)
-  const keepClear: TileRect[] = [main, ...(southStrip ? [southStrip] : [])].map((r) => grow(r, RING_REACH + 1, RING_REACH + 1, RING_REACH + 1));
-  if (north) keepClear.push({ x: north.x - 9, y: north.y - ELF_TREE_UP - 1, w: north.w + 18, h: north.h + ELF_TREE_UP + 7 });
+  const keepClear: TileRect[] = STRIPS.map((st) => stripRect(shape, st))
+    .filter((r): r is TileRect => !!r)
+    .map((r) => grow(r, RING_REACH + 1, RING_REACH + 1, RING_REACH + 1));
+  for (const ring of hallRings(shape)) keepClear.push(grow(ringBounds(ring), 1, 1, 1));
+  // the elves' world tree: its roots spread round the zone and its crown rises far above it
+  for (const r of hallRings(shape).find((h) => h.race === 'elf')?.rects ?? []) keepClear.push({ x: r.x - 9, y: r.y - ELF_TREE_UP - 1, w: r.w + 18, h: r.h + ELF_TREE_UP + 7 });
   keepClear.push({ x: PLAZA_COL * COL_W + 3, y: ext.y, w: COL_W - 6, h: ext.h });
   keepClear.push({ x: wx - 6, y: CORRIDOR_Y - 2, w: 6, h: CORRIDOR_H + 4 });
   const clear = (tx: number, ty: number) => !keepClear.some((r) => tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h);
@@ -154,96 +166,83 @@ export function slotShell(cell: Cell): SlotShell {
     props.push({ kind: rng() < 0.5 ? 'pine' : 'tree', x: x0 + T(15) - 6, y: T(rect.y + 11) + 4, seed: seed(), slot });
     props.push({ kind: 'rock', x: x0 + T(14), y: T(rect.y + 2) + 4, seed: slot + 3, slot });
   }
-  const race = cellRace(strip, col);
+  const race = cellRace(strip, col, side);
   return { slot, side, strip, rect, walls, windows, floors, props: props.map((p) => biomeProp(race, p)) };
 }
 
-/** Patio slots of the square: never hold a room (so `roomInSlot` is always empty for them). */
-export const PLAZA_NORTH_SLOT = -1_000_001;
-export const PLAZA_SOUTH_SLOT = -1_000_002;
-export const WALKWAY_SHELL_SLOT = -1_000_003;
-export const SOUTH_WALKWAY_SHELL_SLOT = -1_000_004;
-export const SOUTH_PLAZA_SLOT = -1_000_005;
+/** Slot of a cell outside the zones (hub, gap and walkway columns): never holds a room. */
+export function hubShellSlot(col: number, side: Side, strip: Strip): number {
+  return -1_000_000 - cellSlot(col, side, strip);
+}
 
 /**
- * Patios of the square's column: on the south side a garden like any empty cell (the square's terrace); on the
- * north side the façade opens onto the covered walkway to the elf wing (flower beds on both sides of it); and
- * where the walkway reaches the north strip, the low wall of the elf corridor opens too.
+ * Patios of the cells outside the four zones: the gap columns between the hub and the zones and the square's cells
+ * on row 2 are gardens; in the square's column the walls open onto the walkways between the rows.
  */
 export function plazaShells(shape: Shape): SlotShell[] {
   const out: SlotShell[] = [];
-  const rect = cellRect(PLAZA_COL, 'north');
-  const x0 = rect.x * TILE;
   const T = (n: number) => n * TILE;
-  const walkX = x0 + T(WALKWAY_LX);
-  const walkway = [{ x: walkX, w: T(WALKWAY_W) }];
-  if (!shape.south) out.push(slotShell({ slot: PLAZA_SOUTH_SLOT, col: PLAZA_COL, side: 'south', strip: 'main', first: false, last: false }));
-  else {
-    // the square's terrace opens onto the walkway across the street to the undead wing
-    const sr = cellRect(PLAZA_COL, 'south');
-    const sy = (CORRIDOR_Y + CORRIDOR_H) * TILE;
-    out.push({
-      slot: PLAZA_SOUTH_SLOT,
-      side: 'south',
-      strip: 'main',
-      rect: sr,
-      walls: [{ kind: 'south', x: x0, y: sy, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: walkway }],
-      windows: [],
-      floors: [],
-      props: [2, 3.5, 12.5, 14].map((cx, i) => ({ kind: i % 2 ? 'flowers' : 'bush', x: x0 + T(cx), y: T(sr.y + 3), seed: 95 + i, slot: PLAZA_SOUTH_SLOT })),
-    });
-    // where it reaches the south strip, the façade of the undead corridor opens; the cell below is a garden
-    const nr = cellRect(PLAZA_COL, 'north', 'south');
-    const fy = (SCORRIDOR_Y - 2) * TILE;
-    out.push({
-      slot: SOUTH_WALKWAY_SHELL_SLOT,
-      side: 'north',
-      strip: 'south',
-      rect: nr,
-      walls: [
-        { kind: 'face', x: x0, y: fy, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: walkway },
-        { kind: 'cap', x: x0 + COL_W * TILE - TILE / 2, y: fy, w: TILE / 2, h: 2 * TILE, style: EXTERIOR_WALL },
-      ],
-      windows: [],
-      floors: [],
-      props: [2.5, 4, 12, 13.5].map((cx, i) => ({ kind: i % 2 ? 'flowers' : 'pine', x: x0 + T(cx), y: T(nr.y + 8), seed: 97 + i, slot: SOUTH_WALKWAY_SHELL_SLOT })),
-    });
-    out.push(slotShell({ slot: SOUTH_PLAZA_SLOT, col: PLAZA_COL, side: 'south', strip: 'south', first: false, last: true }));
-  }
-  const fy = (CORRIDOR_Y - 2) * TILE;
-  const open = shape.north ? walkway : undefined;
-  const north: SlotShell = {
-    slot: PLAZA_NORTH_SLOT,
-    side: 'north',
-    strip: 'main',
-    rect,
-    walls: [{ kind: 'face', x: x0, y: fy, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: open }],
-    windows: [3, 12].map((cx, i) => ({ id: `shell:${PLAZA_NORTH_SLOT}:janela${i}`, kind: 'window' as const, cx: x0 + cx * TILE, baseY: CORRIDOR_Y * TILE, on: 'face' as const, order: 0 })),
-    floors: [],
-    props: [],
+  const garden = (col: number, side: Side, strip: Strip) => {
+    const [x0, x1] = stripCols(shape, strip);
+    const sh = slotShell({ slot: hubShellSlot(col, side, strip), col, side, strip, first: col === x0, last: col === x1 - 1 });
+    out.push(sh);
   };
-  for (const cx of [1.5, 3, 4.5, 11.5, 13, 14.5]) north.props.push({ kind: cx === 3 || cx === 13 ? 'bush' : 'flowers', x: x0 + T(cx), y: T(rect.y + 9) + 12, seed: Math.round(cx * 13), slot: PLAZA_NORTH_SLOT });
-  north.props.push({ kind: 'tree', x: x0 + T(2) + 4, y: T(rect.y + 4), seed: 71, slot: PLAZA_NORTH_SLOT });
-  north.props.push({ kind: 'pine', x: x0 + T(14) - 4, y: T(rect.y + 4) + 6, seed: 72, slot: PLAZA_NORTH_SLOT });
-  if (!shape.north) {
-    // no elf wing yet: a plain patio with a deck
-    north.floors.push({ kind: 'sidewalk', x: x0 + T(4), y: T(rect.y + 4), w: T(8), h: T(4), seed: 77 });
-    north.floors.push({ kind: 'wood', x: x0 + T(4) + 4, y: T(rect.y + 4) + 4, w: T(8) - 8, h: T(4) - 8, seed: 78 });
-  }
-  out.push(north);
-  if (shape.north) {
-    const wr = cellRect(PLAZA_COL, 'south', 'north');
-    const sy = (stripY('north') + ROOM_H + CORRIDOR_H) * TILE;
-    out.push({
-      slot: WALKWAY_SHELL_SLOT,
-      side: 'south',
-      strip: 'north',
-      rect: wr,
-      walls: [{ kind: 'south', x: wr.x * TILE, y: sy, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: [{ x: walkX, w: T(WALKWAY_W) }] }, { kind: 'cap', x: wr.x * TILE, y: sy, w: TILE / 2, h: TILE, style: EXTERIOR_WALL }],
-      windows: [],
-      floors: [],
-      props: [2.5, 4, 12, 13.5].map((cx, i) => ({ kind: i % 2 ? 'flowers' : 'bush', x: wr.x * TILE + T(cx), y: T(wr.y + 4), seed: 90 + i, slot: WALKWAY_SHELL_SLOT })),
-    });
+  /** A cell left as lawn: only the wall closing off the corridor and a few plants either side of the path. */
+  const lawn = (col: number, side: Side, strip: Strip) => {
+    const [x0, x1] = stripCols(shape, strip);
+    const sh = slotShell({ slot: hubShellSlot(col, side, strip), col, side, strip, first: col === x0, last: col === x1 - 1 });
+    const rx = sh.rect.x * TILE;
+    const ry = sh.rect.y * TILE;
+    sh.floors = [];
+    sh.windows = [];
+    sh.props = sh.props.filter((p) => p.kind === 'flowers' || p.kind === 'bush');
+    // keep the plants in the middle of the cell (the rings' walls run down its edges)
+    sh.props = sh.props.filter((p) => p.x - rx > 5 * TILE && p.x - rx < 11 * TILE && p.y - ry >= 0);
+    out.push(sh);
+  };
+  /** The square's column where a walkway leaves the row through this side's wall. */
+  const walkwayCell = (strip: Strip, side: Side) => {
+    const col = PLAZA_COL;
+    const slot = hubShellSlot(col, side, strip);
+    const rect = cellRect(col, side, strip);
+    const x0 = rect.x * TILE;
+    const corridorY = stripY(strip) + ROOM_H;
+    const walkway = [{ x: x0 + T(WALKWAY_LX), w: T(WALKWAY_W) }];
+    const [c0, c1] = stripCols(shape, strip);
+    const walls: WallSegment[] =
+      side === 'north'
+        ? [{ kind: 'face', x: x0, y: (corridorY - 2) * TILE, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: walkway }]
+        : [{ kind: 'south', x: x0, y: (corridorY + CORRIDOR_H) * TILE, w: COL_W * TILE, style: EXTERIOR_WALL, doorways: walkway }];
+    const capY = side === 'north' ? (corridorY - 2) * TILE : (corridorY + CORRIDOR_H) * TILE;
+    const capH = side === 'north' ? 2 * TILE : TILE;
+    if (col === c0) walls.push({ kind: 'cap', x: x0, y: capY, w: TILE / 2, h: capH, style: EXTERIOR_WALL });
+    if (col === c1 - 1) walls.push({ kind: 'cap', x: x0 + COL_W * TILE - TILE / 2, y: capY, w: TILE / 2, h: capH, style: EXTERIOR_WALL });
+    // flower beds and bushes on both sides of the path
+    const py = side === 'north' ? rect.y + 8 : rect.y + 3;
+    const race = cellRace(strip, col, side);
+    const props: ExteriorProp[] = [2, 3.5, 12.5, 14].map((cx, i) => ({ kind: i % 2 ? 'flowers' : 'bush', x: x0 + T(cx), y: T(py), seed: 90 + i + slot, slot }));
+    out.push({ slot, side, strip, rect, walls, windows: [], floors: [], props: props.map((p) => biomeProp(race, p)) });
+  };
+  const zoned = new Set(cellsOf(shape).map((c) => c.slot));
+  for (const strip of STRIPS) {
+    if (!hasStrip(shape, strip)) continue;
+    const [c0, c1] = stripCols(shape, strip);
+    for (let col = c0; col < c1; col++) {
+      if (col === PLAZA_COL || (strip === 'main' && (col === CORE_COL0 || col === CORE_EAST_COL))) continue;
+      for (const side of ['north', 'south'] as const) {
+        if (zoned.has(cellSlot(col, side, strip))) continue;
+        // the open gap columns either side of the hub: just lawn between the rings; any other free cell (row 1's
+        // side of a zone that has no rooms there yet) is a garden
+        if (col === WEST_GAP_COL || col === EAST_GAP_COL) lawn(col, side, strip);
+        else garden(col, side, strip);
+      }
+    }
+    for (const side of ['north', 'south'] as const) {
+      const below = walkways(shape).some(([a]) => a === strip);
+      const above = walkways(shape).some(([, b]) => b === strip);
+      if ((side === 'north' && above) || (side === 'south' && below)) walkwayCell(strip, side);
+      else garden(PLAZA_COL, side, strip);
+    }
   }
   return out;
 }

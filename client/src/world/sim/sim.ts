@@ -4,10 +4,10 @@ import { partsKey } from '../../../../shared/appearance';
 import type { AgentInfo, OfficeSnapshot, Provider, RoomInfo } from '../../../../shared/types';
 import type { ArtModule, Dir, RoomTheme } from '../../art/api';
 import type { WorldOptions } from '../api';
-import { COL_W, COMPACT_DELAY_MS, CORE_COL0, EAST_COL0, PLAZA_COL, DISMANTLE_DELAY_MS, FOOT_DX, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
+import { COL_W, COMPACT_DELAY_MS, DISMANTLE_DELAY_MS, FOOT_DX, FOOT_DY, MISSING_DEBOUNCE_MS, RUN_SPEED, TILE, WALK_SPEED } from '../constants';
 import { assembleBuilding, type BuildingLayout } from '../layout/building';
 import { RECEPTION_ID } from '../layout/core';
-import { cellSlot, coveredSlots, inRect, insideShape, shapeOf, slotColumn, slotSide, slotWing, type Shape } from '../layout/geometry';
+import { ARMS, armCol, armIndex, cellSlot, coveredSlots, emptyShape, inRect, insideShape, shapeOf, slotColumn, slotSide, slotStrip, slotWing, WINGS, type Shape } from '../layout/geometry';
 import type { AreaLayout } from '../layout/types';
 import { packDepartments, type DeptPlan } from '../layout/departments';
 import { raceOfSeed } from '../../../../shared/race';
@@ -291,11 +291,11 @@ export class Sim {
     return owner;
   }
 
-  /** North cell at the far east end, past every room in use and the planned orc wing, where a room can wait. */
+  /** North cell at the far east end of row 1, past every room in use and the planned orc arm, where a room can wait. */
   private parkingSlot(owner: ReadonlyMap<number, RoomState>, plan: DeptPlan): number {
-    let col = plan.shape.east;
-    for (const c of owner.keys()) if (slotWing(c) === 'east') col = Math.max(col, slotColumn(c) - EAST_COL0 + 1);
-    return cellSlot(EAST_COL0 + col, 'north');
+    let k = Math.max(plan.shape.me, plan.shape.ne);
+    for (const c of owner.keys()) if (slotStrip(c) === 'main' || slotStrip(c) === 'north') k = Math.max(k, armIndex('me', slotColumn(c)) + 1);
+    return cellSlot(armCol('me', k + 1), 'north');
   }
 
   /** Puts newly created rooms at their department spot (or parks them past the end until the spot frees up). */
@@ -566,10 +566,12 @@ export class Sim {
     const present = [...this.rooms.values()].filter((r) => r.present);
     let shape = shapeOf(present.flatMap((r) => coveredSlots(r.slot, r.span)));
     const cur = this.building.shape;
-    if ((shape.west < cur.west || shape.east < cur.east || shape.north < cur.north || shape.south < cur.south) && !force) {
+    if (WINGS.some((w) => shape[w] < cur[w]) && !force) {
       // only shrinks once nobody is standing in the part that would go away
       if ([...this.chars.values()].some((c) => !c.gone && !insideShape(shape, c.tx, c.ty) && insideShape(cur, c.tx, c.ty))) {
-        shape = { west: Math.max(shape.west, cur.west), east: Math.max(shape.east, cur.east), north: Math.max(shape.north, cur.north), south: Math.max(shape.south, cur.south) };
+        const grown = { ...shape };
+        for (const w of WINGS) grown[w] = Math.max(shape[w], cur[w]);
+        shape = grown;
         this.shrinkPending = true;
       } else this.shrinkPending = false;
     } else this.shrinkPending = false;
@@ -2117,9 +2119,9 @@ function openHalls(present: readonly RoomState[], shape: Shape): void {
   for (const r of present) {
     if (r.ghost || !Number.isFinite(r.slot)) continue;
     const col = slotColumn(r.slot);
-    // a wing's last room opens onto the ring round the hall too (the elves' tree has none)
+    // an arm's last room opens onto the ring round the zone too (the elves' tree has none)
     const wing = slotWing(r.slot);
-    const beyond = (c: number) => (wing === 'west' ? c < CORE_COL0 - shape.west : wing === 'east' ? c >= EAST_COL0 + shape.east : wing === 'south' ? c < PLAZA_COL - shape.south : false);
+    const beyond = (c: number) => ARMS[wing].race !== 'elf' && armIndex(wing, c) >= shape[wing];
     const west = joins(r, r.slot - 2, col - 1) || beyond(col - 1);
     const east = joins(r, r.slot + r.span * 2, col + r.span) || beyond(col + r.span);
     const key = west || east ? `${west ? 'w' : ''}${east ? 'e' : ''}` : '';

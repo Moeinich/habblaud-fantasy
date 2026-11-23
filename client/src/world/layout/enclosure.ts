@@ -1,12 +1,13 @@
-// Rounded enclosures of the halls (pure): so the office isn't a set of plain boxes, each hall stands inside a
-// rounded ring in its race's style — a stone curtain wall round the human wing and the core, a palisade of
-// sharpened stakes round the orc war camp, and a wrought-iron graveyard fence round the undead crypts (the elves
-// have their hollow tree, render/elf-tree.ts). The ring is a rounded rectangle a little outside the building, with
-// gaps where the corridors and walkways pass. Drawn by render/enclosure.ts.
+// Rounded enclosures of the halls (pure): so the camp isn't a set of plain boxes, each zone of the pinwheel stands
+// inside a rounded ring in its race's style, wrapping the zone's L — a stone curtain wall round the humans (and the
+// hub), a palisade of sharpened stakes round the orc war camp and a wrought-iron graveyard fence round the undead
+// crypts; the elves' is their hollow world tree (render/elf-tree.ts). A ring is the union of a zone's rectangles
+// (layout/geometry.ts zoneRects) grown by a margin, with round corners, and gaps where corridors and walkways pass.
+// Drawn by render/enclosure.ts.
 import type { Race } from '../../../../shared/race';
-import { BUILDING_H, COL_W, CORE_COL0, CORE_COLS, CORRIDOR_H, CORRIDOR_Y, EAST_COL0, MAIN_Y, PLAZA_COL } from '../constants';
+import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, MAIN_Y, PLAZA_COL, ROOM_H } from '../constants';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
-import { southRect, type Shape } from './geometry';
+import { ARMS, armIndex, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
 import { TILE } from '../constants';
 import type { AreaLayout, TileRect } from './types';
 
@@ -19,27 +20,81 @@ export const RING_REACH = RING_MARGIN + RING_WIDTH + 1;
 
 export interface HallRing {
   race: Race;
-  /** The building it wraps (tiles). */
-  rect: TileRect;
+  /** The hub's ring (stone, like the humans'). */
+  hub?: true;
+  /** The rectangles it wraps (tiles); overlapping, so their union has no seams. */
+  rects: TileRect[];
   /** Where corridors and walkways pass through (tiles). */
   gaps: TileRect[];
+}
+
+/** A corridor's opening through the ring on a zone's west or east edge (tiles). */
+function sideGap(strip: Strip, edgeX: number, outward: -1 | 1): TileRect {
+  const reach = RING_REACH + 1;
+  return { x: outward < 0 ? edgeX - reach : edgeX, y: stripY(strip) + ROOM_H, w: reach, h: CORRIDOR_H };
 }
 
 export function hallRings(shape: Shape): HallRing[] {
   const out: HallRing[] = [];
   const reach = RING_REACH + 1;
-  const side = (x: number) => ({ x, y: CORRIDOR_Y, w: reach, h: CORRIDOR_H });
-  // the human wing and the core: the main entrance to the west, the square to the east
-  const hx = (CORE_COL0 - shape.west) * COL_W;
-  const hw = (shape.west + CORE_COLS) * COL_W;
-  out.push({ race: 'human', rect: { x: hx, y: MAIN_Y, w: hw, h: BUILDING_H }, gaps: [side(hx - reach), side(hx + hw)] });
-  // the orc wing: open to the square
-  const ox = EAST_COL0 * COL_W;
-  out.push({ race: 'orc', rect: { x: ox, y: MAIN_Y, w: shape.east * COL_W, h: BUILDING_H }, gaps: [side(ox - reach)] });
-  // the undead wing: open where the walkway comes down
-  const s = southRect(shape);
-  if (s) out.push({ race: 'undead', rect: s, gaps: [{ x: PLAZA_COL * COL_W + WALKWAY_LX - 1, y: s.y - reach, w: WALKWAY_W + 2, h: reach }] });
+  for (const race of ['elf', 'orc', 'undead', 'human'] as const) {
+    const { block, reach: inner } = zoneRects(shape, race);
+    if (!block && !inner) continue;
+    const [outer, side] = ZONE_ARMS[race];
+    const dir = ARMS[outer].dir;
+    // towards the hub: -dir
+    const hubward: -1 | 1 = dir < 0 ? 1 : -1;
+    const rects: TileRect[] = [];
+    const gaps: TileRect[] = [];
+    if (block) {
+      rects.push(block);
+      // row 1's corridor runs between the top and the bottom zone of each side: the ring stays open all along it
+      gaps.push({ x: block.x - reach, y: stripY('main') + ROOM_H, w: block.w + 2 * reach, h: CORRIDOR_H });
+      void side;
+    }
+    if (inner) {
+      // run the inner part back into the block so their round corners don't notch the union
+      const overlap = block ? (RING_RADIUS + RING_MARGIN) : 0;
+      rects.push(hubward > 0 ? { ...inner, x: inner.x - overlap, w: inner.w + overlap } : { ...inner, w: inner.w + overlap });
+      gaps.push(sideGap(ARMS[outer].strip, hubward > 0 ? inner.x + inner.w : inner.x, hubward));
+    }
+    out.push({ race, rects, gaps });
+  }
+  // the hub: the four core halls, open to both sides and to the walkways above and below
+  const hub = hubRect();
+  const gaps: TileRect[] = [];
+  gaps.push(sideGap('main', CORE_COL0 * COL_W, -1));
+  gaps.push(sideGap('main', (CORE_EAST_COL + 1) * COL_W, 1));
+  const wx = PLAZA_COL * COL_W + WALKWAY_LX - 1;
+  if (hasNorth(shape)) gaps.push({ x: wx, y: MAIN_Y - reach, w: WALKWAY_W + 2, h: reach });
+  if (hasBottom(shape)) gaps.push({ x: wx, y: MAIN_Y + BUILDING_H, w: WALKWAY_W + 2, h: reach });
+  out.push({ race: 'human', hub: true, rects: [hub], gaps });
   return out;
+}
+
+/** Bounding box of a ring's rectangles (tiles). */
+export function ringBounds(ring: HallRing): TileRect {
+  const x0 = Math.min(...ring.rects.map((r) => r.x));
+  const y0 = Math.min(...ring.rects.map((r) => r.y));
+  const x1 = Math.max(...ring.rects.map((r) => r.x + r.w));
+  const y1 = Math.max(...ring.rects.map((r) => r.y + r.h));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+/**
+ * Which sides of a project room's cell face its zone's ring (so the room opens onto it): the far side of the outer
+ * row (the top of row 0, the bottom of row 2), plus its hub-side edge over the two columns that reach in over (or
+ * under) the hub. Row 1's rooms face the lawn and the shared corridor and keep their walls. The elves' tree has no
+ * such openings (its back wall rises behind the rooms' own).
+ */
+export function ringSides(slot: number): { north: boolean; south: boolean } {
+  const wing = slotWing(slot);
+  const arm = ARMS[wing];
+  if (arm.race === 'elf') return { north: false, south: false };
+  if (!arm.outer) return { north: false, south: false };
+  const top = slotStrip(slot) === 'north';
+  const inReach = armIndex(wing, slotColumn(slot)) < 2;
+  return { north: top || inReach, south: !top || inReach };
 }
 
 /**
@@ -78,20 +133,22 @@ const SPREAD_WOBBLE = 0.9;
 const SPREAD_SLABS = 0.9;
 
 /**
- * Which sides of `rect` spread, or null when it isn't in a ring (the elf wing, the corridor...). A side spreads when
- * it lies on the ring's edge or when no other area (`others`: rooms, the core, corridors) borders it, e.g. a room
- * next to an empty plot or the square's column.
+ * Which sides of `rect` spread, or null when it isn't inside a ring (the corridors...). The west and east sides spread
+ * where no other area (`others`: rooms, the core, corridors) borders them, e.g. at a zone's outer end or next to an
+ * empty plot; the south side where the room sits on the ring's lower edge (not over the lawn between a zone's rows,
+ * where the room keeps its wall).
  */
 export function spreadSides(rect: TileRect, rings: readonly HallRing[], others: readonly TileRect[] = []): Spread | null {
-  const ring = rings.find((r) => rect.x >= r.rect.x && rect.y >= r.rect.y && rect.x + rect.w <= r.rect.x + r.rect.w && rect.y + rect.h <= r.rect.y + r.rect.h);
+  const inside = (r: TileRect) => rect.x >= r.x && rect.y >= r.y && rect.x + rect.w <= r.x + r.w && rect.y + rect.h <= r.y + r.h;
+  const ring = rings.find((r) => r.rects.some(inside));
   if (!ring) return null;
   const overlapsY = (o: TileRect) => o.y < rect.y + rect.h && o.y + o.h > rect.y;
   const overlapsX = (o: TileRect) => o.x < rect.x + rect.w && o.x + o.w > rect.x;
   const free = (touch: (o: TileRect) => boolean) => !others.some((o) => o !== rect && touch(o));
   const s: Spread = {
-    w: rect.x === ring.rect.x || free((o) => o.x + o.w === rect.x && overlapsY(o)),
-    e: rect.x + rect.w === ring.rect.x + ring.rect.w || free((o) => o.x === rect.x + rect.w && overlapsY(o)),
-    s: rect.y + rect.h === ring.rect.y + ring.rect.h || free((o) => o.y === rect.y + rect.h && overlapsX(o)),
+    w: free((o) => o.x + o.w === rect.x && overlapsY(o)),
+    e: free((o) => o.x === rect.x + rect.w && overlapsY(o)),
+    s: ring.rects.some((r) => inside(r) && r.y + r.h === rect.y + rect.h) && free((o) => o.y === rect.y + rect.h && overlapsX(o)),
     gaps: ring.gaps,
   };
   return s.w || s.e || s.s ? s : null;

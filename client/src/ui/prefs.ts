@@ -38,7 +38,7 @@ export const DEFAULT_PREFS: UiPrefs = {
   sound: false,
   sounds: DEFAULT_SOUND_SETTINGS,
   browserNotifications: false,
-  sidebarOpen: true,
+  sidebarOpen: false,
   activityOpen: false,
   hiddenAccounts: [],
 };

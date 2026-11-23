@@ -134,10 +134,10 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: Cr
     updateBounds();
   };
 
-  // the elf trees' crowns rise above the north strip (render/elf-tree.ts): keep them in frame
+  // the elf tree's crown rises above the top row (render/elf-tree.ts): keep them in frame
   const buildingRect = () => {
     const r = rectPx(sim.building.rect);
-    if (!sim.building.shape.north) return r;
+    if (!sim.building.shape.nw && !sim.building.shape.mw) return r;
     return { x: r.x, y: r.y - CROWN_UP * TILE, w: r.w, h: r.h + CROWN_UP * TILE };
   };
 

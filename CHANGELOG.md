@@ -78,6 +78,17 @@ one (0.**3**.0).
 
 ### Changed
 
+- **The camp wraps round the hub.** The hub is now just the four core halls (Great Hall, Bathhouse, Mess Hall and
+  Tavern), and each race has its own corner round it: night elves top left, orcs top right, undead bottom left and
+  humans bottom right. Each zone is an L: one row reaches in over (or under) the hub, and the other sits beside it on
+  the hub's own row, sharing that row's corridor with the zone below or above. New rooms fill both arms side by side,
+  so the camp grows outwards across the screen instead of downwards, and a busy camp fills a widescreen TV.
+- **Ground to the edge of the screen.** Each race's land (jungle, badlands, blight and green park) now runs all the
+  way to the edge of a widescreen view instead of stopping at a plain backdrop. Inside the elves' world tree the
+  jungle floor runs on, with roots along the foot of the trunk instead of a carved wooden floor.
+- **The Office panel starts closed.** Open it from the button at the top left; your choice is remembered.
+- **A fuller demo.** The demo keeps about twelve sessions open across fourteen projects, and new rooms go to the
+  race with the fewest, so every corner of the camp fills up.
 - **The Activity panel starts closed.** Open it from its bar at the bottom. Every screen starts closed once and then
   remembers its own choice.
 - **Halls that grow out of their yards.** Inside each ring the yard now has the race's own ground: a grassy bailey

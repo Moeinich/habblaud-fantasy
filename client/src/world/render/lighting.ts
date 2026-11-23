@@ -7,11 +7,13 @@
 // assembly); per frame, one drawImage in 'multiply' and a few cached glow sprites.
 import { TILE, type ArtModule, type ScreenMode } from '../../art/api';
 import { mulberry32 } from '../../../../shared/hash';
-import { BUILDING_H, CORRIDOR_H, CORRIDOR_Y, MAIN_BOTTOM, NCORRIDOR_Y, NORTH_Y, NSTRIP_Y, ROOM_H, SCORRIDOR_Y, SSTRIP_BOTTOM, SSTRIP_Y } from '../constants';
-import { mainRect, northCorridorRect, southCorridorRect, stripY } from '../layout/geometry';
+import { BUILDING_H, CORRIDOR_H, ROOM_H } from '../constants';
+import { corridorRect, STRIPS, stripY } from '../layout/geometry';
 
 /** Rooms whose north wall faces the lawn (the north row of either strip). */
-const facesNorth = (y: number) => y === NORTH_Y || y === NSTRIP_Y || y === SSTRIP_Y;
+const facesNorth = (y: number) => STRIPS.some((st) => y === stripY(st));
+/** Rooms whose south wall faces the lawn (the south row of any strip). */
+const facesSouth = (bottom: number) => STRIPS.some((st) => bottom === stripY(st) + BUILDING_H);
 import type { ExteriorLayout, SlotShell } from '../layout/exterior';
 import type { RoomState } from '../sim/room-state';
 import type { Sim } from '../sim/sim';
@@ -436,23 +438,17 @@ export class Lighting {
       if (vis.layout.kind !== 'corridor' && facesNorth(r.y)) {
         // north-wall windows -> lawn to the north
         for (const w of vis.wallItems) if (w.kind === 'window') halo(warm, w.cx, r.y * TILE - 12, 58, 30, 0.55 * k * l);
-      } else if (vis.layout.kind !== 'corridor' && (r.y + r.h === MAIN_BOTTOM || r.y + r.h === NSTRIP_Y + BUILDING_H || r.y + r.h === SSTRIP_BOTTOM)) {
+      } else if (vis.layout.kind !== 'corridor' && facesSouth(r.y + r.h)) {
         // south rooms: soft glow on the hedge and the sidewalk (or the lawn between the strips)
         for (const fx of [0.25, 0.75]) halo(warm, (r.x + r.w * fx) * TILE, (r.y + r.h) * TILE + 16, 96, 30, 0.35 * k * l);
       }
     }
-    // glass façades at the ends of the corridors (main entrance to the west)
-    const m = mainRect(shape);
-    const cy = (CORRIDOR_Y + CORRIDOR_H / 2) * TILE;
-    halo(warm, m.x * TILE - 20, cy, 56, 92, 0.6 * k);
-    halo(warm, (m.x + m.w) * TILE + 20, cy, 56, 92, 0.45 * k);
-    for (const [rc, cy0] of [
-      [northCorridorRect(shape), NCORRIDOR_Y],
-      [southCorridorRect(shape), SCORRIDOR_Y],
-    ] as const) {
+    // glass façades at the ends of the corridors
+    for (const st of STRIPS) {
+      const rc = corridorRect(shape, st);
       if (!rc) continue;
-      const ny = (cy0 + CORRIDOR_H / 2) * TILE;
-      halo(warm, rc.x * TILE - 20, ny, 56, 92, 0.45 * k);
+      const ny = (rc.y + CORRIDOR_H / 2) * TILE;
+      halo(warm, rc.x * TILE - 20, ny, 56, 92, (st === 'main' ? 0.6 : 0.45) * k);
       halo(warm, (rc.x + rc.w) * TILE + 20, ny, 56, 92, 0.45 * k);
     }
     // corridor windows facing the courtyards of empty slots
