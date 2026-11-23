@@ -7,7 +7,7 @@
 import type { Race } from '../../../../shared/race';
 import { BUILDING_H, COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, MAIN_Y, PLAZA_COL, ROOM_H } from '../constants';
 import { WALKWAY_LX, WALKWAY_W } from './corridor';
-import { ARMS, armIndex, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
+import { ARMS, armIndex, hasBottom, hasNorth, hubRect, slotColumn, slotSide, slotStrip, slotWing, stripY, zoneParts, zoneRects, ZONE_ARMS, type Shape, type Strip } from './geometry';
 import { TILE } from '../constants';
 import type { AreaLayout, TileRect } from './types';
 
@@ -38,26 +38,22 @@ export function hallRings(shape: Shape): HallRing[] {
   const out: HallRing[] = [];
   const reach = RING_REACH + 1;
   for (const race of ['elf', 'orc', 'undead', 'human'] as const) {
-    const { block, reach: inner } = zoneRects(shape, race);
-    if (!block && !inner) continue;
-    const [outer, side] = ZONE_ARMS[race];
-    const dir = ARMS[outer].dir;
-    // towards the hub: -dir
-    const hubward: -1 | 1 = dir < 0 ? 1 : -1;
-    const rects: TileRect[] = [];
+    const { outer, side, joint } = zoneParts(shape, race);
+    const rects = zoneRects(shape, race);
+    if (!rects.length) continue;
+    const arm = ARMS[ZONE_ARMS[race][0]];
+    // towards the hub
+    const hubward: -1 | 1 = arm.dir < 0 ? 1 : -1;
     const gaps: TileRect[] = [];
-    if (block) {
-      rects.push(block);
-      // row 1's corridor runs between the top and the bottom zone of each side: the ring stays open all along it
-      gaps.push({ x: block.x - reach, y: stripY('main') + ROOM_H, w: block.w + 2 * reach, h: CORRIDOR_H });
-      void side;
+    // row 1's corridor runs between the top and the bottom zone of each side: the ring stays open all along it
+    const low = side ?? joint;
+    if (low) {
+      const x0 = Math.min(...[side, joint].filter((r): r is TileRect => !!r).map((r) => r.x));
+      const x1 = Math.max(...[side, joint].filter((r): r is TileRect => !!r).map((r) => r.x + r.w));
+      gaps.push({ x: x0 - reach, y: stripY('main') + ROOM_H, w: x1 - x0 + 2 * reach, h: CORRIDOR_H });
     }
-    if (inner) {
-      // run the inner part back into the block so their round corners don't notch the union
-      const overlap = block ? (RING_RADIUS + RING_MARGIN) : 0;
-      rects.push(hubward > 0 ? { ...inner, x: inner.x - overlap, w: inner.w + overlap } : { ...inner, w: inner.w + overlap });
-      gaps.push(sideGap(ARMS[outer].strip, hubward > 0 ? inner.x + inner.w : inner.x, hubward));
-    }
+    // the outer row's corridor leaves towards the square's column
+    if (outer) gaps.push(sideGap(arm.strip, hubward > 0 ? outer.x + outer.w : outer.x, hubward));
     out.push({ race, rects, gaps });
   }
   // the hub: the four core halls, open to both sides and to the walkways above and below
@@ -93,7 +89,7 @@ export function ringSides(slot: number): { north: boolean; south: boolean } {
   if (arm.race === 'elf') return { north: false, south: false };
   if (!arm.outer) return { north: false, south: false };
   const top = slotStrip(slot) === 'north';
-  const inReach = armIndex(wing, slotColumn(slot)) < 2;
+  const inReach = !!arm.reach;
   return { north: top || inReach, south: !top || inReach };
 }
 

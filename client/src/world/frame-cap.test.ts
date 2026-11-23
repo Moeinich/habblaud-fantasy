@@ -12,18 +12,12 @@ describe('frame cap', () => {
   });
 });
 
-describe('lite mode (a TV on the wall)', () => {
-  const desktop = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15';
-  const tizen = 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 SamsungBrowser/4.0 TV Safari/537.36';
-  const webos = 'Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 Chrome/94.0 Safari/537.36';
-
-  it('on for TV browsers and ?lite=1; ?lite=0 turns it off', () => {
-    expect(liteMode('', desktop)).toBe(false);
-    expect(liteMode('', tizen)).toBe(true);
-    expect(liteMode('', webos)).toBe(true);
-    expect(liteMode('?lite=1', desktop)).toBe(true);
-    expect(liteMode('?lite', desktop)).toBe(true);
-    expect(liteMode('?lite=0', tizen)).toBe(false);
+describe('lite mode', () => {
+  it('off unless asked for with ?lite=1, TV browsers included', () => {
+    expect(liteMode('')).toBe(false);
+    expect(liteMode('?lite=1')).toBe(true);
+    expect(liteMode('?lite')).toBe(true);
+    expect(liteMode('?lite=0')).toBe(false);
   });
 
   it('the canvas keeps the screen ratio (1–3), lite mode or not: text stays sharp on a 4K TV', () => {

@@ -62,18 +62,13 @@ export function fpsFromUrl(search: string): number {
   return Number.isFinite(n) && n >= 10 ? Math.min(144, Math.round(n)) : 60;
 }
 
-/** Smart-TV and streaming-stick browsers: weak CPUs and GPUs behind big screens. */
-const TV_UA = /\b(SMART-?TV|SmartTV|Tizen|Web0S|webOS|NetCast|BRAVIA|AFT\w+|CrKey|Android TV|GoogleTV|HbbTV|VIDAA|Roku|AppleTV|PhilipsTV)\b/i;
-
 /**
- * Lite mode, for a TV on the wall: 30 fps at most and no backdrop blur behind the panels. The canvas keeps the
- * screen's full resolution (drawing it at one pixel per CSS pixel made names and labels blurry on a 4K TV). On with
- * `?lite=1` or a TV browser; `?lite=0` turns it off.
+ * Lite mode: 30 fps at most and no backdrop blur behind the panels. Off unless asked for with `?lite=1` (it is no
+ * longer switched on by itself for TV browsers).
  */
-export function liteMode(search: string, userAgent: string): boolean {
+export function liteMode(search: string): boolean {
   const v = new URLSearchParams(search).get('lite');
-  if (v !== null) return v !== '0' && v !== 'false';
-  return TV_UA.test(userAgent);
+  return v !== null && v !== '0' && v !== 'false';
 }
 
 /** Device pixel ratio of the world canvas: the screen's, kept between 1 and 3. */
@@ -81,7 +76,7 @@ export function canvasPixelRatio(dpr: number): number {
   return Math.max(1, Math.min(3, dpr || 1));
 }
 
-const LITE = liteMode(globalThis.location?.search ?? '', globalThis.navigator?.userAgent ?? '');
+const LITE = liteMode(globalThis.location?.search ?? '');
 const pixelRatio = () => canvasPixelRatio(window.devicePixelRatio);
 
 export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore, o: CreateWorldOptions = {}): WorldApi & { debug: WorldDebug; visit: VisitWorld } {

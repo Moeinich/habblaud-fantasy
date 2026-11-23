@@ -9,7 +9,7 @@ import type { Race } from '../../../../shared/race';
 import { ARMS, armCol, armLimit, emptyShape, cellSlot, ZONE_ARMS, type Shape, type Side, type Wing } from './geometry';
 
 /** Race that lives in each arm. */
-export const WING_RACE: Readonly<Record<Wing, Race>> = { nw: 'elf', mw: 'elf', ne: 'orc', me: 'orc', sw: 'undead', bw: 'undead', se: 'human', be: 'human' };
+export const WING_RACE: Readonly<Record<Wing, Race>> = { nw: 'elf', mw: 'elf', nwr: 'elf', ne: 'orc', me: 'orc', ner: 'orc', sw: 'undead', bw: 'undead', bwr: 'undead', se: 'human', be: 'human', ber: 'human' };
 
 export interface DeptRoom {
   id: string;
@@ -46,9 +46,13 @@ export function packDepartments(rooms: readonly DeptRoom[]): DeptPlan {
     for (const r of queue) {
       const span = Math.max(1, r.span);
       let best: { w: Wing; side: Side; reach: number } | null = null;
+      // (the outer rows' columns over the hub stay free: the rows sit flush, so rooms there would press against the
+      // core halls)
       for (const w of ZONE_ARMS[race]) {
         const dist = ARMS[w].dist;
-        for (const side of ARMS[w].side ? [ARMS[w].side] : (['north', 'south'] as const)) {
+        // the outer row's side nearest the hub's row first (right above / below the side arm)
+        const near: Side = ARMS[w].strip === 'north' ? 'south' : 'north';
+        for (const side of ARMS[w].side ? [ARMS[w].side] : [near, near === 'north' ? ('south' as const) : ('north' as const)]) {
           const f = fill.get(`${w}${side}`) ?? 0;
           if (f + span > armLimit(w)) continue;
           const reach = dist + f + span;

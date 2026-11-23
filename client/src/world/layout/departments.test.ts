@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EAST_COL0, PLAZA_COL, WEST_GAP_COL } from '../constants';
 import { packDepartments, type DeptRoom } from './departments';
-import { ARMS, armCol, armIndex, armLimit, coveredSlots, slotColumn, slotSide, slotStrip, slotWing } from './geometry';
+import { ARMS, armCol, armIndex, armLimit, coveredSlots, emptyShape, slotColumn, slotSide, slotStrip, slotWing } from './geometry';
 
 const r = (id: string, race: DeptRoom['race'], order: number, span = 1): DeptRoom => ({ id, race, span, order });
 
@@ -18,7 +18,7 @@ describe('race departments', () => {
     expect(at('o1')).toEqual(['me', EAST_COL0, 'north']);
     expect(at('u1')).toEqual(['sw', WEST_GAP_COL - 1, 'south']);
     expect(at('h1')).toEqual(['se', EAST_COL0, 'south']);
-    expect(plan.shape).toEqual({ nw: 0, ne: 0, mw: 1, me: 1, sw: 1, se: 1, bw: 0, be: 0 });
+    expect(plan.shape).toEqual({ ...emptyShape(), mw: 1, me: 1, sw: 1, se: 1 });
   });
 
   it('a zone starts beside the hub, then wraps up over it and grows outwards on both arms', () => {

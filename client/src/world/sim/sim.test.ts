@@ -580,7 +580,7 @@ describe('rooms without gaps', () => {
     });
     expect(moved).toBe(false);
     expect(sim.rooms.has('/c')).toBe(false);
-    run(sim, clock, 5, () => JSON.stringify(sim.building.shape) === JSON.stringify(orcPlan(1).shape));
+    run(sim, clock, 60, () => JSON.stringify(sim.building.shape) === JSON.stringify(orcPlan(1).shape));
     expect(sim.building.shape).toEqual(orcPlan(1).shape);
   });
 

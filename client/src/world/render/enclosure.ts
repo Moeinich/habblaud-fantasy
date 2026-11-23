@@ -163,8 +163,8 @@ export function ringSprite(ring: HallRing, art: ArtModule): RingSprite {
       }
     }
     if (yIn < 0 || yIn >= top + 2 * T) continue;
-    // no wall across a way in from the north (a walkway)
-    if (gaps.some((g) => g.y1 <= yIn + 2 * T + 1 && g.y1 >= yIn - T && x >= g.x0 && x < g.x1)) continue;
+    // no wall across a way in (a walkway from the north), nor over a corridor the ring stays open along
+    if (gaps.some((g) => x >= g.x0 && x < g.x1 && g.y0 < yIn + 2 * T + 1 && g.y1 > yIn - 3 * T)) continue;
     art.drawWallFace(cctx, wx0 + x, wy0 + yIn, 1, theme.wall);
   }
   cctx.restore();

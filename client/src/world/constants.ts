@@ -33,8 +33,8 @@ export const EAST_GAP_COL = PLAZA_COL + 2;
 export const EAST_COL0 = PLAZA_COL + 3;
 /** Columns the west side arms can take (the outer rows can take two more). */
 export const WEST_COLS = WEST_GAP_COL;
-/** Lawn between two rows (tiles): room for the rings of the halls on both sides. */
-export const STRIP_GAP = 10;
+/** Lawn between two rows (tiles): none, the rows sit flush so a zone's two rows form one block. */
+export const STRIP_GAP = 0;
 /** Row 0 (top: elves and orcs). */
 export const NSTRIP_Y = 0;
 export const NCORRIDOR_Y = NSTRIP_Y + ROOM_H;

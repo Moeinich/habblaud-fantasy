@@ -80,13 +80,19 @@ one (0.**3**.0).
 
 - **The camp wraps round the hub.** The hub is now just the four core halls (Great Hall, Bathhouse, Mess Hall and
   Tavern), and each race has its own corner round it: night elves top left, orcs top right, undead bottom left and
-  humans bottom right. Each zone is an L: one row reaches in over (or under) the hub, and the other sits beside it on
-  the hub's own row, sharing that row's corridor with the zone below or above. A zone's first rooms stand to the
-  left and right of the hub on its own row, then it wraps up (or down) round the hub, so the camp grows outwards
-  across the screen instead of downwards, and a busy camp fills a widescreen TV.
+  humans bottom right. A zone's first two rooms stand beside the hub on its own row (the top zones on the north side
+  of its corridor, the bottom zones on the south side); the next ones go right above (or below) them, and the zone
+  grows outwards from there. A zone only takes the rows it has rooms in, and the rows sit flush against each other,
+  so a quiet camp stays small and the view zooms in on it. Empty cells in a zone are plain ground instead of patios
+  of their own: the shared spaces are the hub's halls.
+- **Roads in each race's colours.** From the edge of the hub every road carries the look of the race it leads to: a
+  forest path to the elves and each other race's carpet to theirs. Where two zones share the hub's row, its
+  corridor is split into a lane for each.
 - **Ground to the edge of the screen.** Each race's land (jungle, badlands, blight and green park) now runs all the
   way to the edge of a widescreen view instead of stopping at a plain backdrop. Inside the elves' world tree the
   jungle floor runs on, with roots along the foot of the trunk instead of a carved wooden floor.
+- **No automatic lite mode.** Lite mode no longer switches itself on for TV browsers; add `?lite=1` to the address
+  to use it.
 - **The Office panel starts closed.** Open it from the button at the top left; your choice is remembered.
 - **A fuller demo.** The demo keeps about twelve sessions open across fourteen projects, and new rooms go to the
   race with the fewest, so every corner of the camp fills up.

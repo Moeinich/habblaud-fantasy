@@ -6,7 +6,7 @@
 import { COL_W, CORE_COL0, CORE_EAST_COL, CORRIDOR_H, EAST_GAP_COL, PLAZA_COL, ROOM_H, WEST_GAP_COL } from '../constants';
 import { AreaBuilder } from './builder';
 import { CORE_CARPET, DEPT_CARPET, WING_RACE } from './departments';
-import { armCol, corridorRect, stripArms, stripIndex, stripY, walkways, type Shape, type Strip, type Wing } from './geometry';
+import { ARMS, armCol, corridorRect, stripArms, stripIndex, stripY, walkways, type Shape, type Strip, type Wing } from './geometry';
 import type { AreaLayout } from './types';
 
 export const CORRIDOR_ID = 'core:corredor';
@@ -56,12 +56,37 @@ function wingColumn(b: AreaBuilder, lx: number, k: number, group: string, keepTo
 }
 
 /** Carpet, threshold band and runner of one wing stretch (local tiles). */
-function wingFloor(b: AreaBuilder, race: keyof typeof DEPT_CARPET, x0: number, x1: number, bandAt: 'west' | 'east', seed: number): void {
+function wingFloor(b: AreaBuilder, race: keyof typeof DEPT_CARPET, x0: number, x1: number, bandAt: 'west' | 'east', seed: number, y0 = 0, h = CORRIDOR_H): void {
   if (x1 <= x0) return;
+  if (race === 'elf') {
+    // the elves' road is a forest path: a beaten earth track between strips of jungle floor
+    const verge = Math.min(0.6, h / 6);
+    b.floor('jungle', x0, y0, x1 - x0, h, seed);
+    b.seamFloor('forest_path', x0, y0 + verge, x1 - x0, h / 2 - verge, seed + 1, { axis: 'y', from: y0 + h / 2, to: y0 + verge });
+    b.seamFloor('forest_path', x0, y0 + h / 2, x1 - x0, h / 2 - verge, seed + 1, { axis: 'y', from: y0 + h / 2, to: y0 + h - verge });
+    return;
+  }
   const c = DEPT_CARPET[race];
-  b.floor('hall', x0, 0, x1 - x0, CORRIDOR_H, seed, c.pile, c.motif);
-  b.floor('hall', bandAt === 'west' ? x0 + 1.25 : x1 - 1.75, 0, 0.5, CORRIDOR_H, seed + 50, c.band, c.motif);
-  if (x1 - x0 > 5) b.rug(x0 + 2.25, 1.95, x1 - x0 - 4.5, 1.1, c.runner, seed + 20, race === 'undead' ? 'crypt' : undefined);
+  b.floor('hall', x0, y0, x1 - x0, h, seed, c.pile, c.motif);
+  b.floor('hall', bandAt === 'west' ? x0 + 1.25 : x1 - 1.75, y0, 0.5, h, seed + 50, c.band, c.motif);
+  if (x1 - x0 > 5) b.rug(x0 + 2.25, y0 + h / 2 - 0.55, x1 - x0 - 4.5, 1.1, c.runner, seed + 20, race === 'undead' ? 'crypt' : undefined);
+}
+
+/**
+ * One side of a corridor's carpet: one race's, or on row 1, where a top and a bottom zone share the corridor, a
+ * lane of each — the upper zone's carpet along its doors, the lower zone's along theirs.
+ */
+function sideFloor(b: AreaBuilder, shape: Shape, arms: Wing[], x0: number, x1: number, bandAt: 'west' | 'east', seed: number): void {
+  const upper = arms.find((w) => ARMS[w].side === 'north');
+  const lower = arms.find((w) => ARMS[w].side === 'south');
+  if (upper && lower && shape[upper] && shape[lower]) {
+    const half = CORRIDOR_H / 2;
+    wingFloor(b, WING_RACE[upper], x0, x1, bandAt, seed, 0, half);
+    wingFloor(b, WING_RACE[lower], x0, x1, bandAt, seed + 7, half, half);
+    return;
+  }
+  const used = arms.find((w) => shape[w]) ?? arms[0];
+  wingFloor(b, WING_RACE[used], x0, x1, bandAt, seed);
 }
 
 /** Corridor ids per row. */
@@ -83,16 +108,17 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   const lx = (col: number) => col * COL_W - r.x;
   const [west, east] = stripArms(strip);
   const middle = strip === 'main';
-  const pave0 = middle ? WEST_GAP_COL : PLAZA_COL;
-  const pave1 = (middle ? EAST_GAP_COL : PLAZA_COL) + 1;
-  // row 1's corridor is shared by a top and a bottom zone each side: it takes the carpet of the longer one
+  // stone paving only where the hub is (the core halls and the square's column): from its edge outwards every road
+  // carries the carpet of the race it leads to
+  const pave0 = middle ? CORE_COL0 : PLAZA_COL;
+  const pave1 = (middle ? CORE_EAST_COL : PLAZA_COL) + 1;
   const longest = (arms: Wing[]) => arms.reduce((a, b) => (shape[b] > shape[a] ? b : a));
   const wr = WING_RACE[longest(west)];
   const er = WING_RACE[longest(east)];
   const x0 = 0;
   const x1 = r.w;
   // floors: west carpet | paving (and the core's carpet in row 1) | east carpet, melting into each other
-  wingFloor(b, wr, x0, lx(pave0), 'east', 510 + stripIndex(strip) * 40);
+  sideFloor(b, shape, west, x0, lx(pave0), 'east', 510 + stripIndex(strip) * 40);
   b.floor('tile_check', lx(pave0), 0, lx(pave1) - lx(pave0), CORRIDOR_H, 505 + stripIndex(strip));
   if (strip === 'main') {
     for (const col of [CORE_COL0, CORE_EAST_COL]) {
@@ -100,7 +126,7 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
       b.rug(lx(col) + 2.25, 1.95, COL_W - 4.5, 1.1, CORE_RUNNER, 502);
     }
   }
-  wingFloor(b, er, lx(pave1), x1, 'west', 530 + stripIndex(strip) * 40);
+  sideFloor(b, shape, east, lx(pave1), x1, 'west', 530 + stripIndex(strip) * 40);
   const w = DEPT_CARPET[wr];
   const e = DEPT_CARPET[er];
   if (lx(pave0) > x0) b.seamFloor('hall', lx(pave0), 0, SEAM, CORRIDOR_H, 511, { axis: 'x', from: lx(pave0) - SEAM / 2, to: lx(pave0) + SEAM }, w.pile, w.motif);
@@ -112,12 +138,13 @@ function layoutRow(shape: Shape, strip: Strip): AreaLayout | null {
   // the arms (k counts outwards from the hub)
   const up = walkways(shape).some(([, lo]) => lo === strip);
   const down = walkways(shape).some(([hi]) => hi === strip);
-  for (const arms of [west, east]) {
-    const n = Math.max(0, ...arms.map((w) => shape[w]));
-    for (let k = 0; k < n; k++) {
-      const col = armCol(arms[0], k);
-      if (col * COL_W < r.x || (col + 1) * COL_W > r.x + r.w) continue;
-      wingColumn(b, lx(col), k, `talk:${ROW_CORRIDOR[strip]}:${col}`, false, false);
+  const dressed = new Set<number>();
+  for (const w of [...west, ...east]) {
+    for (let k = 0; k < shape[w]; k++) {
+      const col = armCol(w, k);
+      if (dressed.has(col) || col * COL_W < r.x || (col + 1) * COL_W > r.x + r.w) continue;
+      dressed.add(col);
+      wingColumn(b, lx(col), Math.abs(col - PLAZA_COL), `talk:${ROW_CORRIDOR[strip]}:${col}`, false, false);
     }
   }
   // the hub's paving: planters at the corners of the square's column, benches by the core, the walkway mouths clear
@@ -177,17 +204,7 @@ export function layoutWalkways(shape: Shape): AreaLayout[] {
     const y0 = stripY(hi) + ROOM_H + CORRIDOR_H;
     const h = stripY(lo) + ROOM_H - y0;
     const b = new AreaBuilder(WALKWAY_FROM[hi], 'corridor', { x: PLAZA_COL * COL_W + WALKWAY_LX, y: y0, w: WALKWAY_W, h });
-    if (hi === 'north') {
-      b.floor('jungle', 0, 0, WALKWAY_W, h, 560);
-      const mid = WALKWAY_W / 2;
-      b.seamFloor('forest_path', 0.3, 0, mid - 0.3, h, 561, { axis: 'x', from: mid, to: 0.3 });
-      b.seamFloor('forest_path', mid, 0, mid - 0.3, h, 561, { axis: 'x', from: mid, to: WALKWAY_W - 0.3 });
-      for (let ly = 0; ly < h; ly += 2) {
-        const k = ly / 2;
-        b.furn(k % 3 === 1 ? 'plant_tall' : 'plant_small', 0, ly, k % 3 === 1 ? 'monstera' : 'fern', { order: 0.1 });
-        b.furn((k + 1) % 3 === 1 ? 'plant_tall' : 'plant_small', WALKWAY_W - 1, ly + 1 < h ? ly + 1 : ly, (k + 1) % 3 === 1 ? 'monstera' : 'fern', { order: 0.1 });
-      }
-    } else {
+    {
       b.floor('grass', 0, 0, WALKWAY_W, h, 580 + stripIndex(hi));
       b.floor('tile_check', 0.6, 0, WALKWAY_W - 1.2, h, 582 + stripIndex(hi));
       for (let ly = 0; ly < h; ly += 3) {

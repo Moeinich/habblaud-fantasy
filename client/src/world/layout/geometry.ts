@@ -37,7 +37,7 @@ import type { TileRect } from './types';
 export type Side = 'north' | 'south';
 export type Strip = 'north' | 'main' | 'south' | 'bottom';
 /** An arm: row (n/m/s/b) and direction (w/e). */
-export type Wing = 'nw' | 'ne' | 'mw' | 'me' | 'sw' | 'se' | 'bw' | 'be';
+export type Wing = 'nw' | 'ne' | 'mw' | 'me' | 'sw' | 'se' | 'bw' | 'be' | 'nwr' | 'ner' | 'bwr' | 'ber';
 
 export const STRIPS: readonly Strip[] = ['north', 'main', 'south', 'bottom'];
 const ROW_BASE = 10_000;
@@ -55,27 +55,39 @@ export interface Arm {
   side?: Side;
   /** How far its first cell is from the hub (the packing fills the nearest lanes first). */
   dist: number;
+  /** The outer row's two columns over (under) the hub, filled last, from the zone inwards. */
+  reach?: true;
+  /** How many columns it can take (default: up to the map's west edge, or unbounded eastwards). */
+  limit?: number;
 }
 
 export const ARMS: Readonly<Record<Wing, Arm>> = {
-  nw: { strip: 'north', dir: -1, start: PLAZA_COL - 1, race: 'elf', outer: true, dist: 2 },
+  // the outer rows: right above (below) the side arm first, then outwards
+  nw: { strip: 'north', dir: -1, start: WEST_GAP_COL - 1, race: 'elf', outer: true, dist: 2 },
   mw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'elf', outer: false, dist: 0, side: 'north' },
-  ne: { strip: 'north', dir: 1, start: PLAZA_COL + 1, race: 'orc', outer: true, dist: 2 },
+  ne: { strip: 'north', dir: 1, start: EAST_COL0, race: 'orc', outer: true, dist: 2 },
   me: { strip: 'main', dir: 1, start: EAST_COL0, race: 'orc', outer: false, dist: 0, side: 'north' },
   sw: { strip: 'main', dir: -1, start: WEST_GAP_COL - 1, race: 'undead', outer: false, dist: 0, side: 'south' },
-  bw: { strip: 'south', dir: -1, start: PLAZA_COL - 1, race: 'undead', outer: true, dist: 2 },
+  bw: { strip: 'south', dir: -1, start: WEST_GAP_COL - 1, race: 'undead', outer: true, dist: 2 },
   se: { strip: 'main', dir: 1, start: EAST_COL0, race: 'human', outer: false, dist: 0, side: 'south' },
-  be: { strip: 'south', dir: 1, start: PLAZA_COL + 1, race: 'human', outer: true, dist: 2 },
+  be: { strip: 'south', dir: 1, start: EAST_COL0, race: 'human', outer: true, dist: 2 },
+  // ...and the two columns over (under) the hub, wrapping inwards towards the square's column
+  nwr: { strip: 'north', dir: 1, start: WEST_GAP_COL, race: 'elf', outer: true, dist: 3, reach: true, limit: 2 },
+  ner: { strip: 'north', dir: -1, start: EAST_GAP_COL, race: 'orc', outer: true, dist: 3, reach: true, limit: 2 },
+  bwr: { strip: 'south', dir: 1, start: WEST_GAP_COL, race: 'undead', outer: true, dist: 3, reach: true, limit: 2 },
+  ber: { strip: 'south', dir: -1, start: EAST_GAP_COL, race: 'human', outer: true, dist: 3, reach: true, limit: 2 },
 };
 export const WINGS = Object.keys(ARMS) as Wing[];
 
 /** The two arms of each race's zone: [outer, side]. */
 export const ZONE_ARMS: Readonly<Record<Race, readonly [Wing, Wing]>> = { elf: ['nw', 'mw'], orc: ['ne', 'me'], undead: ['bw', 'sw'], human: ['be', 'se'] };
+/** Each zone's columns over (under) the hub, on its outer row. */
+export const REACH_ARM: Readonly<Record<Race, Wing>> = { elf: 'nwr', orc: 'ner', undead: 'bwr', human: 'ber' };
 
 /** How many columns an arm can take (the west ones stop at the edge of the map). */
 export function armLimit(w: Wing): number {
   const a = ARMS[w];
-  return a.dir < 0 ? a.start + 1 : 1000;
+  return a.limit ?? (a.dir < 0 ? a.start + 1 : 1000);
 }
 
 /** Column of an arm's k-th cell counting outwards from the hub. */
@@ -105,7 +117,9 @@ export function slotWing(slot: number): Wing {
   const strip = slotStrip(slot);
   const east = slotColumn(slot) > PLAZA_COL;
   const row = strip === 'north' ? 'n' : strip === 'main' ? (slotSide(slot) === 'north' ? 'm' : 's') : 'b';
-  return `${row}${east ? 'e' : 'w'}` as Wing;
+  // the outer rows' columns over (under) the hub
+  const over = row !== 'm' && row !== 's' && Math.abs(slotColumn(slot) - PLAZA_COL) <= 2;
+  return `${row}${east ? 'e' : 'w'}${over ? 'r' : ''}` as Wing;
 }
 
 /** Slot of a cell (inverse of slotColumn / slotSide / slotStrip). */
@@ -148,7 +162,7 @@ export function coveredSlots(slot: number, span = 1): number[] {
 export type Shape = Record<Wing, number>;
 
 export function emptyShape(): Shape {
-  return { nw: 0, ne: 0, mw: 0, me: 0, sw: 0, se: 0, bw: 0, be: 0 };
+  return { nw: 0, ne: 0, mw: 0, me: 0, sw: 0, se: 0, bw: 0, be: 0, nwr: 0, ner: 0, bwr: 0, ber: 0 };
 }
 
 /** k of a column in an arm (negative = on the hub's side of its start). */
@@ -172,12 +186,12 @@ export function shapeKey(s: Shape): string {
 }
 
 /**
- * Whether a row stands: the hub's row always, the others as soon as either zone of their half has a room (a zone's
- * outline always takes both its rows).
+ * Whether a row stands: the hub's row always, the outer rows as soon as a zone has a room in them.
  */
 export function hasStrip(s: Shape, strip: Strip): boolean {
-  if (strip === 'north') return s.nw + s.mw + s.ne + s.me > 0;
-  if (strip === 'south') return s.bw + s.sw + s.be + s.se > 0;
+  // the outer rows stand once a zone has a room there
+  if (strip === 'north') return s.nw + s.ne + s.nwr + s.ner > 0;
+  if (strip === 'south') return s.bw + s.be + s.bwr + s.ber > 0;
   // three rows: the fourth is never built
   return strip === 'main';
 }
@@ -202,17 +216,16 @@ export function stripCols(s: Shape, strip: Strip): [number, number] {
   const middle = strip === 'main';
   let x0 = middle ? WEST_GAP_COL : PLAZA_COL;
   let x1 = (middle ? EAST_GAP_COL : PLAZA_COL) + 1;
-  // the zone outlines (zoneRects) square both of a zone's arms off at the outer end: so does the row
-  for (const w of ws) {
-    const z = zoneOuterCol(s, ARMS[w].race);
-    if (z !== null) x0 = Math.min(x0, z);
-    if (s[w]) x0 = Math.min(x0, armCol(w, s[w] - 1));
-  }
-  for (const e of es) {
-    const z = zoneOuterCol(s, ARMS[e].race);
-    if (z !== null) x1 = Math.max(x1, z + 1);
-    if (s[e]) x1 = Math.max(x1, armCol(e, s[e] - 1) + 1);
-  }
+  // as far as the zones' outlines reach along this row
+  const y0 = stripY(strip);
+  for (const race of ['elf', 'orc', 'undead', 'human'] as const)
+    for (const r of zoneRects(s, race)) {
+      if (r.y >= y0 + BUILDING_H || r.y + r.h <= y0) continue;
+      x0 = Math.min(x0, r.x / COL_W);
+      x1 = Math.max(x1, (r.x + r.w) / COL_W);
+    }
+  void ws;
+  void es;
   return [x0, x1];
 }
 
@@ -257,41 +270,60 @@ export function hubRect(): TileRect {
   return { x: CORE_COL0 * COL_W, y: MAIN_Y, w: (CORE_EAST_COL - CORE_COL0 + 1) * COL_W, h: BUILDING_H };
 }
 
-/**
- * Outermost column of a zone's block (both its rows squared off), or null when the zone has no block: the side arm
- * and the outer arm beyond its two hub columns end at the same column.
- */
-function zoneOuterCol(s: Shape, race: Race): number | null {
-  const [outer, side] = ZONE_ARMS[race];
-  const dir = ARMS[outer].dir;
-  const ends: number[] = [];
-  if (s[side]) ends.push(armCol(side, s[side] - 1));
-  if (s[outer] > (ARMS[outer].outer ? 2 : 0)) ends.push(armCol(outer, s[outer] - 1));
-  if (!ends.length) return null;
-  return dir < 0 ? Math.min(...ends) : Math.max(...ends);
+/** A zone's outline in parts (tiles): its outer row, its side of row 1 and the joint filling the corner between. */
+export interface ZoneParts {
+  /** The outer row (both sides of its corridor), from over / under the hub out to its last room. */
+  outer: TileRect | null;
+  /** Its side of row 1, from past the hub's gap column out to its last room. */
+  side: TileRect | null;
+  /** Where both arms stand: the columns they share, with the lawn between the two rows, so the zone is one L. */
+  joint: TileRect | null;
 }
 
 /**
- * Outline of a race's zone (tiles): `block` covers its outer row and its side of row 1 (and the lawn between them)
- * from the hub's gap column out to the zone's end; `reach` is the outer row's two columns over / under the hub.
- * Either can be null. Row 1's corridor lies between the top and the bottom zones' blocks, in neither.
+ * Outline of a race's zone: only the rows that have rooms. A zone with rooms only beside the hub is just that strip
+ * of row 1; one with rooms only over (under) the hub is just its outer row; with both, the outer row runs out at
+ * least as far as the side arm starts and the joint fills the corner between them. Row 1's corridor lies between
+ * the top and the bottom zones, in neither.
  */
-export function zoneRects(s: Shape, race: Race): { block: TileRect | null; reach: TileRect | null } {
-  const [outer, side] = ZONE_ARMS[race];
-  const a = ARMS[outer];
+export function zoneParts(s: Shape, race: Race): ZoneParts {
+  const [o, sd] = ZONE_ARMS[race];
+  const a = ARMS[o];
+  const west = a.dir < 0;
   const top = a.strip === 'north';
-  // the top zones down to row 1's corridor; the bottom zones from below it
-  const y0 = top ? stripY('north') : stripY('main') + ROOM_H + CORRIDOR_H;
-  const h = (top ? stripY('main') + ROOM_H : stripY('south') + BUILDING_H) - y0;
-  const end = zoneOuterCol(s, race);
-  let block: TileRect | null = null;
-  if (end !== null) {
-    const x0 = a.dir < 0 ? end : EAST_COL0;
-    const x1 = a.dir < 0 ? WEST_GAP_COL : end + 1;
-    block = { x: x0 * COL_W, y: y0, w: (x1 - x0) * COL_W, h };
+  const rowY = stripY(a.strip);
+  const sideY = top ? stripY('main') : stripY('main') + ROOM_H + CORRIDOR_H;
+  /** [first, last + 1) columns of an arm's first n cells (or null). */
+  const span = (w: Wing, n: number): [number, number] | null => {
+    if (n <= 0) return null;
+    const c0 = armCol(w, 0);
+    const c1 = armCol(w, n - 1);
+    return [Math.min(c0, c1), Math.max(c0, c1) + 1];
+  };
+  const sideCols = span(sd, s[sd]);
+  // the outer row: the arm beside / above the side arm, and the columns over the hub, side by side
+  const oc = span(o, s[o]);
+  const rc = span(REACH_ARM[race], s[REACH_ARM[race]]);
+  let outerCols: [number, number] | null = oc && rc ? [Math.min(oc[0], rc[0]), Math.max(oc[1], rc[1])] : (oc ?? rc);
+  // with both arms, the outer row reaches out at least to where the side arm starts, so the two meet in a corner
+  if (outerCols && sideCols) outerCols = west ? [Math.min(outerCols[0], sideCols[1] - 1), outerCols[1]] : [outerCols[0], Math.max(outerCols[1], sideCols[0] + 1)];
+  const rect = (c: [number, number], y: number, h: number): TileRect => ({ x: c[0] * COL_W, y, w: (c[1] - c[0]) * COL_W, h });
+  const outer = outerCols ? rect(outerCols, rowY, BUILDING_H) : null;
+  const side = sideCols ? rect(sideCols, sideY, ROOM_H) : null;
+  let joint: TileRect | null = null;
+  if (outerCols && sideCols) {
+    const j: [number, number] = [Math.max(outerCols[0], sideCols[0]), Math.min(outerCols[1], sideCols[1])];
+    const y0 = top ? rowY : sideY;
+    const y1 = top ? sideY + ROOM_H : rowY + BUILDING_H;
+    if (j[1] > j[0]) joint = rect(j, y0, y1 - y0);
   }
-  const reach: TileRect | null = a.outer && (s[outer] || s[side]) ? { x: (a.dir < 0 ? WEST_GAP_COL : PLAZA_COL + 1) * COL_W, y: stripY(a.strip), w: 2 * COL_W, h: BUILDING_H } : null;
-  return { block, reach };
+  return { outer, side, joint };
+}
+
+/** A zone's outline as a list of overlapping rectangles (tiles); empty when the zone has no rooms. */
+export function zoneRects(s: Shape, race: Race): TileRect[] {
+  const p = zoneParts(s, race);
+  return [p.outer, p.side, p.joint].filter((r): r is TileRect => !!r);
 }
 
 /** Walkways down the square's column between two rows' corridors: [upper row, lower row]. */
@@ -350,22 +382,17 @@ export function cellsOf(s: Shape): Cell[] {
     out.push({ slot, col, side, strip, first, last });
   };
   for (const race of ['elf', 'orc', 'undead', 'human'] as const) {
-    const { block, reach } = zoneRects(s, race);
-    const [outer, side] = ZONE_ARMS[race];
-    const west = ARMS[outer].dir < 0;
-    if (block) {
-      const c0 = block.x / COL_W;
-      const c1 = c0 + block.w / COL_W;
-      for (let col = c0; col < c1; col++)
-        for (const [strip, sides] of [
-          [ARMS[outer].strip, ['north', 'south']],
-          [ARMS[side].strip, [ARMS[side].side!]],
-        ] as const)
-          for (const sd of sides) add(col, sd, strip, west && col === c0, !west && col === c1 - 1);
-    }
-    if (reach) {
-      const c0 = reach.x / COL_W;
-      for (let col = c0; col < c0 + 2; col++) for (const sd of ['north', 'south'] as const) add(col, sd, ARMS[outer].strip, false, false);
+    const west = ARMS[ZONE_ARMS[race][0]].dir < 0;
+    for (const r of zoneRects(s, race)) {
+      const c0 = r.x / COL_W;
+      const c1 = c0 + r.w / COL_W;
+      for (const strip of STRIPS)
+        for (const sd of ['north', 'south'] as const)
+          for (let col = c0; col < c1; col++) {
+            const cr = cellRect(col, sd, strip);
+            if (cr.y < r.y || cr.y + cr.h > r.y + r.h) continue;
+            add(col, sd, strip, west && col === c0, !west && col === c1 - 1);
+          }
     }
   }
   return out;

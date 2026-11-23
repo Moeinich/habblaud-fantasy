@@ -104,7 +104,7 @@ export function layoutExterior(shape: Shape): ExteriorLayout {
   };
 }
 
-/** Outer wall + garden of an empty slot: wooden deck with tables and parasols, flower beds and a path. */
+/** Outer wall and plain ground of an empty cell (no terrace of its own: the shared ones are the hub's). */
 export function slotShell(cell: Cell): SlotShell {
   const { slot, col, side, strip } = cell;
   const lastColumn = cell.last;
@@ -120,12 +120,9 @@ export function slotShell(cell: Cell): SlotShell {
   const W = COL_W * TILE;
   const T = (n: number) => n * TILE;
   const seed = () => Math.floor(rng() * 1e9);
-  /** Wooden deck with a stone border (local tiles). */
-  const deck = (lx: number, ly: number, w: number, h: number) => {
-    floors.push({ kind: 'sidewalk', x: x0 + T(lx), y: T(rect.y + ly), w: T(w), h: T(h), seed: slot + 7 });
-    floors.push({ kind: 'wood', x: x0 + T(lx) + 4, y: T(rect.y + ly) + 4, w: T(w) - 8, h: T(h) - 8, seed: slot + 8 });
-  };
 
+  // an empty cell is just the zone's own ground (the shared terraces are the hub's halls): the wall closing off the
+  // corridor, and a couple of plants of the land
   if (side === 'north') {
     // façade with windows closing off the corridor (rows 10–11)
     const fy = (corridorY - 2) * TILE;
@@ -135,36 +132,15 @@ export function slotShell(cell: Cell): SlotShell {
     );
     if (lastColumn) walls.push({ kind: 'cap', x: x0 + W - TILE / 2, y: fy, w: TILE / 2, h: 2 * TILE, style: EXTERIOR_WALL });
     if (cell.first) walls.push({ kind: 'cap', x: x0, y: fy, w: TILE / 2, h: 2 * TILE, style: EXTERIOR_WALL });
-    // path from the lawn to the deck, deck in the middle and flower beds under the windows
-    floors.push({ kind: 'sidewalk', x: x0 + T(7), y: T(rect.y), w: T(2), h: T(3), seed: slot });
-    deck(3, 3, 10, 5);
-    props.push({ kind: 'parasol', x: x0 + T(5.5), y: T(rect.y + 6) + 4, seed: seed(), slot });
-    props.push({ kind: 'parasol', x: x0 + T(10.5), y: T(rect.y + 6) + 4, seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(3.5), y: T(rect.y + 3) + 6, seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(12.5), y: T(rect.y + 3) + 6, seed: seed(), slot });
-    for (const cx of [3, 8, 13]) props.push({ kind: 'flowers', x: x0 + T(cx), y: T(rect.y + 9) + 12, seed: slot * 3 + cx, slot });
-    props.push({ kind: 'tree', x: x0 + T(1) + 4, y: T(rect.y + 3), seed: seed(), slot });
-    props.push({ kind: rng() < 0.5 ? 'pine' : 'tree', x: x0 + T(15) - 4, y: T(rect.y + 3) + 6, seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(1) + 8, y: T(rect.y + 8), seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(15) - 8, y: T(rect.y + 8), seed: seed(), slot });
+    props.push({ kind: rng() < 0.5 ? 'pine' : 'tree', x: x0 + T(4) + 4, y: T(rect.y + 5), seed: seed(), slot });
+    props.push({ kind: 'bush', x: x0 + T(11), y: T(rect.y + 7) + 4, seed: seed(), slot });
   } else {
-    // low outer wall closing off the corridor (row 17) and a garden below, joined to the street's sidewalk
+    // low outer wall closing off the corridor
     walls.push({ kind: 'south', x: x0, y: southY * TILE, w: W, style: EXTERIOR_WALL });
     if (lastColumn) walls.push({ kind: 'cap', x: x0 + W - TILE / 2, y: southY * TILE, w: TILE / 2, h: TILE, style: EXTERIOR_WALL });
     if (cell.first) walls.push({ kind: 'cap', x: x0, y: southY * TILE, w: TILE / 2, h: TILE, style: EXTERIOR_WALL });
-    floors.push({ kind: 'sidewalk', x: x0 + T(7), y: T(rect.y + 1), w: T(2), h: T(rect.h - 1), seed: slot });
-    // stretch between the façade and the sidewalk: only exists while the slot is empty (the hedge closes it)
-    deck(3, 3.5, 10, 5);
-    props.push({ kind: 'parasol', x: x0 + T(5.5), y: T(rect.y + 6.5) + 4, seed: seed(), slot });
-    props.push({ kind: 'parasol', x: x0 + T(10.5), y: T(rect.y + 6.5) + 4, seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(3.5), y: T(rect.y + 4) + 4, seed: seed(), slot });
-    props.push({ kind: 'bush', x: x0 + T(12.5), y: T(rect.y + 4) + 4, seed: seed(), slot });
-    for (const cx of [3, 13]) props.push({ kind: 'flowers', x: x0 + T(cx), y: T(rect.y + 2), seed: slot * 3 + cx, slot });
-    props.push({ kind: 'bench', x: x0 + T(4), y: T(rect.y + 10) + 6, seed: slot, slot });
-    props.push({ kind: 'bench', x: x0 + T(12), y: T(rect.y + 10) + 6, seed: slot + 1, slot });
-    props.push({ kind: 'tree', x: x0 + T(1) + 6, y: T(rect.y + 11), seed: seed(), slot });
-    props.push({ kind: rng() < 0.5 ? 'pine' : 'tree', x: x0 + T(15) - 6, y: T(rect.y + 11) + 4, seed: seed(), slot });
-    props.push({ kind: 'rock', x: x0 + T(14), y: T(rect.y + 2) + 4, seed: slot + 3, slot });
+    props.push({ kind: 'bush', x: x0 + T(5), y: T(rect.y + 4) + 4, seed: seed(), slot });
+    props.push({ kind: rng() < 0.5 ? 'pine' : 'tree', x: x0 + T(11) + 4, y: T(rect.y + 7), seed: seed(), slot });
   }
   const race = cellRace(strip, col, side);
   return { slot, side, strip, rect, walls, windows, floors, props: props.map((p) => biomeProp(race, p)) };
@@ -233,7 +209,7 @@ export function plazaShells(shape: Shape): SlotShell[] {
         if (zoned.has(cellSlot(col, side, strip))) continue;
         // the open gap columns either side of the hub: just lawn between the rings; any other free cell (row 1's
         // side of a zone that has no rooms there yet) is a garden
-        if (col === WEST_GAP_COL || col === EAST_GAP_COL) lawn(col, side, strip);
+        if (Math.abs(col - PLAZA_COL) <= 2) lawn(col, side, strip);
         else garden(col, side, strip);
       }
     }
@@ -241,7 +217,7 @@ export function plazaShells(shape: Shape): SlotShell[] {
       const below = walkways(shape).some(([a]) => a === strip);
       const above = walkways(shape).some(([, b]) => b === strip);
       if ((side === 'north' && above) || (side === 'south' && below)) walkwayCell(strip, side);
-      else garden(PLAZA_COL, side, strip);
+      else lawn(PLAZA_COL, side, strip);
     }
   }
   return out;
